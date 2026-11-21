@@ -559,12 +559,23 @@ end
 """
     advance_shared!(rt, trt, clock, n, window) -> ReturnCode.T
 
-One window of a coupled `PottsProblem` implicit group `rt` with derivative parts: `trt` is
-the group bound to the Dual store with a `TangentCache` on `rt`'s own cache
-(`bind_group(…; shared = (rt.cache,
-rt.store))`, the stores sharing their slot parity). The masks and clamps of both stores,
-then each stage's primal solve (once, on `rt`'s store) and its tangent step, then the slot-1
-copies of both. The status is `rt`'s, as [`advance!`](@ref) keeps it.
+One window of a coupled `PottsProblem` implicit group `rt` with derivative parts.
+
+It runs the masks and clamps of both stores, then each stage's primal solve (once, on
+`rt`'s store) and its tangent step, then the slot-1 copies of both. The status is `rt`'s,
+as [`advance!`](@ref) keeps it.
+
+# Arguments
+- `rt::GroupRuntime`: the primal group.
+- `trt::GroupRuntime`: the group bound to the Dual store with a `TangentCache` on `rt`'s
+  own cache (`bind_group(…; shared = (rt.cache, rt.store))`, the stores sharing their slot
+  parity).
+- `clock::Tuple{Real, Integer}`: the window's start time and the clock's step index.
+- `n::Integer`: the substep count.
+- `window::Real`: the window.
+
+# Returns
+- The return code of the window, a `ReturnCode.T`.
 """
 function advance_shared!(
         rt::GroupRuntime, trt::GroupRuntime,

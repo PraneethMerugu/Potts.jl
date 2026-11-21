@@ -4,26 +4,46 @@
 # host executor). `solve`, `init`, `step!` and `solve!` follow CommonSolve.
 
 """
-    FieldProblem(program, u0, tspan, p; state, kind, init = String[], index, tables = [],
-                 inputs = [], backend = CPU(), options = CompileOptions(),
-                     stability = p -> NaN)
+    FieldProblem(program, u0, tspan, p; state, kind, init = String[],
+                 index = LatticeIndex(), tables = [], inputs = [], backend = CPU(),
+                 options = CompileOptions(), stability = p -> NaN,
+                 route = "ExplicitEuler(; substeps = n)", terms = String[],
+                 linearity = nothing)
 
-The owned problem of a lowered field program (before the semantic passes). `state` are the
-keys of the packed state fields (two buffers each), `u0` the flat initial state on the host,
-`p` the raw parameters. `kind` is `:rate` (stepped by [`ExplicitEuler`](@ref); the program
-stores `c + dt · rate` with `dt = G.rt[2]`) or `:map` ([`ExplicitMap`](@ref)). Kernels named
-in `init` (the masks of masked conditions) run at `init`, after a parameter or input change,
-and at the start of every step, before its substeps, so a mask that reads the time, a field
-or an input follows it; the others run each substep.
-`index` is the [`LatticeIndex`](@ref); `tables` are `key => values`; `inputs` are
-`symbol => values` for the input fields (an array with one value per site, or a number):
-every input field must have a value at `init`, an unset one is an error naming it (see
-[`resolve_inputs`](@ref)). `stability(p)` is a
-bound `ρ` on the spectral radius of the rate Jacobian at raw parameters `p` (NaN when
-unknown); it is evaluated again whenever the parameters change, on their primal values. A
-parameter that is NaN (no value) is an error at `init`.
+The owned problem of a lowered field program (before the semantic passes).
 
-**Number types** (P5 role model). The element type `E` of the problem is `eltype(u0)`,
+Kernels named in `init` (the masks of masked conditions) run at `init`, after a parameter or
+input change, and at the start of every step, before its substeps, so a mask that reads the
+time, a field or an input follows it; the others run each substep. Every input field must
+have a value at `init`: an unset one is an error naming it (see [`resolve_inputs`](@ref)).
+A parameter that is NaN (no value) is an error at `init`.
+
+# Arguments
+- `program::Program`: the lowered field program.
+- `u0`: the flat initial state on the host.
+- `tspan`: the time span.
+- `p`: the raw parameters.
+
+# Keywords
+- `state`: the keys of the packed state fields (two buffers each).
+- `kind::Symbol`: `:rate` (stepped by [`ExplicitEuler`](@ref); the program stores
+  `c + dt · rate` with `dt = G.rt[2]`) or `:map` ([`ExplicitMap`](@ref)). Any other value is
+  an `ArgumentError`.
+- `init = String[]`: the kernels that run at a step's start.
+- `index = LatticeIndex()`: the [`LatticeIndex`](@ref).
+- `tables = []`: the tables, `key => values`.
+- `inputs = []`: `symbol => values` for the input fields (an array with one value per site,
+  or a number).
+- `backend = CPU()`: the KernelAbstractions backend.
+- `options = CompileOptions()`: the compile options.
+- `stability = p -> NaN`: a bound `ρ` on the spectral radius of the rate Jacobian at raw
+  parameters `p` (NaN when unknown). It is evaluated again whenever the parameters change,
+  on their primal values.
+- `route`, `terms`, `linearity`: the [`GroupSpec`](@ref) texts (how to give a count, the
+  terms the bound does not see) and linearity classes.
+
+# Number types
+The element type `E` of the problem is `eltype(u0)`,
 promoted with the parameters only when they carry derivative parts (Dual `p` gives a Dual
 state; a plain Float64 `p` leaves a Float32 state Float32; a BigFloat `p` is kept as given
 and rounded once to the compute type). The bodies are emitted for the value type
@@ -33,6 +53,8 @@ recompiles. `tspan` stays Float64 on the host. A non-isbits `E` (BigFloat) runs 
 only; Float64 values on a backend without Float64 are refused. `p` is a plain vector, so it
 is a SciMLStructures structure whose `Tunable` portion is every scalar parameter (`replace`
 promotes its eltype); kind tables are constants outside `p` (not tunable in this version).
+
+See also [`FieldSolution`](@ref), [`FieldIntegrator`](@ref).
 """
 struct FieldProblem{N, B, X, R, U, PV, E, TB, TT} <: SciMLBase.AbstractSciMLProblem
     program::Program{N}
@@ -79,12 +101,25 @@ function FieldProblem(
     return FieldProblem(spec, u0, tspan, pv; index, tables, inputs, backend, options)
 end
 """
-    FieldProblem(spec::GroupSpec, u0, tspan, p; index, tables, inputs, backend, options)
+    FieldProblem(spec::GroupSpec, u0, tspan, p; index = LatticeIndex(), tables = [],
+                 inputs = [], backend = CPU(), options = CompileOptions())
 
 The owned problem of the group `spec` (its rate program, state, kind, masks and stability
-bound): the default algorithm's update (`ExplicitEuler()` for rates, `ExplicitMap()` for
-maps) is fused into the rate program by the update pass; another algorithm's is fused when
-it first steps the problem (once per family, [`group_program`](@ref)).
+bound).
+
+The default algorithm's update (`ExplicitEuler()` for rates, `ExplicitMap()` for maps) is
+fused into the rate program by the update pass; another algorithm's is fused when it first
+steps the problem (once per family, [`group_program`](@ref)).
+
+# Arguments
+- `spec::GroupSpec`: the group.
+- `u0`, `tspan`, `p`: the flat initial state, the time span and the raw parameters.
+
+# Keywords
+- `index`, `tables`, `inputs`, `backend`, `options`: as for the program method above.
+
+# Returns
+- A `FieldProblem`.
 """
 function FieldProblem(
         spec::GroupSpec, u0, tspan, p; index = LatticeIndex(), tables = Pair{
@@ -486,15 +521,25 @@ end
 """
     FieldSolution
 
-Saved states of an owned solve: `t`, `u` (flat host vectors), `retcode`, and the substep
-counts used: `substeps` the first group's (the only one's for one group), `counts` every
-group's, in group order ([`substep_counts`](@ref)). Indexed by symbol through
+Saved states of an owned solve.
+
+It is indexed by symbol through
 SymbolicIndexingInterface: `sol[c]` is a vector of grid-shaped arrays, `sol[c, i]` one of
 them, `sol(t; idxs = c)` the grid at time `t` (linear between the saves) and
 [`field_series`](@ref)`(sol, c)` the time-first view, as on the owned `ODESolution`. An aux
 field `K ~ rhs` is not in `u`: `aux` holds its values at each save, evaluated from the saved
-state at the save time, and `sol[K]` reads them. `stats` holds the solver counters of the
-groups' status words ([`field_stats`](@ref)).
+state at the save time, and `sol[K]` reads them.
+
+# Fields
+- `prob`: the problem.
+- `t::Vector`: the save times.
+- `u::Vector`: the saved states (flat host vectors).
+- `retcode::ReturnCode.T`: the return code.
+- `substeps::Int`: the first group's substep count (the only one's for one group).
+- `counts::Vector{Int}`: every group's count, in group order ([`substep_counts`](@ref)).
+- `aux::Vector`: the aux fields at each save (flat), or empty.
+- `stats::NamedTuple`: the solver counters of the groups' status words
+  ([`field_stats`](@ref)).
 """
 struct FieldSolution{P, U, TT}
     prob::P
@@ -588,6 +633,19 @@ Parameters and tables change only through `integ.ps[sym] = v` or
 the substeps and rebinds the steps, or else leaves the integrator unchanged. Writing
 `integ.p[i] = v` directly has no effect on the run: the steps keep the values they were
 bound to.
+
+# Fields
+- `prob`, `alg`: the problem and the algorithm.
+- `store::FieldStore`: the field store.
+- `runtimes::Tuple`: one [`GroupRuntime`](@ref) per field group, in group order.
+- `p`, `pgood`: the parameters, and the parameters the steps are bound to.
+- `dt`: the window; `substeps::Int`: the first group's count.
+- `ts`, `us`: the saved times and states (flat, host); `auxu`: the aux fields at each save.
+- `retcode::ReturnCode.T`: the return code so far.
+- `windows::Int`: every window stepped (shortened ones too).
+- `syncs::Int`: the host copies of a device state taken.
+
+The other fields hold the save schedule, the time stops and the callbacks.
 """
 mutable struct FieldIntegrator{
         P <: FieldProblem, A, S <: FieldStore, RT <: Tuple, T, PV, TB, U, TT,
@@ -659,8 +717,9 @@ end
 """
     substeps(prob, alg, p = prob.p; dt = nothing) -> Int
 
-The substep count of `alg` on `prob` at parameters `p` over the window `dt` (the `solve`
-keyword; `nothing`: the clock's period): `⌈dt ρ(p) / 1.8⌉`; with a user
+The substep count of `alg` on `prob` at parameters `p` over the window `dt`.
+
+The count is `⌈dt ρ(p) / 1.8⌉`; with a user
 count `n`, the larger of `n` and the count of the bound over the terms the bound sees
 ([`seen_bound`](@ref)), or `n` when that is not finite; when the full bound is unknown the
 count is the user's for the terms it does not cover, and a warning names them, once per
@@ -671,6 +730,17 @@ evaluates the aux fields once, and a count `substeps = n` (a minimum) has nothin
 so it changes nothing. This is the one policy of both routes,
 [`substeps`](@ref)`(spec, alg, dt, pp)` of the problem's group, in standalone `FieldProblem`
 words ([`ProblemTexts`](@ref)).
+
+# Arguments
+- `prob::FieldProblem`: the problem.
+- `alg`: the field algorithm.
+- `p = prob.p`: the parameters.
+
+# Keywords
+- `dt = nothing`: the window (the `solve` keyword); `nothing` is the clock's period.
+
+# Returns
+- The substep count.
 """
 function substeps(
         ::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing,
@@ -811,7 +881,15 @@ end
     steady_alg(alg) -> QuasiSteady
 
 The algorithm of a steady row `0 ~ rhs` that no pair names, beside `alg` (both front
-ends): `QuasiSteady`, with its `linsolve` and `solver_type` when it has them.
+ends).
+
+# Arguments
+- `alg`: the algorithm of the other fields.
+
+# Returns
+- `alg` itself when it is a [`QuasiSteady`](@ref). Else a `QuasiSteady` with `alg`'s
+  `linsolve` and `solver_type` when it has them, and `init = :steady` when `alg` starts
+  steady.
 """
 function steady_alg(a)
     if a isa QuasiSteady
@@ -833,6 +911,20 @@ end
 
 Whether `alg` has `init = :steady`: its group starts at its steady state
 ([`steady_start`](@ref)).
+
+# Arguments
+- `alg`: the field algorithm.
+
+# Returns
+- `true` if `alg` has an `init` property equal to `:steady`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Problems: BackwardEuler
+
+julia> LatticeFields.Problems.starts_steady(BackwardEuler(; init = :steady))
+true
+```
 """
 starts_steady(a) = hasproperty(a, :init) && getproperty(a, :init) === :steady
 # a steady row's algorithm: `QuasiSteady` only
@@ -998,9 +1090,10 @@ function _save_list(prob::FieldProblem, o, t0::T, tf::T, dt::T, a1, clock) where
     return _save_times(t0, tf, dt, o.save_start, o.save_end, sat)
 end
 """
-    LARGE_SAVE_BYTES
+    LARGE_SAVE_BYTES::Int
 
-The saved size (bytes) above which `init` of a field run or a Potts run warns (2 GiB). With
+The saved size (bytes) above which `init` of a field run or a Potts run warns: `2^31`
+(2 GiB). With
 SciML's default, `save_everystep = isempty(saveat)`, every step's state is kept on the host,
 and a long run of a large lattice then holds more states than memory.
 """
@@ -1049,9 +1142,17 @@ end
 """
     resolve_tols(abstol, reltol) -> (atol, rtol)
 
-Internal front-end helper: validate and resolve `abstol` and `reltol` `solve`/`init`
-keywords against the SciML defaults (`1 // 10^6` and `1 // 10^3`). Throws `ArgumentError` if
-negative, non-finite, non-real, or if both are zero.
+Validate and resolve the `abstol` and `reltol` keywords of `solve`/`init` against the SciML
+defaults (`1 // 10^6` and `1 // 10^3`).
+
+A front-end helper. It throws an `ArgumentError` if a value is negative, not finite, not
+real, or if both are zero.
+
+# Arguments
+- `abstol`, `reltol`: the keywords as given; `nothing` takes the default.
+
+# Returns
+- `(atol, rtol)`, the resolved tolerances.
 """
 function resolve_tols(abstol, reltol)
     atol = abstol === nothing ? (1 // 10^6) : _tol_keyword("abstol", abstol)
@@ -1330,10 +1431,17 @@ end
 """
     steady_start(alg) -> QuasiSteady
 
-The steady solve of `alg`'s `init = :steady` (both routes): `QuasiSteady` with
-`alg`'s `linsolve` and `solver_type` (and `nlsolve` for a `QuasiSteady` group);
+The steady solve of `alg`'s `init = :steady` (both routes).
+
 `linsolve = :auto` takes `LatticePCG` to `reltol = 1e-6` within 64 iterations
 (`STEADY_INNER`), the host-checked steady solve of a system with no time.
+
+# Arguments
+- `alg`: the field algorithm.
+
+# Returns
+- A [`QuasiSteady`](@ref) with `alg`'s `linsolve` and `solver_type` (and `nlsolve` for a
+  `QuasiSteady` group).
 """
 function steady_start(a)
     return QuasiSteady(;
@@ -1349,9 +1457,14 @@ end
 """
     StartSubsteps(rule, keys)
 
-The substep rule of a steady start in a coupled `PottsProblem` (`init = :steady`):
-`rule(pp)` (the `QuasiSteady` policy: its steady refusals), whose refusal names `init` and
-its route.
+The substep rule of a steady start in a coupled `PottsProblem` (`init = :steady`).
+
+Calling it runs `rule(pp)` (the `QuasiSteady` policy: its steady refusals), whose refusal
+names `init` and its route.
+
+# Fields
+- `rule`: the `QuasiSteady` substep rule.
+- `keys`: the group's state keys.
 """
 struct StartSubsteps{R}
     rule::R
@@ -1379,7 +1492,7 @@ end
     StartText()
 
 The steady start in a runtime's messages (`totals.where`): "the steady start
-(`init = :steady`, t = …)".
+(`init = :steady`, t = …)". It has no fields.
 """
 struct StartText end
 function (::StartText)(w, t1)
@@ -1903,9 +2016,17 @@ end
 """
     finish!(integ) -> integ
 
-The run of `solve!` without its solution: step to the end of the time span, then the checks
-at the end (statuses, declared intervals, a state that is not finite; a failure saves the
-state it stopped at). Inferred; `solve!` then builds the solution behind a barrier.
+The run of `solve!` without its solution.
+
+It steps to the end of the time span, then runs the checks at the end (statuses, declared
+intervals, a state that is not finite; a failure saves the state it stopped at). It is
+inferred; `solve!` then builds the solution behind a barrier.
+
+# Arguments
+- `integ::FieldIntegrator`: the integrator.
+
+# Returns
+- `integ`.
 """
 function finish!(integ::FieldIntegrator)
     getfield(integ, :verbose) ||
@@ -1949,12 +2070,19 @@ end
 """
     field_stats(integ) -> NamedTuple
 
-The solver counters of an owned run, summed over its groups' status words:
-`solves`, `budget` (linear budget hits), `floor` (rounding floors), `newton_budget` (Newton
-budget hits). All zero for the explicit algorithms. On a device, where a run reads the
+The solver counters of an owned run, summed over its groups' status words.
+
+On a device, where a run reads the
 status words only at the saves and at the end, it reads them first (one copy per group), so
 the counts are current in the middle of a run too; a failure found there becomes
 `integ.retcode`, as at a save.
+
+# Arguments
+- `integ::FieldIntegrator`: the integrator.
+
+# Returns
+- `(; solves, budget, floor, newton_budget)`: the solves, the linear budget hits, the
+  rounding floors and the Newton budget hits. All zero for the explicit algorithms.
 """
 function field_stats(integ::FieldIntegrator)
     Exec.ishost(integ.prob.backend) || _check_statuses!(integ)
@@ -2001,8 +2129,15 @@ end
 """
     steady_fields(prob) -> Vector{String}
 
-The state fields of `prob` written as steady rows `0 ~ rhs` (each row's field by the rule of
-`LatticePDE.steady_choice`), which `QuasiSteady` solves.
+The state fields of `prob` written as steady rows `0 ~ rhs`, which `QuasiSteady` solves.
+
+Each row's field follows the rule of `LatticePDE.steady_choice`.
+
+# Arguments
+- `prob::FieldProblem`: the problem.
+
+# Returns
+- The state keys, a new `Vector{String}`.
 """
 steady_fields(prob::FieldProblem) = copy(prob.group.spec.steady)
 function Base.show(io::IO, ::MIME"text/plain", prob::FieldProblem)
@@ -2247,7 +2382,14 @@ end
     check_aux_write(ix, sym)
 
 Throw an `ArgumentError` in the user's words when `sym` (or an entry of a list) is an aux
-field of index `ix` (`K ~ rhs`: computed, never written); else nothing.
+field of index `ix` (`K ~ rhs`: computed, never written).
+
+# Arguments
+- `ix`: the symbol table.
+- `sym`: the symbol written, or a list of them.
+
+# Returns
+- `nothing` when no aux field is written.
 """
 function check_aux_write(ix, sym)
     sym isa Union{AbstractArray, Tuple} &&
@@ -2325,8 +2467,17 @@ end
 The values `vals` written at the flat state indices `idx` of `prob` against the declared
 intervals of its state fields ([`declared_intervals`](@ref)): the stability
 bound takes those intervals for the coefficients that read the fields, so a value outside
-one is refused before anything changes, naming the field, the value and the site (`what`:
-"starts at" for `remake(; u0)` and `reinit!`, "is written" for a state write).
+one is refused before anything changes, naming the field, the value and the site.
+
+# Arguments
+- `prob::FieldProblem`: the problem.
+- `vals`: the values written.
+- `idx`: the flat state indices.
+- `what::AbstractString`: the verb of the message, "starts at" for `remake(; u0)` and
+  `reinit!`, "is written" for a state write.
+
+# Returns
+- `nothing`.
 """
 function check_declared_state(prob::FieldProblem, vals, idx, what::AbstractString)
     decl = declared_intervals(prob.stability)
@@ -2828,6 +2979,13 @@ more, as the stability bound of the group's own rows needs at the current parame
 follows `setp`, input and table writes. `integ.substeps` and `sol.substeps` are the first
 group's.
 
+# Arguments
+- `integ` or `sol`: a [`FieldIntegrator`](@ref) or a [`FieldSolution`](@ref).
+
+# Returns
+- The counts, one per group.
+
+# Examples
 ```julia
 ig = init(prob, FieldGroups(o => ExplicitEuler(); default = ExplicitEuler(; substeps = \
 1)); dt = 0.01)

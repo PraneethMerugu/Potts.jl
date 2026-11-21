@@ -6,16 +6,32 @@
 # shape).
 
 """
-    FieldSeries
+    FieldSeries{T}(size, slice)
 
-A field's values over the saves of a solution, time first (MethodOfLines' shape): an
-`AbstractArray` of size `(nt, dims...)` whose entries are read from the saved states when
-indexed, with no copy of the series ([`field_series`](@ref) gives it; `sol[c]` is a vector
-of grids). `s[i, :, :]` (or `sol[c, i]`, `sol[c][i]`) is the grid at save `i`, `Array(s)`
+A field's values over the saves of a solution, time first (MethodOfLines' shape).
+
+It is an `AbstractArray` of size `(nt, dims...)` whose entries are read from the saved
+states when indexed, with no copy of the series ([`field_series`](@ref) gives it; `sol[c]`
+is a vector of grids). `s[i, :, :]` (or `sol[c, i]`, `sol[c][i]`) is the grid at save `i`, `Array(s)`
 copies the whole series. An aux field (`K ~ rhs`) is evaluated from the saved state at each
 save time when that save is read. An owned solve saves host vectors; an OrdinaryDiffEq solve
 on a device saves device arrays: there read whole grids (`s[i, :, :]`, `Array(s)`), not
 single entries.
+
+# Fields
+- `size::NTuple{N, Int}`: `(nt, dims...)`.
+- `slice`: the function `i -> grid` that gives the grid at save `i` (a view of the save for
+  a state field).
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> s = LatticeFields.Problems.FieldSeries{Float64}((2, 3), i -> fill(Float64(i), 3));
+
+julia> s[2, 1], size(s)
+(2.0, (2, 3))
+```
 """
 struct FieldSeries{T, N, F} <: AbstractArray{T, N}
     size::NTuple{N, Int}
@@ -76,11 +92,19 @@ end
     field_series(sol, c) -> FieldSeries
 
 The time-first values of the field, aux field or input `c` of a solution (MethodOfLines'
-shape): `size = (length(sol.t), dims...)`, a lazy view of the saves. In both coupled and
-standalone routes `sol[c]` is one grid per save (as SciML reads a variable), so
-`field_series(sol, c)[i, :, :] == sol[c][i] == sol[c, i]`; this accessor is the time-first
-view, for a standalone `FieldProblem`/ODE solution and for a coupled `PottsProblem`
-(`PottsSolution`, per-MCS states).
+shape).
+
+In both coupled and standalone routes `sol[c]` is one grid per save (as SciML reads a
+variable), so `field_series(sol, c)[i, :, :] == sol[c][i] == sol[c, i]`. This accessor is
+the time-first view, for a standalone `FieldProblem`/ODE solution and for a coupled
+`PottsProblem` (`PottsSolution`, per-MCS states).
+
+# Arguments
+- `sol`: the solution.
+- `c`: the symbol of a field, aux field or input.
+
+# Returns
+- A [`FieldSeries`](@ref) of size `(length(sol.t), dims...)`, a lazy view of the saves.
 """
 function field_series(sol, sym)
     s = _field_series(sol, sym)
@@ -231,14 +255,27 @@ end
     ImplicitFacts
 
 The resolved implicit facts of one field group ([`implicit_facts`](@ref)), as data (the
-report words them): `keys` its fields; `linsolve` its solvers as resolved and `krylov` the
-coupled solve's Krylov solver (or `nothing`); `levels` and `solver_type` per solver;
-`newton` the Newton count and `given` whether the user gave it; `coupled`, `linear` (a
-coupled solve, linear in its state), `exact` (the operator `J̃` is exact at the bound
-parameters), `exact0` (exact apart from the signs of the Robin faces and multipliers),
-`switch`, `iterate`, `seen` (every term out of the operator has a bound), `cyclic`; `h` the
-substep, `ρin` the bound of the terms out of the operator, `θ`, `smin` (the decay); `terms`
-the terms out of the operator and `unseen` those no bound sees.
+report words them). It is a `NamedTuple` type.
+
+# Fields
+- `keys::Vector{String}`: the group's fields.
+- `linsolve::Vector{Any}`: its solvers as resolved.
+- `krylov`: the coupled solve's Krylov solver, or `nothing`.
+- `levels::Vector{Int}`, `solver_type::Vector{Type}`: per solver.
+- `newton::Int`: the Newton count; `given::Bool`: whether the user gave it.
+- `coupled::Bool`, `linear::Bool`: a coupled solve, linear in its state.
+- `exact::Bool`: the operator `J̃` is exact at the bound parameters.
+- `exact0::Bool`: exact apart from the signs of the Robin faces and multipliers.
+- `switch::Bool`, `iterate::Bool`: as for [`RowOperator`](@ref), over the group's rows.
+- `cyclic::Bool`: the group's rows read one another in a cycle.
+- `seen::Bool`: every term out of the operator has a bound.
+- `h::Float64`: the substep.
+- `ρin::Float64`: the bound of the terms out of the operator.
+- `θ::Float64`: the largest ratio sum of a scaled row's terms out of the operator
+  ([`inexact_bounds`](@ref)).
+- `smin::Float64`: the decay (the steady shift).
+- `terms::Vector{String}`: the terms out of the operator.
+- `unseen::Vector{String}`: the terms no bound sees.
 """
 const ImplicitFacts = @NamedTuple{
     keys::Vector{String}, linsolve::Vector{Any}, krylov::Any, levels::Vector{Int},
@@ -250,16 +287,25 @@ const ImplicitFacts = @NamedTuple{
     terms::Vector{String}, unseen::Vector{String},
 }
 """
-    LatticeStats
+    LatticeStats(integ::FieldIntegrator)
 
-The statistics of an owned solve (`sol.stats`): `nf` the windows stepped (shortened ones
-too), `nsolve` the implicit solves, `counts` the substep count of each field group
-([`substep_counts`](@ref)), and the solver counters of the groups' status words
-([`field_stats`](@ref)): `solves`, `budget`, `floor`, `newton_budget`; `syncs` the host
-copies of a device state that callbacks and interpolated saves took (0 with none);
-`implicit` the resolved implicit facts of each group, `nothing` for an explicit one
-([`implicit_facts`](@ref): `linsolve`, the multigrid levels, `solver_type`, the Newton count
-and its rule, the operator's exactness), taken when the solution is built.
+The statistics of an owned solve (`sol.stats`), taken from the integrator when the solution
+is built.
+
+# Fields
+- `nf::Int`: the windows stepped (shortened ones too).
+- `nsolve::Int`: the implicit solves.
+- `counts::Vector{Int}`: the substep count of each field group
+  ([`substep_counts`](@ref)).
+- `solves::Int64`, `budget::Int64`, `floor::Int64`, `newton_budget::Int64`: the solver
+  counters of the groups' status words ([`field_stats`](@ref)).
+- `syncs::Int`: the host copies of a device state that callbacks and interpolated saves
+  took (0 with none).
+- `implicit::Vector{Union{Nothing, ImplicitFacts}}`: the resolved implicit facts of each
+  group, `nothing` for an explicit one ([`implicit_facts`](@ref): `linsolve`, the
+  multigrid levels, `solver_type`, the Newton count and its rule, the operator's
+  exactness).
+- `dt::Float64`: the window.
 """
 struct LatticeStats
     nf::Int
@@ -329,7 +375,8 @@ The field reads differ from `PDETimeSeriesSolution`'s layout:
 - `sol(t, x, y…; idxs = c)` interpolates linearly in time and multilinearly in space;
 - an integer, colon, index-array or `CartesianIndex` index reads `sol.u` as SciML does.
 
-[`field_series`](@ref) gives a field as one array with time first.
+[`field_series`](@ref) gives a field as one array with time first. `LatticeSolution` is a
+type alias of `ODESolution` with a [`LatticeProblem`](@ref), not a constructor.
 """
 const LatticeSolution = typewith(SciMLBase.ODESolution, :prob, LatticeProblem)
 field_stats(s::LatticeSolution) = _stats(s.stats)

@@ -39,6 +39,12 @@ using ..Schedule: LaunchSpec, StepPlan, plan, fusion_report
 using ..Solvers: Solvers, LatticeMultigrid, LatticePCG, LatticeGMRES, LatticeBlockSolve
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
+"""
+    rgf(ex::Expr) -> function
+
+Compile the function expression `ex` into a `RuntimeGeneratedFunction` of this module,
+with its expression dropped (`drop_expr`), so it does not hold the expression.
+"""
 rgf(ex::Expr) = drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
 
 public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind_program, rebind, retime,

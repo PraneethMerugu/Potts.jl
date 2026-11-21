@@ -8,12 +8,27 @@
 """
     ParamSlot(name; text = name, default = nothing, role = :base, derivation = nothing)
 
-A parameter slot of a group: its `name` (the slot's key), the parameter as
-the user wrote it (`text`), its default as given (any `Real`, or `nothing` when the front
-end binds the values itself), its `role` (`:base`, `:computed`, or `:clock` for
-[`CLOCK_KEY`](@ref)) and, for `:computed`, its `derivation`: the expression of the base
-parameters as written (the compiled derivation of a problem's computed slots is its index's,
-`LatticeIndex.derive`). `string(slot)` is its name.
+A parameter slot of a group. `string(slot)` is its name. The role defaults to `:clock` when
+`name` is [`CLOCK_KEY`](@ref), else `:base`. Any other role throws an `ArgumentError`.
+
+# Fields
+- `name::String`: the slot's key.
+- `text::String`: the parameter as the user wrote it.
+- `default`: its default as given (any `Real`), or `nothing` when the front end binds the
+  values itself.
+- `role::Symbol`: `:base`, `:computed`, or `:clock` for [`CLOCK_KEY`](@ref).
+- `derivation`: for `:computed`, the expression of the base parameters as written. The
+  compiled derivation of a problem's computed slots is its index's, `LatticeIndex.derive`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> s = LatticeFields.Problems.ParamSlot("D"; default = 0.1);
+
+julia> (string(s), s.role, s.default)
+("D", :base, 0.1)
+```
 """
 struct ParamSlot
     name::String
@@ -43,9 +58,13 @@ Base.show(io::IO, s::ParamSlot) = print(io, s.name)
 """
     TableSpec(key; name = key, values = nothing)
 
-A table of a group: its `key`, its user `name` and its values as given (the
-element type kept), or `nothing` when the front end binds them itself. `string(t)` is its
-key.
+A table of a group. `string(t)` is its key.
+
+# Fields
+- `key::String`: the table's key.
+- `name::String`: its user name.
+- `values`: its values as given (the element type kept), or `nothing` when the front end
+  binds them itself.
 """
 struct TableSpec
     key::String
@@ -63,12 +82,18 @@ Base.show(io::IO, t::TableSpec) = print(io, t.key)
     InputSpec(key; name = key, eltype = Real, bounds = (-Inf, Inf), default = nothing,
         filled = false)
 
-An input field of a group: its `key`, its user `name`, its element type
-(`Bool`, `Int32` or a real type), its declared `bounds`, its `default` (or `nothing`) and
-whether it is `filled`: a caller writes it on the device at every step (coupled
-`PottsProblem`'s CPM reads), so no host check of its values runs between steps and an
-implicit algorithm treats it as moving data. The fields of other groups (`spec.external`)
-are inputs too, not filled. `string(i)` is its key.
+An input field of a group. The fields of other groups (`spec.external`) are inputs too, not
+filled. `string(i)` is its key.
+
+# Fields
+- `key::String`: the input's key.
+- `name::String`: its user name.
+- `eltype::Type`: its element type (`Bool`, `Int32` or a real type).
+- `bounds::Tuple{Float64, Float64}`: its declared bounds.
+- `default`: its default, or `nothing`.
+- `filled::Bool`: a caller writes it on the device at every step (coupled `PottsProblem`'s
+  CPM reads). No host check of its values then runs between steps, and an implicit
+  algorithm treats it as moving data.
 """
 struct InputSpec
     key::String
@@ -93,10 +118,17 @@ Base.string(i::InputSpec) = i.key
 Base.show(io::IO, i::InputSpec) = print(io, i.key)
 
 """
-    GroupSpec
+    GroupSpec(rate::Program; state, external = String[], params = String[],
+        tables = String[], inputs = String[], init = String[], kind, clock = nothing,
+        stability = p -> NaN, route = "ExplicitEuler(; substeps = n)", terms = String[],
+        linearity = nothing, operator = nothing, steady = String[], timefree = false)
 
-The description of one field group, shared by coupled and standalone routes:
+The description of one field group, shared by coupled and standalone routes. The keywords
+set the fields of the same name. `params`, `tables` and `inputs` take names or slots, and
+`route` and `terms` make `texts`. A `kind` other than `:rate` or `:map` throws an
+`ArgumentError`.
 
+# Fields
 - `rate`: the group's rate program before the semantic passes (`rate:c` kernels store the
   rate in a scratch field `∂c`; `map:`, `aux:` and `mask:` kernels as written): a
   [`FieldGroup`](@ref) fuses each algorithm's update into it
@@ -160,16 +192,24 @@ function GroupSpec(
 end
 
 """
-    FieldGroup(spec; alg)
+    FieldGroup(spec::GroupSpec; alg = default)
 
-The numerical group of `spec`: for each algorithm, the semantic program of its update fused
+The numerical group of `spec`. The default `alg` is the default algorithm of the group's
+kind: `ExplicitEuler()` for rates, `ExplicitMap()` for maps.
+
+For each algorithm, the semantic program of its update fused
 into `spec.rate` ([`group_program`](@ref): `fuse_update(spec.rate, update_rule(alg))`, an IR
 pass with no symbolic step, made once per [`update_key`](@ref)), and its plans, planned and
 emitted once per `(update_key(alg), value type, kernels)` and shared by every problem and
 runtime made from it (the plans of `ExplicitEuler()` at `dt = 0.1` and at `dt = 0.2`
-are one). `program` is the program of `alg` (the default algorithm of the group's kind:
-`ExplicitEuler()` for rates, `ExplicitMap()` for maps); every algorithm's program has the
-same fields, kernels and rules, so one store serves them all.
+are one). Every algorithm's program has the same fields, kernels and rules, so one store
+serves them all.
+
+# Fields
+- `spec::GroupSpec`: the group's description.
+- `program::Program`: the program of `alg`.
+- `programs::Dict`: the programs made so far, by [`update_key`](@ref).
+- `plans::Dict`: the plans made so far, as `(init plan, step plan)`.
 """
 struct FieldGroup{N}
     spec::GroupSpec{N}
@@ -208,16 +248,21 @@ const CLOCK_KEY = "clock__tick"
 """
     clock_slot(spec) -> Int
 
-The parameter slot of the clock in group `spec` ([`CLOCK_KEY`](@ref)), or 0 when its kernels
-do not read the step index.
+The parameter slot of the clock in group `spec` ([`CLOCK_KEY`](@ref)).
+
+# Returns
+- The slot's index, or 0 when the group's kernels do not read the step index.
 """
 clock_slot(spec::GroupSpec) = something(findfirst(q -> q.name == CLOCK_KEY, spec.params), 0)
 
 """
     group_program(g, alg) -> Program
 
-The semantic program of group `g` stepped by `alg`: its update fused into the rate program,
-once per `update_key(alg)` (thread-safe).
+The semantic program of group `g` stepped by `alg`. It is made once per `update_key(alg)`
+and is thread-safe.
+
+# Returns
+- The group's rate program with the update of `alg` fused into it.
 """
 function group_program(g::FieldGroup, alg)
     return lock(
@@ -267,8 +312,22 @@ end
 """
     group_plans(g, alg, V, backend, options; kernels) -> (init plan, step plan)
 
-The plans of group `g` for algorithm `alg` at value type `V` (once per update, value type
-and kernel set; thread-safe).
+The plans of group `g` for algorithm `alg` at value type `V`. They are made once per
+update, value type and kernel set, and the call is thread-safe.
+
+# Arguments
+- `g::FieldGroup`: the group.
+- `alg`: the algorithm.
+- `V::Type`: the value type.
+- `backend`: the backend.
+- `options::CompileOptions`: the compile options.
+
+# Keywords
+- `kernels`: the `(init ids, step ids)` of the kernels to plan. The default is the kernels
+  of the group's state fields.
+
+# Returns
+- `(init plan, step plan)`.
 """
 function group_plans(
         g::FieldGroup, alg, ::Type{V}, backend, o::CompileOptions;
@@ -291,21 +350,35 @@ end
 
 The stability bound of the rows `keys` alone, for a group of those fields: a front end's
 bound defines it (LatticePDE's `StabilityBound` drops the cross terms that read fields
-outside the group, which the group reads from their arrays). Any other bound is kept whole
-(conservative: the bound of every row).
+outside the group, which the group reads from their arrays).
+
+# Returns
+- The front end's restricted bound. Any other bound is returned whole (conservative: the
+  bound of every row).
 """
 restrict_bound(stability, keys) = stability
 
 """
     lagged_coupling(stability, groups, p; within = nothing) -> Union{Nothing, Vector}
 
-For the field groups `groups` (vectors of state keys, in stepping order) at parameters `p`,
-per group `(; rate, row, other, text, raw, reads, unseen)`:
+The lagged coupling of the field groups `groups` at the parameters `p`. A front end's bound
+defines it (LatticePDE's `StabilityBound`).
+
+# Arguments
+- `stability`: the bound of the whole field system.
+- `groups`: the groups, as vectors of state keys in stepping order.
+- `p`: the raw parameters.
+
+# Keywords
+- `within = nothing`: per group, a collection of group indices (its loop, from
+  [`group_loops`](@ref)). Only the terms that read those groups then count.
+
+# Returns
+- `nothing` (the default method): the bound does not know the cross terms.
+- Else a vector with one `(; rate, row, other, text, raw, reads, unseen)` per group:
 - `rate`: the largest over the group's rows of the sum of the largest magnitudes of the
   coefficients of the terms that read fields of other groups (a group reads them from their
-  arrays, held over its window; `Inf` or `NaN` when a coefficient has no finite bound); with
-  `within` (per group, a collection of group indices: its loop, from [`group_loops`](@ref)),
-  only the terms that read those groups count;
+  arrays, held over its window; `Inf` or `NaN` when a coefficient has no finite bound);
 - for the worst row: its key `row`, the other field `other`, and the coefficient as the user
   wrote it, `text` (`raw`: the bound's own text);
 - `reads`: the groups whose fields the terms the bound sees read (the group read graph; the
@@ -313,9 +386,6 @@ per group `(; rate, row, other, text, raw, reads, unseen)`:
 - `unseen`: a row of the group has a term the bound cannot see that reads another field (of
   another row, or an aux field, which may carry any state): it may read any group. A term on
   the row's own field alone (`-a^3`) does not count.
-
-A front end's bound defines it (LatticePDE's `StabilityBound`). `nothing` (the default): the
-bound does not know the cross terms.
 """
 lagged_coupling(stability, groups, p; within = nothing) = nothing
 
@@ -337,21 +407,40 @@ reads a steady field). `why` is `nothing` or why the rule has no bound: `(:islan
 decay and no face anchor, `(:robin, k, _)` a Robin face with a negative diagonal,
 `(:steady, k, o)` a steady row that reads a steady field of the loop, `(:unseen, k, _)` a
 term the bound cannot see, `(:coef, k, o)` a coefficient with no finite bound,
-`(:steady_only, _, _)` a loop of steady groups only. `nothing` (the default): the bound does
-not know the gain (every such loop is refused).
+`(:steady_only, _, _)` a loop of steady groups only.
+
+# Returns
+- A vector of the named tuples above, one per group, or `nothing` (the default method):
+  the bound does not know the gain, and every such loop is refused.
 """
 steady_loop_rates(stability, groups, p, steady, loops) = nothing
 
 """
     group_loops(parts) -> Vector{Vector{Int}}
 
-The loops of the group read graph of `parts` (from [`lagged_coupling`](@ref)): per group,
-the groups of its strongly connected component, itself included, when that holds more than
-one group; else empty (the group is in no loop). Group `g` reads group `h` when a term of
-`g` that the bound sees reads a field of `h`; a group with a term the bound cannot see that
-reads another field (`unseen`) reads every other group. Groups outside every loop are block
-triangular to the others: each is stable under its own count, and the lag between groups
-only adds an O(window) source error.
+The loops of the group read graph of `parts` (from [`lagged_coupling`](@ref)). Group `g`
+reads group `h` when a term of `g` that the bound sees reads a field of `h`; a group with a
+term the bound cannot see that reads another field (`unseen`) reads every other group.
+Groups outside every loop are block triangular to the others: each is stable under its own
+count, and the lag between groups only adds an O(window) source error.
+
+# Returns
+- Per group, the groups of its strongly connected component, itself included, when that
+  holds more than one group. Else an empty vector: the group is in no loop.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> parts = [(; reads = [2], unseen = false), (; reads = [1], unseen = false),
+                (; reads = Int[], unseen = false)];
+
+julia> LatticeFields.Problems.group_loops(parts)
+3-element Vector{Vector{Int64}}:
+ [1, 2]
+ [1, 2]
+ []
+```
 """
 function group_loops(parts)
     n = length(parts)
@@ -395,7 +484,10 @@ abstract type AbstractPolicyTexts end
 """
     ProblemTexts(route = "ExplicitEuler(; substeps = n)")
 
-Standalone `FieldProblem` words: `route` is how a count is given.
+The words of standalone `FieldProblem` messages.
+
+# Fields
+- `route::String`: how a count is given.
 """
 struct ProblemTexts <: AbstractPolicyTexts
     route::String
@@ -418,8 +510,8 @@ end
 
 """
     substeps(spec::GroupSpec, alg::ExplicitEuler, dt, pp; fields = spec.state,
-        stability = spec.stability,
-             key = identity, texts = ProblemTexts(spec.texts.route)) -> Int
+        stability = spec.stability, key = identity,
+        texts = ProblemTexts(spec.texts.route), span = nothing) -> Int
 
 The substep count of the group `spec` (its fields `fields`, whose rows' bound is
 `stability`) stepped by `alg` over a window `dt` at the raw parameters `pp` (with the tables
@@ -436,9 +528,18 @@ and the bound's inputs: [`with_tables`](@ref), primal values). The shared subste
   (`why`: [`unbounded_key`](@ref), no value);
 - a group with no field (aux fields only) takes 0.
 
-`key` makes the warning's once-key from the value-free reason (standalone `FieldProblem`:
-the program's text, hashed; coupled `PottsProblem`: the group's fingerprint text); `texts`
-words the messages.
+# Keywords
+- `fields = spec.state`: the group's fields.
+- `stability = spec.stability`: the bound of their rows.
+- `key = identity`: makes the warning's once-key from the value-free reason (standalone
+  `FieldProblem`: the program's text, hashed; coupled `PottsProblem`: the group's
+  fingerprint text).
+- `texts`: words the messages.
+- `span = nothing`: the run's time span. With it and no explicit count, the automatic count
+  is also checked over the span (a bound that reads the time).
+
+# Returns
+- The substep count `n`. A refusal throws an `ArgumentError`.
 """
 function substeps(
         spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = spec.state,
@@ -492,8 +593,8 @@ _explicit_count(a) = hasproperty(a, :substeps) && getproperty(a, :substeps) !== 
 
 """
     check_coupling(stability, groups, explicit, pp, dt; check = eachindex(groups),
-        key = identity,
-                   texts = ProblemTexts(), span = nothing)
+        key = identity, texts = ProblemTexts(), span = nothing, steady = nothing,
+        rows0 = String[]) -> nothing
 
 The coupling between field groups: one rule for both coupled and standalone routes. `groups`
 are the groups' state keys in stepping order, `explicit[g]` whether group `g` has an
@@ -508,6 +609,11 @@ know the cross terms is the same for every group. `span` is the time span (stand
 group takes its gain ([`steady_loop_rates`](@ref)): each group of the loop that is not
 steady needs `κ = dt · rate ≤ 1` with the steady reads through the gain (`steady_gain_text`
 past it), and a loop whose gain the rule does not bound is refused (`steady_loop_text`).
+`rows0` are the steady rows `0 ~ rhs` (written as rates first on a `BackwardEuler` route);
+the refusal names them.
+
+# Returns
+- `nothing`. A refusal throws an `ArgumentError`.
 """
 function check_coupling(
         stability, groups, explicit, pp, dt::Real; check = eachindex(groups),
@@ -602,11 +708,13 @@ end
 """
     unseen_reads(stability) -> Union{Nothing, Vector{Tuple{String, String, Vector{String}}}}
 
-Each term the bound cannot see with the state fields it reads, structurally: `(row key,
-"key: term", state
-keys)` (its own field included; an aux field read through its definition). A front end's
-bound defines it (LatticePDE's `StabilityBound`); `nothing` (the default): the bound does
-not record them.
+Each term the bound cannot see, with the state fields it reads, structurally. A front end's
+bound defines it (LatticePDE's `StabilityBound`).
+
+# Returns
+- One `(row key, "key: term", state keys)` per term: its own field included, and an aux
+  field read through its definition.
+- `nothing` (the default method): the bound does not record them.
 """
 unseen_reads(stability) = nothing
 
@@ -622,6 +730,9 @@ every group), or `:none` (the loop is closed by seen reads and its unseen terms 
 it, or only their own field). `terms` the unseen terms that read another field, as the user
 wrote them; `fields` the state fields they read (the fields whose declared intervals let the
 bound see them).
+
+# Returns
+- `(; kind, terms, fields)`, as above.
 """
 function unseen_loop(stability, pp, keys, parts, loop)
     gof = Dict{String, Int}(k => h for (h, ks) in enumerate(keys) for k in ks)
@@ -671,6 +782,12 @@ end
 # a bound's term as the user wrote it (`u: -u*(v^2)`, not `u: -u(t, x, y)*(v(t, x, y)^2)`)
 _termtext(t) = replace(string(t), r"\(t(, \w+)*\)" => "", "LatticePDE." => "")
 # what κ covers when a loop meets unseen terms (the warning and `field_report` say it alike)
+"""
+    cover_text(terms) -> String
+
+What κ covers when a loop of groups meets the unseen terms `terms`, in words. The coupling
+warning and [`field_report`](@ref) use the same text.
+"""
 function cover_text(terms)
     return string(
         "κ covers only the cross terms the bound sees (unseen: ",
@@ -687,6 +804,9 @@ the loop is checked as one only because an unseen term counts as reading every g
 names the loop's fields, the unseen terms (`c.terms`), what κ covers, and the routes (the
 loop's fields in one group; declared intervals for the state fields the terms read,
 `c.fields`). One text for both routes (an `AbstractPolicyTexts` may define its own).
+
+# Returns
+- The warning text.
 """
 function coupling_unseen_text(::AbstractPolicyTexts, c)
     head = if c.kind === :conservative
@@ -723,8 +843,14 @@ The substep rule of one group, a callable of the raw parameters (with the tables
 texts)`, then, with `coupling = (; stability, groups, explicit, index, whole,
 steady)`, the coupling check of group `index` ([`check_coupling`](@ref)) at `whole(pp)`, the
 parameters of the whole field system. Coupled `PottsProblem` field phases hold one (a host
-function, evaluated at build and when the parameters change, never per MCS). `key` is the
-group's once-key text.
+function, evaluated at build and when the parameters change, never per MCS).
+
+# Fields
+- `spec::GroupSpec`, `alg::AbstractFieldAlgorithm`: the group and its algorithm.
+- `dt::Float64`: the window.
+- `key::String`: the group's once-key text.
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `coupling`: the coupling check's facts, or `nothing`.
 """
 struct GroupSubsteps{S, A <: AbstractFieldAlgorithm, T, C}
     spec::S
@@ -764,6 +890,13 @@ end
 # --- standalone `FieldProblem` words (`ProblemTexts`) ---
 _fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 _num(x) = round(x; sigdigits = 6)                  # a value in a message (`dt = 0.003334`)
+"""
+    unbounded_text(texts::AbstractPolicyTexts, c) -> String
+
+The refusal of an automatic substep count when the stability bound is unknown, naming why
+and how to give an explicit count, in the words of `texts`. `c` is the decision's context
+([`substeps`](@ref)).
+"""
 function unbounded_text(t::ProblemTexts, c)
     why = something(
         unbounded_reason(c.stability, c.pp),
@@ -780,6 +913,12 @@ function unbounded_text(t::ProblemTexts, c)
         "the terms it sees can raise it)"
     )
 end
+"""
+    uncovered_text(texts::AbstractPolicyTexts, c) -> String
+
+The warning of an explicit substep count when the full stability bound is unknown: what
+the bound does not cover. `c` is the decision's context ([`substeps`](@ref)).
+"""
 function uncovered_text(::ProblemTexts, c)
     return string(
         "ExplicitEuler(substeps = ", c.least, "): ", c.n,
@@ -791,6 +930,14 @@ function uncovered_text(::ProblemTexts, c)
 end
 # the parameter check of the bound (LatticePDE: negative diffusion, a coefficient not finite
 # at an entry), with its own words
+"""
+    refuse_parameters(texts::AbstractPolicyTexts, c)
+
+Run the bound's parameter check ([`check_parameters`](@ref)) and refuse the parameters in
+the words of `texts`: a negative diffusion coefficient, or a coefficient that is not finite
+where the inputs reach. `c` is the decision's context (`stability`, `pp`, `fields` and the
+check's result `r`). Throws an `ArgumentError`.
+"""
 function refuse_parameters(::ProblemTexts, c)
     check_parameters(c.stability, c.pp)
     why = if isempty(c.r.negative)
@@ -807,6 +954,13 @@ function refuse_parameters(::ProblemTexts, c)
         )
     )
 end
+"""
+    coupling_unknown_text(texts::AbstractPolicyTexts, c; refuse::Bool) -> String
+
+The message for a bound that does not see the terms that couple the groups. With
+`refuse = true`, the refusal with its routes; else the warning that the counts are the
+user's. `c` is the decision's context ([`check_coupling`](@ref)).
+"""
 function coupling_unknown_text(t::ProblemTexts, c; refuse::Bool)
     if refuse
         return string(
@@ -824,6 +978,13 @@ function coupling_unknown_text(t::ProblemTexts, c; refuse::Bool)
         )
     end
 end
+"""
+    coupling_unbounded_text(texts::AbstractPolicyTexts, c; refuse::Bool) -> String
+
+The message for a group in a loop whose cross coefficient has no finite bound. With
+`refuse = true`, the refusal of an automatic count with its routes; else the warning of an
+explicit count. `c` is the decision's context ([`check_coupling`](@ref)).
+"""
 function coupling_unbounded_text(t::ProblemTexts, c; refuse::Bool)
     ks, q, lf = c.keys[c.g], c.q, c.lf
     refuse && return string(
@@ -847,6 +1008,12 @@ function coupling_unbounded_text(t::ProblemTexts, c; refuse::Bool)
 end
 # why the coupling rule has no bound for a loop with a QuasiSteady group
 # (`steady_loop_rates`'s `why`), in words both routes share
+"""
+    steady_why_text(why) -> String
+
+Why the coupling rule has no bound for a loop with a `QuasiSteady` group, in words both
+routes share. `why` is the `why` of [`steady_loop_rates`](@ref).
+"""
 function steady_why_text(why)
     w, k, o = why
     w === :island && return string(
@@ -890,6 +1057,13 @@ end
 # the refusal of a loop with a QuasiSteady group whose gain the rule does not bound, with
 # its routes: steady groups that read one another take one `QuasiSteady` (one group: solved
 # together)
+"""
+    steady_loop_text(texts::AbstractPolicyTexts, c) -> String
+
+The refusal of a loop with a `QuasiSteady` group whose gain the coupling rule does not
+bound, with its routes, in the words of `texts`. `c.why` is from
+[`steady_loop_rates`](@ref).
+"""
 function steady_loop_text(t::ProblemTexts, c)
     w = c.why[1]
     one = if w === :steady_only
@@ -922,6 +1096,13 @@ function steady_loop_text(t::ProblemTexts, c)
 end
 # the `BackwardEuler` routes' condition when steady fields of the loop have steady rows `0 ~
 # rhs` (which take only `QuasiSteady`): written as rates first (both routes)
+"""
+    rows0_route(c) -> String
+
+The extra route of a `BackwardEuler` refusal when steady fields of the loop (`c.qs`) have
+steady rows `0 ~ rhs` (`c.rows0`): write them as rates `D(c) ~ rhs` first, since a steady
+row takes only `QuasiSteady`. Returns `""` when no such row is in the loop.
+"""
 function rows0_route(c)
     z = [k for k in c.qs if k in (hasproperty(c, :rows0) ? c.rows0 : String[])]
     isempty(z) && return ""
@@ -937,6 +1118,12 @@ function rows0_route(c)
 end
 # the gain of a loop with a QuasiSteady group in words: the worst term and the gain it reads
 # through
+"""
+    steady_gain_words(c) -> String
+
+The gain of a loop with a `QuasiSteady` group in words: the worst term and the gain it
+reads through ([`steady_loop_rates`](@ref)).
+"""
 function steady_gain_words(c)
     x = c.x
     via = if isempty(x.qs)
@@ -957,6 +1144,12 @@ function steady_gain_words(c)
     )
 end
 # the refusal of a loop with a QuasiSteady group past the limit, with its routes
+"""
+    steady_gain_text(texts::AbstractPolicyTexts, c) -> String
+
+The refusal of a loop with a `QuasiSteady` group past the coupling limit, with its routes,
+in the words of `texts`. `c` is the decision's context ([`check_coupling`](@ref)).
+"""
 function steady_gain_text(t::ProblemTexts, c)
     lim = floor(1 / c.x.rate; sigdigits = 4)
     span = c.span
@@ -981,6 +1174,12 @@ function steady_gain_text(t::ProblemTexts, c)
     )
 end
 # the refusal of a loop past the limit, with its routes
+"""
+    loop_text(texts::AbstractPolicyTexts, c) -> String
+
+The refusal of a loop of groups past the coupling limit `κ ≤ 1`, with its routes, in the
+words of `texts`. `c` is the decision's context ([`check_coupling`](@ref)).
+"""
 function loop_text(t::ProblemTexts, c)
     q, κ, lf, dt, pp = c.q, c.κ, c.lf, c.dt, c.pp
     unseen = [k for h in c.loops[c.g] if c.parts[h].unseen for k in c.keys[h]]
@@ -1123,9 +1322,11 @@ const STATUS_CAUSES = (
 """
     status_word(cache) -> word or nothing
 
-The device status word of an algorithm's cache ([`STATUS_CODE`](@ref)), or `nothing` for an
-algorithm with no solve (`ExplicitEuler`, `ExplicitMap`): then [`check_status!`](@ref) reads
-nothing and costs nothing.
+The device status word of an algorithm's cache ([`STATUS_CODE`](@ref)).
+
+# Returns
+- The word, or `nothing` for an algorithm with no solve (`ExplicitEuler`, `ExplicitMap`).
+  Then [`check_status!`](@ref) reads nothing and costs nothing.
 """
 status_word(::Any) = nothing
 # the Newton count of an algorithm's cache (its budget warning names it), or nothing
@@ -1141,6 +1342,9 @@ more substeps or a larger linear budget; a Newton divergence or a residual that 
 finite takes more substeps only (a smaller step brings the iteration into its contraction;
 neither more iterations nor a larger linear budget does). `coupled`: the group is solved
 together (a `QuasiSteady` group only), so its linear budget is the `LatticeGMRES`'s.
+
+# Returns
+- The route text.
 """
 function status_route(alg, which::Symbol, cause::Integer = 0; coupled::Bool = false)
     which === :budget &&
@@ -1227,9 +1431,20 @@ that bring its fields back to slot 1 (`ends_in = :slot1`), its substep count `n`
 `dt`, the algorithm's cache (`alg_cache`) and the status of its last step. Made by
 [`bind_group`](@ref), stepped by [`advance!`](@ref).
 
-`pending` is the host task that compiles the launches on a device (`nothing` when there is
-none): a caller awaits it before the first step. `host` is the caller's own record of
-the binding (`PottsProblem`: the parameter object and the state arrays it was bound from).
+# Fields
+- `store`, `alg`, `backend`, `program`: the store, the algorithm, the backend and the
+  group's program.
+- `n::Int`, `dt::Float64`: the substep count and the window.
+- `p`: the parameters the launches are bound to (shared with the driver).
+- `cache`: the algorithm's cache ([`alg_cache`](@ref)).
+- `status::ReturnCode.T`: the worst code since the bind or the last
+  [`clear_status!`](@ref).
+- `totals`: the status word's host totals ([`check_status!`](@ref)).
+- `pending`: the host task that compiles the launches on a device, or `nothing`. A caller
+  awaits it before the first step.
+- `host`: the caller's own record of the binding (`PottsProblem`: the parameter object and
+  the state arrays it was bound from).
+- other fields: the launches, clamps, copies and declared intervals of the binding.
 """
 mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H, DC}
     store::ST
@@ -1293,8 +1508,8 @@ end
 
 """
     bind_group(g, alg, store, p; fields = g.spec.state, n, dt, c, ends_in = :parity,
-        backend,
-               options, kernels = nothing) -> GroupRuntime
+        backend, options, V, host = nothing, kernels = nothing, shared = nothing,
+        abstol = 1 // 10^6, reltol = 1 // 10^3) -> GroupRuntime
 
 Bind the fields `fields` of group `g` (all of its state by default) to the arrays of `store`
 at parameters `p` (the vector is shared: the driver updates it in place before `rebind!`),
@@ -1304,6 +1519,19 @@ copies them back to slot 1 after an odd count, so a group that runs after it rea
 values. `kernels = (initids, stepids)` binds those kernels of the group's program alone
 (coupled `PottsProblem`'s at-init evaluation of the `aux:` kernels, `n = 0`); by default the
 fields' own kernels.
+
+# Keywords
+- `fields`, `n`, `dt`, `ends_in`, `kernels`: as above. An `ends_in` other than `:parity`
+  or `:slot1` throws an `ArgumentError`.
+- `c`: the compute element type's zero.
+- `backend`, `options::CompileOptions`: the backend and the compile options.
+- `V::Type`: the value type (checked by [`check_backend_float64`](@ref)).
+- `host = nothing`: the caller's own record of the binding (`rt.host`).
+- `shared = nothing`, `abstol`, `reltol`: passed to the algorithm's cache
+  ([`bind_cache`](@ref)).
+
+# Returns
+- The [`GroupRuntime`](@ref).
 """
 function bind_group(
         g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
@@ -1358,6 +1586,9 @@ false: Metal) is refused at the bind, in the user's words: a `compute_type` or `
 of Float64, or a field of its program declared `lattice_storage = Float64` (the group's own,
 or one it reads). Without the check the kernel compiler would refuse it in its own group's
 own terms. A Float64 state type `V` is the caller's own check.
+
+# Returns
+- `nothing`. A refusal throws an `ArgumentError`.
 """
 function check_backend_float64(prog, alg, backend, V::Type; fields = String[])
     Exec.supports(backend, Float64) && return nothing
@@ -1537,6 +1768,9 @@ rebind!(rt::GroupRuntime, p) = install_launches!(rt, rebind_launches(rt, p))
 The first part of [`rebind!`](@ref): the runtime's launches bound to the parameter values
 `p`, returned and not installed. It may throw (a parameter refused); the runtime is then
 unchanged. Install the result with [`install_launches!`](@ref).
+
+# Returns
+- The `(step launches, mask launches)` pair.
 """
 function rebind_launches(rt::GroupRuntime, p)
     return (
@@ -1592,6 +1826,12 @@ end
 _parity(rt::GroupRuntime) = isempty(rt.swaps) ? 1 : rt.store.cur[rt.swaps[1]]
 
 # the masked values now, at the parameters the launches are bound to
+"""
+    clamp_now!(rt::GroupRuntime)
+
+Write the masked values of runtime `rt`'s masked fields now, at the parameters its launches
+are bound to. Returns `nothing`.
+"""
 clamp_now!(rt::GroupRuntime) = (_clamp!(rt.clamps, rt.store, rt.p); nothing)
 
 """
@@ -1609,6 +1849,15 @@ algorithms); `rt.status` keeps the worst code since the bind or the last
 
 A group with no state (aux fields `K ~ rhs` only) takes `n = 0`: its kernels
 run once, at the window's start `(t0, k)`, with the window as their step length.
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+- `clock::Tuple{Real, Integer}`: `(t0, k)`.
+- `n::Integer = rt.n`: the substep count.
+- `window::Real = rt.dt`: the window.
+
+# Returns
+- The algorithm's `ReturnCode.T` for the step.
 """
 function advance!(
         rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt.n,
@@ -1716,6 +1965,12 @@ bound_params!(stability, pp) = nothing
 bound_params(stability) = nothing
 # the time span a bound is taken over now, `(t0, t1)`, or nothing (a front end's bound
 # defines it)
+"""
+    bound_window(stability) -> Union{Nothing, Tuple}
+
+The time span `(t0, t1)` a bound that [`reads_time`](@ref) is taken over now, set by
+[`bound_window!`](@ref). A front end's bound defines it; `nothing` by default.
+"""
 bound_window(stability) = nothing
 
 """
@@ -1746,6 +2001,9 @@ to `acc`, a front end's counters with the same fields, when given) and are zeroe
 device; a linear or Newton budget hit warns once per runtime, naming the fields, the count
 and the route, and stays `Success`. An algorithm with no word reads nothing (no launch, no
 copy).
+
+# Returns
+- The worst `ReturnCode.T` so far.
 """
 function check_status!(rt::GroupRuntime, acc = nothing)
     return _check_status!(status_word(rt.cache), rt, acc)
@@ -1893,6 +2151,9 @@ Window `w` of runtime `rt` (the status word's entry [2]: the `w`-th window since
 the last [`clear_status!`](@ref)) in words: `rt.totals.where(w, t1)` when the front end set
 it (`t1` the start time of the first window), else "window w (t = …)", `t` the window's
 start time.
+
+# Returns
+- The window's text.
 """
 function window_text(rt::GroupRuntime, w::Integer)
     rt.totals.where === nothing || return rt.totals.where(w, rt.totals.t1)

@@ -30,10 +30,18 @@
     residual_rule(alg)
 
 The residual of implicit algorithm `alg` for [`fuse_residual`](@ref
-LatticeFields.Compile.fuse_residual): `rule(kb, c, r, cn)` from the iterate `c`, the rate
-`r` and the stage's right side `cn`: `(cn − c)/(γh) + r`, `γh = G.rt[2]` (the launch's step
-argument: `h` for Backward Euler, `h/2` for Crank–Nicolson, `2h/3` for BDF2). One residual
-for every implicit algorithm; they differ in `cn` and `γ` (the runtime's stages).
+LatticeFields.Compile.fuse_residual).
+
+`rule(kb, c, r, cn)` gives, from the iterate `c`, the rate `r` and the stage's right side
+`cn`, the value `(cn − c)/(γh) + r`, with `γh = G.rt[2]` (the launch's step argument: `h`
+for Backward Euler, `h/2` for Crank–Nicolson, `2h/3` for BDF2). One residual for every
+implicit algorithm; they differ in `cn` and `γ` (the runtime's stages).
+
+# Arguments
+- `alg::AbstractImplicitFieldAlgorithm`: the implicit algorithm.
+
+# Returns
+- The residual rule, a callable `rule(kb, c, r, cn)`.
 """
 residual_rule(::AbstractImplicitFieldAlgorithm) = BERule()
 struct BERule end
@@ -59,8 +67,17 @@ _algname(a) = string(nameof(typeof(a)))
 """
     residual_program(g, alg) -> Program
 
-The semantic residual program of group `g` for implicit algorithm `alg` (`fuse_residual` of
-its rate program, once per residual key; thread-safe).
+The semantic residual program of group `g` for implicit algorithm `alg`.
+
+It is `fuse_residual` of the group's rate program, built once per residual key and cached
+(thread-safe).
+
+# Arguments
+- `g::FieldGroup`: the group.
+- `alg::AbstractImplicitFieldAlgorithm`: the implicit algorithm.
+
+# Returns
+- The residual `Program`.
 """
 function residual_program(g::FieldGroup, alg::AbstractImplicitFieldAlgorithm)
     return lock(
@@ -478,9 +495,30 @@ function _be_rhs_body!(i, f, v, res, j, m, smask, rmask, dom, ih, ih2)
 end
 
 """
+    ImplicitRow
+
 One row of an implicit runtime: its residual launches per slot parity and iteration kind,
 its state buffers, its solver (or `nothing`: a row with no diffusion, solved site by site)
 with the arrays its solve reads and writes, and its update's mask and clip.
+
+The implicit runtime builds it at bind; it is not built by a user.
+
+# Fields
+- `key::String`: the row's state field.
+- `res::NTuple{4}`: the residual launches, per slot parity and iteration kind.
+- `bufs::NTuple{2}`: the row's two state slots.
+- `resarr`: the residual array `res:c`.
+- `solver`: the row's linear solver, or `nothing`.
+- `xs::NTuple{2}`: the solver's solution array in each of its slots.
+- `mask`, `mval`, `mvf`: the row's own mask (`c ~ masked(…)`), its value and its value
+  field, or `nothing`.
+- `lo`: the clip `lower` in the state type, or `nothing`.
+- `op::RowOperator`: the row's operator.
+- `numeric::Union{Nothing, Solvers.CellOperator}`: the numeric cell operator, when the row
+  is numeric.
+
+The other fields are the solver's workspaces and scalars, the operator arrays (`jac:`), and
+the Newton check's partials and history.
 """
 mutable struct ImplicitRow{
         R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF,
@@ -540,21 +578,27 @@ _solve_cache!(c) = Solvers.solve_owned!(c)
 """
     ImplicitCache
 
-The cache of an implicit runtime: its rows in solve order
-([`ImplicitRow`](@ref)), the operator program's launches per slot parity (or `nothing`), the
-Newton count, the step `h` and the `γ` the coefficients hold (the shift `1/(γh)`), the
-`stale` flag (the hierarchy is rebuilt before the next stage: set at bind, by
-[`reset!`](@ref) and by a change of `h` or `γ`), the `start` flag (the next substep is a
-start: Crank–Nicolson's damped substep, BDF2's Backward Euler substep; set at bind, by
-`reset!` and by a change of `h`), the `jumps` flag (Crank–Nicolson: the group's data can
-jump at every window, so the first substep of every window is damped), the `moving` flag
-(the operator reads data that change every window: it is rebuilt each window), the `timed`
-flag (the operator reads the time: it is rebuilt at each stage's end time), the `iterate`
-flag (a row's local Jacobian reads its own field, a local nonlinear term or a switch: that
-row's operator is rebuilt at every Newton iteration, at the iterate), Crank–Nicolson's
-right-side launches (`qres`, per slot parity, or nothing), the status word, the operator
-spec and the coupled solve (`cs`: a `CoupledKrylov` when the group's rows are solved
-together; `nothing` when they are solved one by one).
+The cache of an implicit runtime ([`bind_cache`](@ref) builds it).
+
+# Fields
+- The cache holds its rows in solve order (`rows`, [`ImplicitRow`](@ref)), the operator
+  program's launches per slot parity (`jac`, or `nothing`), the Newton count (`newton`), the
+  step `h` and the `γ` the coefficients hold (the shift `1/(γh)`), the `stale` flag (the
+  hierarchy is rebuilt before the next stage: set at bind, by [`reset!`](@ref) and by a
+  change of `h` or `γ`), the `start` flag (the next substep is a start: Crank–Nicolson's
+  damped substep, BDF2's Backward Euler substep; set at bind, by `reset!` and by a change of
+  `h`), the `jumps` flag (Crank–Nicolson: the group's data can jump at every window, so the
+  first substep of every window is damped), the `moving` flag (the operator reads data that
+  change every window: it is rebuilt each window), the `timed` flag (the operator reads the
+  time: it is rebuilt at each stage's end time), the `iterate` flag (a row's local Jacobian
+  reads its own field, a local nonlinear term or a switch: that row's operator is rebuilt at
+  every Newton iteration, at the iterate), Crank–Nicolson's right-side launches (`qres`, per
+  slot parity, or nothing), the status word, the operator spec and the coupled solve (`cs`:
+  a `CoupledKrylov` when the group's rows are solved together; `nothing` when they are
+  solved one by one).
+- The other fields hold the Newton settings (`check`, `flip`, `auto`, `check_div`,
+  `fail_budget`, `κ`, `abstol`, `reltol`) and the bounds of the terms out of the operator
+  (`seen`, `ρin`, `θ`).
 """
 mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT, GP, GC, GH}
     rows::RS
@@ -637,10 +681,29 @@ end
 step_retcode!(::ImplicitCache, rt) = SciMLBase.ReturnCode.Success
 
 """
-    bind_cache(alg, group, store, p; fields, n, dt, c, backend, options, V) -> cache
+    bind_cache(alg, group, store, p; fields, n, dt, c, backend, options, V,
+               shared = nothing, abstol = 1 // 10^6, reltol = 1 // 10^3) -> cache
 
-The algorithm's cache bound to `store` at parameters `p` (`alg_cache` for the explicit
-algorithms; an [`ImplicitCache`](@ref) for the implicit ones).
+The algorithm's cache bound to `store` at parameters `p`.
+
+# Arguments
+- `alg`: the field algorithm.
+- `group`: the [`FieldGroup`](@ref).
+- `store`: the [`FieldStore`](@ref).
+- `p`: the raw parameters.
+
+# Keywords
+- `fields`, `n`, `dt`, `c`, `backend`, `options`, `V`: the group's state keys, substep
+  count, window, compute zero, backend, compile options and value type, as
+  [`bind_group`](@ref) passes them. The explicit algorithms ignore every keyword.
+- `shared = nothing`: `(cache, store)` of the primal group, for a group bound to a Dual
+  store (see [`advance_shared!`](@ref)).
+- `abstol = 1 // 10^6`, `reltol = 1 // 10^3`: the `NLNewton` tolerances from the `solve`
+  keywords.
+
+# Returns
+- `alg_cache(alg, group, store)` for the explicit algorithms; an [`ImplicitCache`](@ref)
+  for the implicit ones.
 """
 bind_cache(alg, g, st, p; kw...) = alg_cache(alg, g, st)
 
@@ -2189,8 +2252,10 @@ end
         pp; fields = spec.state, stability = spec.stability,
              key = identity, texts = ProblemTexts(spec.texts.route)) -> Int
 
-The substep count of an implicit algorithm, the same policy as the explicit
-one with the implicit rule (§3.6): the parameter refusals first (a negative diffusion
+The substep count of an implicit algorithm.
+
+It is the same policy as the explicit one with the implicit rule: the parameter refusals
+first (a negative diffusion
 coefficient, a coefficient that is not finite where the inputs reach), then
 `n = max(m, ⌈2γ dt g⌉, ⌈2γ dt (ρ_adv + κ_in + ρ_rob) / (1 − θ)⌉)`: `m` the user's count
 (when left out 1, and 2 for Crank–Nicolson on data that can jump every window, so that a
@@ -2206,6 +2271,22 @@ the one kept, which contracts at any step size (a ratio above 1/2, or unknown, p
 term's Gershgorin bound in the sum instead). No stability bound is needed: an unknown bound
 is no refusal (the device check decides). When a rule raises the user's count, a warning
 says which, once per cause (`key`).
+
+# Arguments
+- `spec::GroupSpec`: the group.
+- `alg::AbstractImplicitFieldAlgorithm`: the implicit algorithm.
+- `dt`: the window.
+- `pp`: the raw parameters, with the tables and the bound's inputs.
+
+# Keywords
+- `fields = spec.state`: the group's fields.
+- `stability = spec.stability`: the stability bound.
+- `key = identity`: the key of the warnings, given once per cause.
+- `texts = ProblemTexts(spec.texts.route)`: the policy texts of the messages
+  ([`AbstractPolicyTexts`](@ref)).
+
+# Returns
+- The substep count `n` (0 for a group with no fields).
 """
 function substeps(
         spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, dt::Real, pp;

@@ -49,14 +49,30 @@ function _input_value(
 end
 
 """
-    resolve_inputs(p, index, given, base = nothing; t0 = nothing) -> Vector{Pair{String,
-        Any}}
+    resolve_inputs(p, index, given, base = nothing; t0 = nothing)
+        -> Vector{Pair{String, Any}}
 
-The value of every input field of program `p` (in field order): `base` (a previous list) or
-unset (`nothing`), replaced by the `given` pairs (`symbol => values`, the symbol looked up
-in `index`, or the field key). A value that is a function of the time
-([`is_input_function`](@ref)) gives its value at `t0` (a problem with no start time takes
-none); [`input_functions`](@ref) keeps the function.
+The value of every input field of program `p`, in field order.
+
+Each value is `base` (a previous list) or unset (`nothing`), replaced by the `given` pairs.
+A value that is a function of the time ([`is_input_function`](@ref)) gives its value at
+`t0`; [`input_functions`](@ref) keeps the function. A given value is checked: one value
+per site (or a number), the input's integer type, Bool declaration and bounds.
+
+# Arguments
+- `p::Program`: the field program.
+- `index`: the symbol table, a [`LatticeIndex`](@ref), or another value for keys only.
+- `given`: `symbol => values` pairs; the symbol is looked up in `index`, or is the field
+  key.
+- `base = nothing`: a previous list of `key => value` pairs.
+
+# Keywords
+- `t0 = nothing`: the start time. A problem with no start time takes no function of the
+  time: such a value throws an `ArgumentError`.
+
+# Returns
+- `key => value` pairs, one per input field: a flat host vector, or `nothing` for an unset
+  input.
 """
 function resolve_inputs(p::Program, index, given, base = nothing; t0 = nothing)
     ks = _input_keys(p)
@@ -96,19 +112,46 @@ end
 """
     is_input_function(v) -> Bool
 
-Whether an input value `v` is a function of the time: anything that is not a number,
-an array or `nothing` (an anonymous function `t -> values`, a named function, an
-interpolation object). The run calls it as `v(t)`, which returns an array with one value per
-site or a number.
+Whether an input value `v` is a function of the time.
+
+Anything that is not a number, an array or `nothing` is one: an anonymous function
+`t -> values`, a named function, an interpolation object. The run calls it as `v(t)`, which
+returns an array with one value per site or a number.
+
+# Arguments
+- `v`: the input value.
+
+# Returns
+- `true` if `v` is not a `Number`, an `AbstractArray` or `nothing`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> LatticeFields.Problems.is_input_function(t -> 2t), LatticeFields.Problems.is_input_function([1.0])
+(true, false)
+```
 """
 is_input_function(v) = !(v isa Union{Number, AbstractArray, Nothing})
 
 """
     input_functions(p, index, given, base = []) -> Vector{Pair{String, Any}}
 
-The inputs of `given` that are functions of the time, `key => f`, over those of `base`: a
-function replaces the input's previous one, and a value removes it (the input is constant
+The inputs of `given` that are functions of the time, `key => f`, over those of `base`.
+
+A function replaces the input's previous one, and a value removes it (the input is constant
 again).
+
+# Arguments
+- `p::Program`: the field program.
+- `index`: the symbol table that looks up the given symbols.
+- `given`: `symbol => value` pairs.
+- `base = []`: the previous `key => f` pairs.
+
+# Returns
+- The `key => f` pairs of the inputs that are functions of the time.
+
+See also [`resolve_inputs`](@ref), [`is_input_function`](@ref).
 """
 function input_functions(p::Program, index, given, base = Pair{String, Any}[])
     out = Pair{String, Any}[k => f for (k, f) in base]
@@ -354,8 +397,16 @@ _route(name::AbstractString) = Base.isidentifier(name) ? ":" * name : repr(Strin
 """
     input_name(index, key) -> String
 
-The name of input field `key` as the user writes it (`kind` for a generated `kind__in`, the
-`input_name` metadata of its variable), else the key.
+The name of input field `key` as the user writes it, else the key.
+
+The name is `kind` for a generated `kind__in`, or the `input_name` metadata of its variable.
+
+# Arguments
+- `index`: the symbol table, a [`LatticeIndex`](@ref). Any other value gives the key.
+- `key::AbstractString`: the input field key.
+
+# Returns
+- The name as a `String`.
 """
 input_name(ix::LatticeIndex, key::AbstractString) = get(ix.inputnames, key, String(key))
 input_name(_, key::AbstractString) = String(key)
@@ -376,10 +427,26 @@ _bnum(x) = isinteger(x) && isfinite(x) ? string(Int(x)) : string(x)
 is_bool_input(ix::LatticeIndex, key::AbstractString) = key in ix.boolinputs
 is_bool_input(_, ::AbstractString) = false
 
-# an input with no value is an error naming it; `built`: the problem exists already (an
-# owned problem at `init`, which `remake(prob; inputs)` can still give values), else it is
-# being built (an ODE problem, whose inputs are fixed when it is built); `index` gives the
-# names
+"""
+    check_inputs_set(inputs; built = true, index = nothing)
+
+Throw an `ArgumentError` that names every input with no value.
+
+An unset input is never read as zero.
+
+# Arguments
+- `inputs`: `key => value` pairs; `nothing` is an unset input.
+
+# Keywords
+- `built::Bool = true`: the problem exists already (an owned problem at `init`, which
+  `remake(prob; inputs)` can still give values). `false`: it is being built (an ODE
+  problem, whose inputs are fixed when it is built), and the message gives no `remake`
+  route.
+- `index = nothing`: the symbol table that gives the input names.
+
+# Returns
+- `nothing`.
+"""
 function check_inputs_set(inputs; built::Bool = true, index = nothing)
     unset = [input_name(index, k) for (k, v) in inputs if v === nothing]
     isempty(unset) || throw(
@@ -410,7 +477,24 @@ function check_inputs_set(inputs; built::Bool = true, index = nothing)
     return nothing
 end
 
-# upload the input values into the store's (only) slot of each input field
+"""
+    upload_inputs!(st, p, inputs; index = nothing) -> st
+
+Copy the input values into the store's (only) slot of each input field.
+
+It first checks that every input has a value ([`check_inputs_set`](@ref)).
+
+# Arguments
+- `st::FieldStore`: the field store, written in place.
+- `p::Program`: the field program.
+- `inputs`: `key => values` pairs.
+
+# Keywords
+- `index = nothing`: the symbol table that gives the input names for the messages.
+
+# Returns
+- `st`.
+"""
 function upload_inputs!(st::FieldStore, p::Program, inputs; index = nothing)
     check_inputs_set(inputs; index)
     for (k, v) in inputs
@@ -441,6 +525,11 @@ number; [`bound_inputs`](@ref)), as the stability hooks receive them
 change; a front end's bound reads the table values from `tables` (a coefficient `Dk[i]` or
 `value_at(Dk, kind)`) and the index values from `inputs`. An input the front end fills on
 the device every step is not passed (its declared bounds hold).
+
+# Fields
+- `p`: the raw parameters.
+- `tables::Vector{Pair{String, Vector{Float64}}}`: the tables, `key => values`.
+- `inputs::Vector{Pair{String, Any}}`: the input values the bound reads.
 """
 struct ParamsTables{P}
     p::P
@@ -456,9 +545,31 @@ Base.eltype(::Type{ParamsTables{P}}) where {P} = eltype(P)
     with_tables(p, tables; inputs = [])
 
 `p` as the stability hooks take it: `ParamsTables(p, tables, inputs)` when there are tables
-or inputs, else `p`. The hooks read the tables in Float64 on their primal values (a policy,
-as for the parameters: a BigFloat table is rounded and a Dual table drops its derivative
-parts here only; the problem keeps the values as given).
+or inputs, else `p`.
+
+The hooks read the tables in Float64 on their primal values (a policy, as for the
+parameters: a BigFloat table is rounded and a Dual table drops its derivative parts here
+only; the problem keeps the values as given).
+
+# Arguments
+- `p`: the raw parameters.
+- `tables`: the tables, `key => values`.
+
+# Keywords
+- `inputs = []`: the input values the bound reads, `key => values`.
+
+# Returns
+- A [`ParamsTables`](@ref), or `p` when `tables` and `inputs` are empty.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> w = LatticeFields.Problems.with_tables([1.0, 2.0], ["D" => [0.5]]);
+
+julia> w[2], w.tables
+(2.0, ["D" => [0.5]])
+```
 """
 function with_tables(p, tables; inputs = ())
     if isempty(tables) && isempty(inputs)
@@ -476,17 +587,33 @@ _primal64(v) = Float64[Float64(primal(x)) for x in v]
 """
     bound_inputs(stability) -> Vector{String}
 
-The keys of the inputs whose current values the stability bound reads (an index of a table
-read: the bound evaluates index 0 only where the values reach it). The default is none.
+The keys of the inputs whose current values the stability bound reads.
+
+Such an input is the index of a table read: the bound evaluates index 0 only where the
+values reach it.
+
+# Arguments
+- `stability`: the stability bound of the problem.
+
+# Returns
+- The input keys. The default is none.
 """
 bound_inputs(stability) = String[]
 
 """
     check_parameters(stability, p)
 
-A front end's parameter check at raw parameters `p` (primal values), run before stepping and
-at every parameter change: it throws for values no step count makes valid (LatticePDE:
-negative diffusion). The default checks nothing.
+A front end's parameter check at raw parameters `p` (primal values).
+
+It runs before stepping and at every parameter change. It throws for values no step count
+makes valid (LatticePDE: negative diffusion).
+
+# Arguments
+- `stability`: the stability bound of the problem.
+- `p`: the raw parameters.
+
+# Returns
+- `nothing`. The default checks nothing.
 """
 check_parameters(stability, p) = nothing
 
@@ -497,33 +624,60 @@ The declared intervals of the stability bound against the constant face and mask
 raw parameters `p`: a value outside its field's declared `bounds` drives
 the field out of the interval the bound takes, and is refused in the user's words
 (LatticePDE). Run with [`check_parameters`](@ref)'s policy, before stepping and at every
-parameter change. The default checks nothing.
+parameter change.
+
+# Arguments
+- `stability`: the stability bound of the problem.
+- `p`: the raw parameters.
+
+# Returns
+- `nothing`. The default checks nothing.
 """
 check_declared(stability, p) = nothing
 
 """
     declared_intervals(stability) -> Vector{Tuple{String, Tuple{Float64, Float64}}}
 
-The fields (state or aux, by key) with declared finite `bounds = (lo, hi)`:
-a write of a state field outside its interval is refused, as at the start. The default is
-none.
+The fields (state or aux, by key) with declared finite `bounds = (lo, hi)`.
+
+A write of a state field outside its interval is refused, as at the start.
+
+# Arguments
+- `stability`: the stability bound of the problem.
+
+# Returns
+- `(key, (lo, hi))` tuples. The default is none.
 """
 declared_intervals(stability) = Tuple{String, Tuple{Float64, Float64}}[]
 
 """
     used_intervals(stability) -> Vector{String}
 
-The keys of [`declared_intervals`](@ref) whose interval a coefficient bound read: a run
-checks that those fields stay in their intervals where it reads its status. The default is
-none.
+The keys of [`declared_intervals`](@ref) whose interval a coefficient bound read.
+
+A run checks that those fields stay in their intervals where it reads its status.
+
+# Arguments
+- `stability`: the stability bound of the problem.
+
+# Returns
+- The field keys. The default is none.
 """
 used_intervals(stability) = String[]
 
 """
     seen_bound(stability, p) -> Float64
 
-A bound on the spectral radius over the terms the stability bound sees, used to raise an
-explicit substep count (`NaN` when there is none). The default is `stability(p)`.
+A bound on the spectral radius over the terms the stability bound sees.
+
+It is used to raise an explicit substep count.
+
+# Arguments
+- `stability`: the stability bound of the problem.
+- `p`: the raw parameters.
+
+# Returns
+- The bound as a `Float64`, or `NaN` when there is none. The default is `stability(p)`.
 """
 seen_bound(stability, p) = Float64(stability(p))
 
@@ -531,13 +685,20 @@ seen_bound(stability, p) = Float64(stability(p))
     bound_report(stability, p) -> NamedTuple
 
 The parts of the stability bound at raw parameters `p` that the substep policy decides on
-([`substeps`](@ref)), `(; negative, coupled, nonfinite, terms)`: the keys of the rows with a
-diffusion coefficient below zero, the keys of the coupled rows that are not diagonally
-dominant, a `(key, coefficient, why)` per coefficient with no finite bound (`why`: `:cap`,
-`:tables`, or a `Tuple` of the entries where it is not finite), and the terms the bound
-cannot see (`"key: term"`). A bound may add `worst`, the row that gives the bound and its
-parts `(; key, diffusion, advection, reaction, cross)`, which the report prints. The default
-reports none (LatticePDE's `StabilityBound` reports them).
+([`substeps`](@ref)).
+
+# Arguments
+- `stability`: the stability bound of the problem.
+- `p`: the raw parameters.
+
+# Returns
+- `(; negative, coupled, nonfinite, terms)`: the keys of the rows with a diffusion
+  coefficient below zero, the keys of the coupled rows that are not diagonally dominant, a
+  `(key, coefficient, why)` per coefficient with no finite bound (`why`: `:cap`,
+  `:tables`, or a `Tuple` of the entries where it is not finite), and the terms the bound
+  cannot see (`"key: term"`). A bound may add `worst`, the row that gives the bound and its
+  parts `(; key, diffusion, advection, reaction, cross)`, which the report prints. The
+  default reports none (LatticePDE's `StabilityBound` reports them).
 """
 function bound_report(stability, p)
     return (;
@@ -549,26 +710,50 @@ end
 """
     unbounded_reason(stability, p) -> Union{Nothing, String}
 
-Why `stability(p)` has no value (the terms it cannot see, by name), for the substep error;
-the default gives none.
+Why `stability(p)` has no value (the terms it cannot see, by name), for the substep error.
+
+# Arguments
+- `stability`: the stability bound of the problem.
+- `p`: the raw parameters.
+
+# Returns
+- The reason as a `String`, or `nothing`. The default gives `nothing`.
 """
 unbounded_reason(stability, p) = nothing
 
 """
     unbounded_key(stability, p) -> Union{Nothing, String}
 
-The same reason as [`unbounded_reason`](@ref) without values: the terms and the causes
-only (no entry, no parameter value), so a warning keyed on it is given once per program,
-term and cause, however many values a sweep sets. The default is `unbounded_reason`.
+The same reason as [`unbounded_reason`](@ref) without values.
+
+It holds the terms and the causes only (no entry, no parameter value), so a warning keyed
+on it is given once per program, term and cause, however many values a sweep sets.
+
+# Arguments
+- `stability`: the stability bound of the problem.
+- `p`: the raw parameters.
+
+# Returns
+- The key as a `String`, or `nothing`. The default is `unbounded_reason(stability, p)`.
 """
 unbounded_key(stability, p) = unbounded_reason(stability, p)
 
 """
     check_bounds(p, index)
 
-The declared `bounds = (lo, hi)` of each parameter of `index` hold for the values `p`: an
-`ArgumentError` names the first parameter outside them, in slot order, with its bounds as
-`PottsProblem` prints them (`(0, 2)`). Every write checks it before anything changes.
+Check that the declared `bounds = (lo, hi)` of each parameter of `index` hold for the
+values `p`.
+
+An `ArgumentError` names the first parameter outside them, base parameters first and then
+computed ones, in slot order, with its bounds as `PottsProblem` prints them (`(0, 2)`). A
+NaN value passes. Every write checks it before anything changes.
+
+# Arguments
+- `p`: the raw parameter values.
+- `index`: the symbol table. An `index` that is not a [`LatticeIndex`](@ref) checks nothing.
+
+# Returns
+- `nothing`.
 """
 function check_bounds(p, index)
     index isa LatticeIndex || return nothing
@@ -611,8 +796,23 @@ function check_bounds(p, index, kv; tables = nothing)
     return check_bounds(q, index)
 end
 
-# a parameter whose value is NaN (no value given) is an error naming it; `built` as for
-# `check_inputs_set` (a problem being built has no `remake` yet)
+"""
+    check_values(p, index; built = true)
+
+Check the parameter values `p`: their declared bounds hold ([`check_bounds`](@ref)), and a
+NaN value (no value given) throws an `ArgumentError` that names the parameter.
+
+# Arguments
+- `p`: the raw parameter values.
+- `index`: the symbol table that gives the names.
+
+# Keywords
+- `built::Bool = true`: as for [`check_inputs_set`](@ref). A problem being built has no
+  `remake` yet, so the message gives the system's `initial_conditions` instead.
+
+# Returns
+- `nothing`.
+"""
 function check_values(p, index; built::Bool = true)
     check_bounds(p, index)          # a declared `bounds = (lo, hi)` holds at every write
     for i in eachindex(p)
