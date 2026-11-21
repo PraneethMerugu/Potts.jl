@@ -4,36 +4,145 @@
 # directly to log α through `CPMFunction(…; bias)`; constraints veto through `constraint`.
 # All primitives read the pre-commit state.
 
-"""A cell extends into the medium (`old` is medium, `new` is a cell)."""
+"""
+    is_extension(prop) -> Bool
+
+Return `true` if the copy is an extension: a cell copies into the medium (`prop.old` is
+the medium, `prop.new` is a cell).
+
+# Arguments
+- `prop`: the copy attempt, a [`Proposal`](@ref).
+
+# Returns
+- `Bool`.
+
+See also [`is_retraction`](@ref).
+"""
 @inline is_extension(prop) = prop.old == 0 && prop.new != 0
-"""A cell retracts, leaving the medium (`old` is a cell, `new` is medium)."""
+"""
+    is_retraction(prop) -> Bool
+
+Return `true` if the copy is a retraction: the medium copies into a cell (`prop.old` is a
+cell, `prop.new` is the medium).
+
+# Arguments
+- `prop`: the copy attempt, a [`Proposal`](@ref).
+
+# Returns
+- `Bool`.
+
+See also [`is_extension`](@ref).
+"""
 @inline is_retraction(prop) = prop.old != 0 && prop.new == 0
 
 """
     chemotaxis_delta(c, prop, χ; response = identity)
 
-Chemotaxis `ΔH = −χ (r(c[target]) − r(c[source]))` with a response `r` applied to each
-concentration: `identity` (linear), `saturating(s)` = `c/(s + c)`,
-`saturating_linear(s)` = `c/(s c + 1)`, or any function. Gate it by kind and copy type in
+Compute the chemotaxis energy change `ΔH = −χ (r(c[target]) − r(c[source]))`.
+
+The response `r` is applied to each concentration. Gate the term by kind and copy type in
 the model.
+
+# Arguments
+- `c`: the concentration site array.
+- `prop`: the copy attempt, a [`Proposal`](@ref).
+- `χ`: the chemotactic strength.
+
+# Keywords
+- `response = identity`: the response `r`: `identity` (linear),
+  [`saturating(s)`](@ref saturating), [`saturating_linear(s)`](@ref saturating_linear),
+  or any function.
+
+# Returns
+- The energy change.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> prop = CorePotts.Proposal{1}(1, 2, (1,), 1, Int32(0), Int32(1));
+
+julia> chemotaxis_delta([1.0, 3.0], prop, 2.0)
+4.0
+```
+
+See also [`saturating`](@ref).
 """
 @inline function chemotaxis_delta(c, prop, χ; response::F = identity) where {F}
     # bounds: the proposal's target and source are sites ≤ nsites = length(c)
     return -χ * (response(@inbounds(c[prop.target])) - response(@inbounds(c[prop.source])))
 end
 
-"""`saturating(s)`: the response `c -> c/(s + c)`."""
+"""
+    saturating(s) -> Function
+
+Return the saturating response `c -> c / (s + c)`.
+
+# Arguments
+- `s`: the saturation constant.
+
+# Returns
+- A function of the concentration.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> saturating(2.0)(2.0)
+0.5
+```
+
+See also [`chemotaxis_delta`](@ref), [`saturating_linear`](@ref).
+"""
 saturating(s) = c -> c / (s + c)
-"""`saturating_linear(s)`: the response `c -> c/(s c + 1)`."""
+"""
+    saturating_linear(s) -> Function
+
+Return the response `c -> c / (s c + 1)`.
+
+# Arguments
+- `s`: the saturation constant.
+
+# Returns
+- A function of the concentration.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> saturating_linear(1.0)(1.0)
+0.5
+```
+
+See also [`chemotaxis_delta`](@ref), [`saturating`](@ref).
+"""
 saturating_linear(s) = c -> c / (s * c + 1)
 
-"""Folds for [`neighborhood_mean`](@ref)."""
+"""
+    AbstractNeighborhoodMean
+
+The supertype of the folds of [`neighborhood_mean`](@ref): [`ArithmeticMean`](@ref),
+[`GeometricMean`](@ref) and [`Log1pGeometricMean`](@ref).
+"""
 abstract type AbstractNeighborhoodMean end
-"""Arithmetic mean."""
+"""
+    ArithmeticMean()
+
+The arithmetic mean, a fold of [`neighborhood_mean`](@ref).
+"""
 struct ArithmeticMean <: AbstractNeighborhoodMean end
-"""Geometric mean, zero if any value is zero."""
+"""
+    GeometricMean()
+
+The geometric mean, a fold of [`neighborhood_mean`](@ref). It is zero if any value is
+zero.
+"""
 struct GeometricMean <: AbstractNeighborhoodMean end
-"""`exp(mean(log1p(max(x, 0)))) − 1`."""
+"""
+    Log1pGeometricMean()
+
+The fold `exp(mean(log1p(max(x, 0)))) − 1` of [`neighborhood_mean`](@ref).
+"""
 struct Log1pGeometricMean <: AbstractNeighborhoodMean end
 
 @inline _fold_term(::ArithmeticMean, a) = a
@@ -52,9 +161,37 @@ end
 """
     neighborhood_mean(x, σ, ctx, site, owner; relation, fold = GeometricMean())
 
-Mean of `x` over `site` (if `owner` owns it) and its `relation` neighbors owned by
-`owner`. Zero for the medium or an empty set. The neighborhood-memory drive of the Act
-family is `−(λ/max)(mean(source, new) − mean(target, old))`.
+Compute the mean of `x` over `site` (if `owner` owns it) and its `relation` neighbors
+that `owner` owns.
+
+The result is zero for the medium or an empty set. A neighborhood-memory drive (as in
+the Act model) is `−(λ / max) (mean(source, new) − mean(target, old))`.
+
+# Arguments
+- `x`: the site values.
+- `σ`: the `ownership` array.
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `site`: the linear site index.
+- `owner`: the cell whose sites count.
+
+# Keywords
+- `relation`: the resolved relation of the neighbors. Required.
+- `fold::AbstractNeighborhoodMean = GeometricMean()`: the mean.
+
+# Returns
+- The mean, of the element type of `x`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((3,); boundary = Closed()); ctx = (; lattice = l);
+
+julia> r = relation(VonNeumann(), l); σ = Int32[1, 1, 2];
+
+julia> neighborhood_mean([1.0, 4.0, 9.0], σ, ctx, 2, 1; relation = r)
+2.0
+```
 """
 @inline function neighborhood_mean(
         x, σ, ctx, site, owner; relation,
@@ -89,8 +226,19 @@ family is `−(λ/max)(mean(source, new) − mean(target, old))`.
 end
 
 # bounds: prop.old is a cell id ≤ capacity = length(volume)
-"""Extinction policy `ForbidExtinction`: veto a copy that would remove a cell's last \
-site."""
+"""
+    forbid_extinction(volume, prop) -> Bool
+
+Return `false` for a copy that would remove a cell's last site: the extinction policy
+`ForbidExtinction`.
+
+# Arguments
+- `volume`: the volume tracker.
+- `prop`: the copy attempt, a [`Proposal`](@ref).
+
+# Returns
+- `Bool`: `true` if the copy is allowed.
+"""
 @inline forbid_extinction(volume, prop) = prop.old == 0 || @inbounds(volume[prop.old]) > 1
 
 # ---------------------------------------------------------------------------------------
@@ -99,22 +247,62 @@ site."""
 """
     local_components(σ, ctx, prop) -> Int
 
-Number of pieces the losing cell's (`prop.old`) sites around the target would form if the
-copy were accepted: face-connected components of its sites in the target's Moore
-neighborhood (3ᴺ − 1 ≤ 26 sites: runs of the 8-ring in 2D, a bit-dilation flood fill in
-3D), or arcs of the 6-ring on a hexagonal lattice. Out-of-domain sites are not part of the
-cell. Zero for the medium, when the target is the cell's last site, or when it is an
-isolated fragment. Connectivity rules are expressions over it: `local_components == 1`
-(hard, exactly one piece as in CompuCell3D), `λ * (local_components > 1)` (soft).
+Count the pieces that the losing cell's sites around the target would form if the copy
+were accepted.
+
+The pieces are the face-connected components of the cell's sites on the target's
+neighbor shell (see [`shell_offsets`](@ref)): runs of the 8-ring in 2D, a bit-dilation
+flood fill over the 26 sites in 3D, or arcs of the 6-ring on a hexagonal lattice.
+Out-of-domain sites are not part of the cell. The result is zero for the medium, when the
+target is the cell's last site, or when it is an isolated fragment. Connectivity rules
+are expressions over it: `local_components == 1` (hard, exactly one piece) or
+`λ * (local_components > 1)` (soft).
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+
+# Returns
+- `Int`: the number of pieces.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((3, 3); boundary = Closed()); ctx = (; lattice = l);
+
+julia> σ = Int32[1 0 1; 0 1 0; 0 0 0];   # the target (2, 2) joins two corners
+
+julia> prop = CorePotts.Proposal{2}(5, 2, (2, 2), 1, Int32(1), Int32(0));
+
+julia> local_components(σ, ctx, prop), locally_connected(σ, ctx, prop)
+(2, false)
+```
+
+See also [`locally_connected`](@ref), [`ring_arcs`](@ref).
 """
 @inline function local_components(σ, ctx, prop::Proposal)
     return prop.old == 0 ? 0 : Int(_old_pieces(read_shell(σ, ctx, prop), ctx.lattice, prop))
 end
 
 """
-`locally_connected(σ, ctx, prop)`: the losing cell stays exactly one local piece,
-`prop.old == 0 || local_components(σ, ctx, prop) == 1`. Zero pieces (the cell's last
-site, an isolated fragment) is rejected like two.
+    locally_connected(σ, ctx, prop) -> Bool
+
+Return `true` if the losing cell stays exactly one local piece:
+`prop.old == 0 || local_components(σ, ctx, prop) == 1`.
+
+Zero pieces (the cell's last site, an isolated fragment) is rejected like two.
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+
+# Returns
+- `Bool`.
+
+See also [`local_components`](@ref).
 """
 @inline function locally_connected(σ, ctx, prop::Proposal)
     return prop.old == 0 ||
@@ -124,20 +312,55 @@ end
 """
     ring_arcs(σ, ctx, prop) -> Int
 
-Pieces of the losing cell's (`prop.old`) sites on the target's neighbor shell, two shell
-sites joined when they are lattice face neighbors: the maximal runs (arcs) of the 8-ring
-on a square 2D lattice and of the 6-ring on a hexagonal one; the face-connected pieces of
-the 26-site Moore shell on a cubic 3D lattice. It equals [`local_components`](@ref) on every
-geometry. Zero for the medium. Out-of-domain sites are not the cell; periodic axes wrap.
-The shell is fixed, whatever the model's neighborhood.
+Count the pieces of the losing cell's sites on the target's neighbor shell, two shell
+sites joined when they are face neighbors.
+
+The pieces are the maximal runs (arcs) of the 8-ring on a square lattice and of the
+6-ring on a hexagonal one, and the face-connected pieces of the 26-site shell on a cubic
+lattice. It equals [`local_components`](@ref) on every geometry. The result is zero for
+the medium. Out-of-domain sites are not part of the cell; periodic axes wrap. The shell
+is fixed, whatever the model's neighborhood.
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+
+# Returns
+- `Int`: the number of pieces.
+
+See also [`ring_cells`](@ref), [`ring_medium`](@ref).
 """
 @inline ring_arcs(σ, ctx, prop::Proposal) = local_components(σ, ctx, prop)
 
 """
     ring_cells(σ, ctx, prop) -> Int
 
-Number of distinct cells (medium excluded) on the target's neighbor shell (see
-[`ring_arcs`](@ref)).
+Count the distinct cells on the target's neighbor shell, the medium excluded.
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+
+# Returns
+- `Int`: the number of distinct cells.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((3, 3); boundary = Closed()); ctx = (; lattice = l);
+
+julia> σ = Int32[1 0 2; 0 1 0; 0 0 3];
+
+julia> prop = CorePotts.Proposal{2}(5, 2, (2, 2), 1, Int32(1), Int32(0));
+
+julia> ring_cells(σ, ctx, prop), ring_medium(σ, ctx, prop)
+(3, 5)
+```
+
+See also [`ring_arcs`](@ref), [`ring_medium`](@ref).
 """
 @inline function ring_cells(
         σ, ctx,
@@ -149,9 +372,20 @@ end
 """
     ring_medium(σ, ctx, prop) -> Int
 
-Number of medium sites on the target's neighbor shell (see [`ring_arcs`](@ref)).
-Out-of-domain sites (a closed face, outside a domain mask) are not medium; on a periodic
-axis the shell wraps.
+Count the medium sites on the target's neighbor shell.
+
+Out-of-domain sites (off a closed face, or outside a domain mask) are not medium. On a
+periodic axis the shell wraps.
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+
+# Returns
+- `Int`: the number of medium sites.
+
+See also [`ring_arcs`](@ref), [`ring_cells`](@ref).
 """
 @inline ring_medium(σ, ctx, prop::Proposal) = _count_medium(read_shell(σ, ctx, prop).owners)
 
