@@ -908,7 +908,7 @@ LatticeFields.Compile.fuse_update)).
 - `alg`: the field algorithm.
 
 # Returns
-- `ExplicitEuler`: an [`EulerRule`](@ref), `c + dt · r` with `dt = G.rt[2]`, then
+- `ExplicitEuler`: an `EulerRule`, `c + dt · r` with `dt = G.rt[2]`, then
   `max(·, lower_bound)` with a clip. An implicit algorithm: an `EulerRule` with no clip.
 - `ExplicitMap`: `nothing` (a map program stores its values itself).
 """

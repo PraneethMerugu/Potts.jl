@@ -581,7 +581,7 @@ _solve_cache!(c) = Solvers.solve_owned!(c)
 The cache of an implicit runtime ([`bind_cache`](@ref) builds it).
 
 # Fields
-- The cache holds its rows in solve order (`rows`, [`ImplicitRow`](@ref)), the operator
+- The cache holds its rows in solve order (`rows`, `ImplicitRow`), the operator
   program's launches per slot parity (`jac`, or `nothing`), the Newton count (`newton`), the
   step `h` and the `γ` the coefficients hold (the shift `1/(γh)`), the `stale` flag (the
   hierarchy is rebuilt before the next stage: set at bind, by [`reset!`](@ref) and by a

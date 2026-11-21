@@ -150,7 +150,7 @@ A kernel builder for space `space` (default: the full space at level 0).
 - `space`: the [`Space`](@ref) the kernel runs on.
 
 # Returns
-- A new [`KernelBuilder`](@ref).
+- A new `KernelBuilder`.
 """
 function kernel(pb::ProgramBuilder{N}, space::Space{N} = Space{N}()) where {N}
     return KernelBuilder{N}(

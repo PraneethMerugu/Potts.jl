@@ -88,7 +88,7 @@ exact floods.
 
 Host algorithms use it. It is stored in the run context as `ctx.global_mode`.
 
-See also [`GlobalBoard`](@ref), [`global_keeps`](@ref), [`connectivity_ctx`](@ref).
+See also `GlobalBoard`, [`global_keeps`](@ref), [`connectivity_ctx`](@ref).
 """
 struct GlobalExact end
 
@@ -123,7 +123,7 @@ The stage of the `Global` veto that decides with the full search.
 The veto (`ConnectivityHooks.post`) returns `0` when the copy passes, `1` when it is
 refused for want of window and `2` when it is refused.
 
-See also [`GlobalLocal`](@ref), [`global_keeps`](@ref).
+See also `GlobalLocal`, [`global_keeps`](@ref).
 """
 struct GlobalSearch end
 
@@ -142,7 +142,7 @@ draw, `Global`.
 
 # Keywords
 - `post = nothing`: `post(st, p, prop, ctx, stage) -> Int32`, the `Global` veto. `stage`
-  is [`GlobalLocal()`](@ref GlobalLocal) or [`GlobalSearch()`](@ref GlobalSearch). `0`
+  is `GlobalLocal()` or [`GlobalSearch()`](@ref GlobalSearch). `0`
   passes, `1` is a refusal for want of window, `2` is a refusal.
 - `defer = nothing`: `defer(st, p, prop, ctx) -> Bool`, on the checkerboard, whether a
   copy needs the exact floods (cell-scope `pieces`, or an inline `Global` without window).
@@ -200,7 +200,7 @@ Return the run-context fields of a model with whole-cell connectivity.
 - `backend`: the KernelAbstractions backend of the flood scratch.
 - `f`: the model function; the function reads `f.connectivity`.
 - `lattice::Lattice`: the lattice.
-- `mode`: [`GlobalExact()`](@ref GlobalExact) or [`GlobalBoard()`](@ref GlobalBoard).
+- `mode`: [`GlobalExact()`](@ref GlobalExact) or `GlobalBoard()`.
 
 # Returns
 - `(; flood, global_mode)` with the flood scratch and `mode` when `f.connectivity` is a
@@ -451,7 +451,7 @@ The windowed search refuses when every touching piece leaves the box.
 - `Val(window)`: the search window, or `Val(nothing)` for none.
 - `Val(cap)`: the size of the fixed stack and visited bits of the windowed search. A box
   larger than `cap` sites is a refusal for want of window.
-- `stage`: [`GlobalLocal()`](@ref GlobalLocal) or [`GlobalSearch()`](@ref GlobalSearch).
+- `stage`: `GlobalLocal()` or [`GlobalSearch()`](@ref GlobalSearch).
 
 # Returns
 - `Int32`: `0` passes (always for the medium), `1` is undecided after `GlobalLocal()` or a
@@ -499,7 +499,7 @@ Gaining the target does not increase the cell's piece count exactly when the tar
 adjacent to the cell under the adjacency. The result is `true` for the medium.
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt.
 - `Val(full)`: `Val(false)` for face adjacency, `Val(true)` for full adjacency.
@@ -697,7 +697,7 @@ checkerboard phase piece counts only fall, and a copy that is fast here stays fa
 `pieces_after!` while other copies of its cells are in flight.
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt.
 - `P`: the piece-count tracker of this adjacency.

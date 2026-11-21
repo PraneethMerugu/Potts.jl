@@ -67,10 +67,15 @@ public VCycle
 public declared_parameters, declared_variables, RK4
 
 """
-    PottsCompileError <: Exception
+    PottsCompileError(msg)
 
-Thrown when lowering or compiling a `PottsSystem` rejects a model expression or assignment
-that cannot execute in the generated CPM kernels.
+The exception thrown when lowering or compiling a `PottsSystem` rejects a model
+expression or assignment that cannot run in the generated CPM kernels.
+
+# Fields
+- `msg::String`: the message, printed by `showerror`.
+
+See also [`PottsSolveError`](@ref), [`CompiledPottsSystem`](@ref).
 """
 struct PottsCompileError <: Exception
     msg::String
@@ -79,9 +84,15 @@ Base.showerror(io::IO, e::PottsCompileError) = print(io, e.msg)
 public PottsCompileError
 
 """
-    PottsSolveError <: Exception
+    PottsSolveError(msg)
 
-Thrown when `anneal` stops with non-finite dynamics and cannot return a state.
+The exception thrown when [`Potts.anneal`](@ref) stops with non-finite dynamics and cannot
+return a state.
+
+# Fields
+- `msg::String`: the message, printed by `showerror`.
+
+See also [`PottsCompileError`](@ref).
 """
 struct PottsSolveError <: Exception
     msg::String
@@ -113,8 +124,33 @@ include("odes.jl")
 include("initialization.jl")
 include("precompile.jl")
 
-"""Operating-point key for the kinds of the labeled cells (`kind => [:dark, :light, …]`)."""
+"""
+    kind
+
+The built-in `kind`: the kind of a cell in model expressions, and the operating-point key
+for the kinds of the cells.
+
+In an operating point, `kind => kinds` gives one kind per cell, as names or numbers
+(`[ownership => σ, kind => [:dark, :light, …]]`). In a model, `kind` reads the kind of the
+cell in scope (`J[kind, neighbor_kind]`).
+
+See also [`cluster`](@ref), [`layout`](@ref).
+"""
 const kind = B.kind
+"""
+    cluster
+
+The built-in `cluster`: the cluster of a cell in model expressions, and the
+operating-point key for the compartment clusters of the cells.
+
+In an operating point, `cluster => ids` gives one entry per cell. Cells with equal entries
+form one cluster (a compartment cell), and the default is every cell alone. For a model
+without compartments, `PottsProblem` throws an `ArgumentError` on this key. In a model,
+`cluster[owner] == cluster[neighbor_owner]` tests whether two sites belong to one cluster.
+[`layout`](@ref) returns `cluster => ids` for a [`Group`](@ref).
+
+See also [`kind`](@ref), [`Group`](@ref).
+"""
 const cluster = B.cluster
 export kind, cluster
 
@@ -124,13 +160,20 @@ public Layouts
 """
     Potts.Layouts
 
-The initial-state vocabulary: `layout` and its layers (`Tiling`, `Scattered`, `Frame`,
-`InsertUntil`, `overlay`), shapes and point patterns (GeometryBasics' `HyperSphere`,
-`Circle`, `Sphere` and `Point`, the lattice `Center`, `RandomPoints`, `Voronoi`),
-seed-and-grow and divisions (`Eden`, `Splits`), and strict shapes, filled regions,
-translated copies and compartment groups (`Interior`, `Fill`, `Objects`, `Group`).
-`using Potts.Layouts` brings these names into scope; each layout word is also public as
-`Potts.name`.
+The module of the initial-state vocabulary.
+
+`using Potts.Layouts` brings these names into scope:
+
+- [`layout`](@ref) and its layers: [`Tiling`](@ref), [`Scattered`](@ref),
+  [`Frame`](@ref), [`InsertUntil`](@ref) and [`overlay`](@ref).
+- Shapes and point patterns: GeometryBasics' `HyperSphere`, `Circle`, `Sphere` and
+  `Point`, the lattice [`Center`](@ref), [`RandomPoints`](@ref) and [`Voronoi`](@ref).
+- Seed-and-grow and divisions: [`Eden`](@ref) and [`Splits`](@ref).
+- Strict shapes, filled regions, translated copies and compartment groups:
+  [`Interior`](@ref), [`Fill`](@ref), [`Objects`](@ref) and [`Group`](@ref).
+- [`AbstractLayout`](@ref), the supertype of a layer.
+
+Each layout name is also public as `Potts.name`.
 """
 module Layouts
 

@@ -72,19 +72,14 @@ export FrameWritingCallback, FrameFile, PottsFrames, AbstractFrameWriter, FrameW
 # Public but not exported: generic lattice and randomness primitives for hand-written models
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
-public CHECKPOINT_FORMAT, Part, BindingScratch, coordinates, shift, interior,
-    neighbor_index, linear_index, draw, cell_entity, uniform, normal, bounded_normal,
-    radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
-    DeviceTimeoutError, isfatal,
-    TrackEnergyChange, track_eltype, phase_context, phase_contexts, field_clamp,
-    shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair,
-    simple_point, ShellRead, read_shell, check_shell_lattice,
-    ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps,
-    global_gains, global_defer,
-    pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH,
-    oncopy_cell!,
-    ConvertPass, convert_scratch, CONVERT_FLAGS, reduce_scratch, REDUCE_STATUS,
-    STATUS_SUM_RANGE
+public Part, BindingScratch, coordinates, shift, interior, neighbor_index, linear_index,
+    draw, cell_entity, uniform, normal, bounded_normal, radius, weight, RNGKey,
+    frozen_varies, frozen_kinds, frozen_reads, DeviceTimeoutError, isfatal,
+    TrackEnergyChange, track_eltype, phase_contexts, field_clamp, shell_offsets,
+    shell_pieces, local_rule, arc_or_pair, simple_point, read_shell, check_shell_lattice,
+    ConnectivityHooks, GlobalExact, GlobalSearch, global_keeps, global_gains, global_defer,
+    pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH, oncopy_cell!,
+    ConvertPass, convert_scratch, CONVERT_FLAGS, reduce_scratch, REDUCE_STATUS
 
 # The interface the symbolic layer (Potts) builds problems and generates code against: hooks
 # it extends (`remake_*`, `report_run`, the setters), defaults it compares with, and the

@@ -485,7 +485,7 @@ end
 
 Copy the input values into the store's (only) slot of each input field.
 
-It first checks that every input has a value ([`check_inputs_set`](@ref)).
+It first checks that every input has a value (`check_inputs_set`).
 
 # Arguments
 - `st::FieldStore`: the field store, written in place.
@@ -810,7 +810,7 @@ NaN value (no value given) throws an `ArgumentError` that names the parameter.
 - `index`: the symbol table that gives the names.
 
 # Keywords
-- `built::Bool = true`: as for [`check_inputs_set`](@ref). A problem being built has no
+- `built::Bool = true`: as for `check_inputs_set`. A problem being built has no
   `remake` yet, so the message gives the system's `initial_conditions` instead.
 
 # Returns

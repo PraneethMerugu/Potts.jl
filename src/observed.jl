@@ -438,16 +438,36 @@ function _vector_message(m, x)
 end
 
 """
-    observe(prob_or_sol, x[, u])
+    observe(prob, x, u = prob.u0)
+    observe(sol, x)
 
-Evaluate the model quantity or expression `x` (e.g. `volume`, an `@observed` name,
-`count(true for c in cells(tumor))` written with the model's symbols) on state `u`
-(default: the problem's initial state, or every saved state of a solution).
+Evaluate the model quantity or expression `x` on a state of a problem or on every saved
+state of a solution.
 
-`x` may also be a name, as a `Symbol`: `observe(sol, :nA)` is `observe` on the model's
-quantity of that name, looked up in this order: a declared variable or `@observed`
-quantity, then a built-in such as `:volume`, then a parameter. An unknown name is an
-`ArgumentError`.
+`x` is written with the model's symbols: `volume`, an `@observed` name, or an expression
+such as `count(true for c in cells(tumor))`. `x` may also be a name, as a `Symbol`:
+`observe(sol, :nA)` is `observe` on the model's quantity of that name. The lookup order is
+a declared variable or `@observed` quantity, then a built-in such as `:volume`, then a
+parameter.
+
+# Arguments
+- `prob::PottsProblem` or `sol::PottsSolution`: built from a `@potts_model`.
+- `x`: a model quantity, an expression, or a `Symbol` name. An unknown name throws an
+  `ArgumentError`.
+- `u = prob.u0`: the state, for a problem.
+
+# Returns
+- For a problem, the value of `x` on `u`: a number for a model quantity, a vector with
+  one entry per cell for a cell quantity, an array over the lattice for a site quantity.
+- For a solution, a vector of these values, one per saved state.
+
+# Examples
+```julia
+sol = solve(prob, SequentialCPM(); saveat = 10)
+observe(sol, :volume)
+```
+
+See also [`total_energy`](@ref).
 """
 function observe(prob::CorePotts.PottsProblem, x, u = prob.u0)
     return _observed_function(prob.f.sys, _observe_quantity(prob.f.sys, x))(
@@ -495,26 +515,50 @@ SII.parameter_values(p::PottsParameters, i::Symbol) = p[i]
 
 """
     Potts.field_inputs(integ) -> Dict{Symbol, Array}
-    Potts.field_inputs(prob)
+    Potts.field_inputs(prob) -> Dict{Symbol, Array}
 
-The current values of the CPM inputs of a model's fields, at the CPM state of an integrator
-(the state at `integ.t`) or the initial state of a problem: one array over the lattice per
-input of [`Potts.fields`](@ref)`(model)`, by the name it gives that input
-(`lattice_input_name`): `kind` (the kind number of each site, 0 for the medium), `vol` for a
-binding `vol => volume[owner]`, `volume[owner]` for a CPM read with no binding of its own, a
-site variable by its name. Each array holds the values the field compiler reads for that
-input: a `Bool` input gives a `Bool` array, an integer input an array of its type, any other
-input an array of the model's scalar type. They are what `discretize(Potts.fields(model),
-disc; inputs = collect(Potts.field_inputs(integ)))` takes: the fields solved by any SciML
-solver with the CPM frozen at that state, a `Coarse(k)` field included. That solve matches
-the model's own run only while the lattice does not change (σ frozen): in a run the CPM
-moves the cells every MCS and the inputs follow them, while the frozen inputs do not. A
-model without such inputs gives an empty `Dict`.
+Return the current values of the CPM inputs of a model's fields, at the CPM state of an
+integrator or the initial state of a problem.
 
-The values are computed from the CPM state at `integ.t` (the lattice and cells at the end of
-the last completed MCS). They are not the arrays the field phase filled during that
-MCS: a phase after it in the schedule (divisions and the other lifecycle rules, by default)
-may have changed the lattice since.
+There is one array over the lattice per input of [`Potts.fields`](@ref)`(model)`, keyed by
+the name it gives that input (`lattice_input_name`):
+
+- `kind`: the kind number of each site, 0 for the medium.
+- `vol`, for a binding `vol => volume[owner]`.
+- `volume[owner]`, for a CPM read with no binding of its own.
+- a site variable, by its name.
+
+Each array holds the values that the field compiler reads for that input: a `Bool` input
+gives a `Bool` array, an integer input an array of its type, any other input an array of
+the model's scalar type. They are what
+`discretize(Potts.fields(model), disc; inputs = collect(Potts.field_inputs(integ)))`
+takes: the fields solved by any SciML solver with the CPM frozen at that state, a
+`Coarse(k)` field included. That solve matches the model's own run only while the lattice
+does not change: in a run the CPM moves the cells every MCS and the inputs follow them,
+while the frozen inputs do not.
+
+The values are computed from the CPM state at `integ.t` (the lattice and cells at the end
+of the last completed MCS). They are not the arrays that the field phase filled during
+that MCS: a phase after it in the schedule (by default, divisions and the other lifecycle
+rules) may have changed the lattice since.
+
+# Arguments
+- `integ::PottsIntegrator`: an integrator; its state at `integ.t` is used.
+- `prob::PottsProblem`: a problem; its initial state is used.
+
+# Returns
+- `Dict{Symbol, Array}`: one array per input. A model without such inputs gives an empty
+  `Dict`.
+
+# Examples
+```julia
+integ = init(prob, SequentialCPM())
+step!(integ, 10)
+F = Potts.fields(sys)
+fprob = discretize(F, disc; inputs = collect(Potts.field_inputs(integ)))
+```
+
+See also [`Potts.fields`](@ref), [`Potts.couple`](@ref).
 """
 function field_inputs(integ::CorePotts.PottsIntegrator)
     return _field_inputs_at(
@@ -531,28 +575,43 @@ end
 
 """
     Potts.field_inputs(integ, pdesys::PDESystem) -> Dict{Symbol, Array}
-    Potts.field_inputs(prob, pdesys)
+    Potts.field_inputs(prob, pdesys::PDESystem) -> Dict{Symbol, Array}
 
-The current values of exactly the inputs of the PDESystem `pdesys`, by the names
-`discretize(pdesys, disc; inputs)` takes (each input's `lattice_input_name`, else its own
-name). For a PDESystem coupled into the model (`@fields c = pdesys (sec => kind == A, vol =>
-volume[owner])`, `Potts.couple`), its inputs: a bound input holds its binding evaluated at
-each site (`sec` the truth value of `kind == A`, `vol` the owner's volume), an unbound one
-the model quantity that fills it (`kind`, a site variable). For
-[`Potts.fields`](@ref)`(model)`, its own inputs, as `Potts.field_inputs(integ)` gives them.
-So
+Return the current values of exactly the inputs of the PDESystem `pdesys`, keyed by the
+names that `discretize(pdesys, disc; inputs)` takes.
 
+Each key is the input's `lattice_input_name`, or else its own name.
+
+- For a PDESystem coupled into the model (`@fields c = pdesys (sec => kind == A, …)`, or
+  `Potts.couple`), its inputs. A bound input holds its binding evaluated at each site
+  (`sec` the truth value of `kind == A`, `vol` the owner's volume). An unbound input holds
+  the model quantity that fills it (`kind`, a site variable).
+- For [`Potts.fields`](@ref)`(model)`, its own inputs, as `Potts.field_inputs(integ)`
+  gives them.
+
+So `discretize(pdesys, disc; inputs = collect(Potts.field_inputs(integ, pdesys)))` solves
+the user's own PDESystem with any SciML solver at the CPM state of `integ` (σ frozen, as
+for `Potts.field_inputs(integ)`). This includes a `Coarse(k)` field: the coupled model and
+`pdesys` fold a fine read over each block by the same rule (the block mean of a bound input
+and of its binding written out alike). So the two agree on any cell layout, including
+blocks that a cell covers in part.
+
+# Arguments
+- `integ::PottsIntegrator` or `prob::PottsProblem`: the CPM state, as for
+  `Potts.field_inputs(integ)`.
+- `pdesys::PDESystem`: a coupled PDESystem, or `Potts.fields(model)`. A PDESystem whose
+  inputs are neither those of a coupled PDESystem of the same name nor those of
+  `Potts.fields(model)` throws an `ArgumentError` that names both lists.
+
+# Returns
+- `Dict{Symbol, Array}`: one array over the lattice per input of `pdesys`.
+
+# Examples
 ```julia
-prob = discretize(pdesys, disc; inputs = collect(Potts.field_inputs(integ, pdesys)))
+fprob = discretize(pdesys, disc; inputs = collect(Potts.field_inputs(integ, pdesys)))
 ```
 
-solves the user's own PDESystem with any SciML solver at the CPM state of `integ` (σ frozen,
-as for [`Potts.field_inputs`](@ref)`(integ)`). A `Coarse(k)` field included: the coupled
-model and `pdesys` fold a fine read over each block by the same rule (the block mean of a
-bound input and of its binding written out alike), so the two agree on any cell layout,
-blocks that a cell covers in part included. A PDESystem whose inputs are neither those of a
-coupled PDESystem of the same name nor those of `Potts.fields(model)` is an `ArgumentError`
-that names both lists.
+See also [`Potts.couple`](@ref), [`Potts.fields`](@ref).
 """
 function field_inputs(
         integ::CorePotts.PottsIntegrator,

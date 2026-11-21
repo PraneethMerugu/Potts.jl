@@ -21,33 +21,49 @@
 """
     Potts.initialization_system(csys::CompiledPottsSystem, scope::Symbol)
 
-The ModelingToolkit system of the cell (`scope = :cell`) or model (`scope = :model`)
-initialization of a compiled model: a complete `System` whose `initialization_equations` are
-that scope's `@initialization_equations`, one per equation as written, or `nothing` when the
-scope has none.
+Return the ModelingToolkit system of the cell or model initialization of a compiled
+model.
 
-- Its unknowns are the scope's variables the equations name, under their declared names. A
-  variable declared without a value (`r(cell)`) has none here, so initialization solves for
-  it; its guess (`r(cell), [guess = -1.0]`) is the system's guess. A variable with a written
-  value has that value as its initial condition.
-- Each declared parameter the equations read is a parameter under its declared name, with
-  its declared value.
-- Everything else the equations read (built-ins such as `volume` and `id`, a kind table at
-  the cell's kind, `g[kind]`, as `g_kind`, model variables in the cell system) is an input:
-  a further parameter standing for that quantity.
+The result is a complete `System` whose `initialization_equations` are that scope's
+`@initialization_equations`, one per equation as written.
+
+- Its unknowns are the scope's variables that the equations name, under their declared
+  names. A variable declared without a value (`r(cell)`) has none here, so initialization
+  solves for it. Its guess (`r(cell), [guess = -1.0]`) is the system's guess. A variable
+  with a written value has that value as its initial condition.
+- Each declared parameter that the equations read is a parameter under its declared name,
+  with its declared value.
+- Everything else that the equations read is an input: a further parameter standing for
+  that quantity. Examples are built-ins such as `volume` and `id`, a kind table at the
+  cell's kind (`g[kind]`, as `g_kind`), and model variables in the cell system.
 - `D(x)` of a cell or model ODE variable is its rate at the start (`D(x) ~ 0` is a steady
-  start): the system carries the ODE `D(x) ~ rate`, and every other unknown `D(v) ~ 0`.
+  start). The system carries the ODE `D(x) ~ rate`, and every other unknown `D(v) ~ 0`.
 
 An equation that reads no cell quantity is in the model system. A system without inputs is
 an ordinary MTK system, which `ModelingToolkitBase.InitializationProblem` accepts.
 
 When a problem is built (and on `remake(prob; u0 = map)`, not on `remake(prob; p = …)`),
-Potts solves the model system once and then the cell system for every cell, with that cell's
-built-ins, fixed values and the model's values as inputs, and checks each result against the
-equations: one without a solution, or without a unique one (a singular Jacobian), is an
-`ArgumentError` naming the cell and the variables. An operating-point value for an algebraic
-variable is a condition of that problem alone and builds no system here. Any other scope, or
-a `PottsSystem` that has not been through `mtkcompile`, is an `ArgumentError`.
+Potts solves the model system once and then the cell system for every cell. The inputs are
+that cell's built-ins, its fixed values and the model's values. Potts checks each result
+against the equations: an equation set with no solution, or with no unique one (a singular
+Jacobian), throws an `ArgumentError` that names the cell and the variables. An
+operating-point value for an algebraic variable is a condition of that problem alone and
+builds no system here.
+
+# Arguments
+- `csys::CompiledPottsSystem`: the compiled model. A `PottsSystem` that has not been
+  through `mtkcompile` throws an `ArgumentError`.
+- `scope::Symbol`: `:cell` or `:model`. Any other scope throws an `ArgumentError`.
+
+# Returns
+- A `System`, or `nothing` when the scope has no `@initialization_equations`.
+
+# Examples
+```julia
+init = Potts.initialization_system(mtkcompile(sys), :cell)
+```
+
+See also [`Potts.ode_system`](@ref).
 """
 function initialization_system(c::CompiledPottsSystem, scope::Symbol)
     scope in _ODE_SCOPES || throw(

@@ -1,6 +1,24 @@
 """
-Reference composition of native Makie Blocks. The explorer owns no rendering
-semantics; its central display is an ordinary `PottsPlot`.
+    PottsExplorer
+
+A figure for browsing render frames: a [`pottsplot`](@ref) with a slider over the frames.
+
+[`explore_potts`](@ref) makes it. It displays as its figure. `close(explorer)` removes its
+slider subscription and its `DataInspector`; closing again does nothing, and
+`isopen(explorer)` tells whether it is open.
+
+# Fields
+
+  - `figure`: the `Makie.Figure`.
+  - `axis`: the `Makie.Axis`.
+  - `plot`: the [`PottsPlot`](@ref).
+  - `slider`: the `Makie.Slider`.
+  - `frame_index`: the `Observable` of the shown frame index.
+  - `slider_subscription`: the observer that links the slider to `frame_index`.
+  - `inspector`: the `Makie.DataInspector`, or `nothing`.
+  - `closed::Base.RefValue{Bool}`: whether it is closed.
+
+See also [`explore_potts`](@ref).
 """
 struct PottsExplorer{F, A, P, S, I, O, D}
     figure::F
@@ -14,14 +32,44 @@ struct PottsExplorer{F, A, P, S, I, O, D}
 end
 
 """
-    explore_potts(frames; title="Potts model", inspector=true, kwargs...)
-    explore_potts(solution; request=RenderRequest(), kwargs...)
+    explore_potts(frames; title = "Potts model", inspector = true,
+        kwargs...) -> PottsExplorer
+    explore_potts(solution; request = RenderRequest(), kwargs...) -> PottsExplorer
 
-Build the experimental reference explorer from already materialized frames, or from the
-states of `solution`: a `PottsSolution`, or `CorePotts.PottsFrames`, whose frames are read
-and rendered one at a time, when the slider shows them.
-Call `close(explorer)` to release its slider subscription and optional
-`DataInspector`; closing is idempotent.
+Return an explorer of 2D render frames: a [`pottsplot`](@ref) with a slider. Experimental.
+
+The plot shows the frame at the slider position. A `CorePotts.PottsSolution` is rendered
+first ([`renderframes`](@ref)); frames a run wrote to disk (`CorePotts.PottsFrames`) are
+read and rendered one at a time, when the slider reaches them.
+
+# Arguments
+
+  - `frames::AbstractVector{<:AbstractPottsRenderFrame{2}}`: the frames, at least one,
+    all with the same geometry. Throws an `ArgumentError` otherwise.
+  - `solution`: a `CorePotts.PottsSolution` or `CorePotts.PottsFrames` of a 2D run.
+
+# Keywords
+
+  - `request::RenderRequest = RenderRequest()`: as for [`renderframe`](@ref).
+  - `title::AbstractString = "Potts model"`: the axis title.
+  - `inspector::Bool = true`: add a `Makie.DataInspector`.
+  - `encoding::AbstractPottsEncoding = CellTypeEncoding()`: the encoding.
+  - `figure = (;)`, `axis = (;)`, `plot = (;)`: keywords of the figure, the axis and
+    [`pottsplot`](@ref).
+
+# Returns
+
+  - [`PottsExplorer`](@ref): the explorer. Call `close(explorer)` when done.
+
+# Examples
+
+```julia
+using Potts, MakiePotts, GLMakie
+explorer = explore_potts(sol)
+display(explorer)
+```
+
+See also [`record_potts`](@ref).
 """
 function explore_potts(
         frames::AbstractVector{<:AbstractPottsRenderFrame{2}};

@@ -4,25 +4,44 @@
 """
     Potts.boundary_lengths(prob, u = prob.u0; relation = nothing)
 
-The boundary length of state `u` split by kind pair, as a
-`Dict{Tuple{Symbol, Symbol}, <:Real}`.
+Return the boundary length of state `u`, split by kind pair.
 
-A bond is an unordered pair of sites `{i, i + o}`, with `o` an offset of `relation` (a
-relation such as `Moore(1)`, resolved on the problem's lattice; `nothing` means the
-problem's contact relation). The neighbor must lie inside the lattice and its domain:
-periodic axes wrap, closed axes and the domain edge do not. A bond counts when its two
-owners differ. Each bond counts once, with the relation's weight (1 for an unweighted
-relation, so the counts are integers).
+A bond is an unordered pair of sites `{i, i + o}`, with `o` an offset of `relation`. The
+neighbor must lie inside the lattice and its domain: periodic axes wrap, closed axes and
+the domain edge do not. A bond counts when its two owners differ. Each bond counts once,
+with the relation's weight (1 for an unweighted relation, so the counts are integers).
 
-The bond is credited to the kinds of its two owners. The medium has the model's first kind.
-The keys are `(a, b)`, with kind `a` declared no later than `b` in `@kinds`. Every pair is
-a key, zeros included, and `(medium, medium)` is always 0. Two cells of one kind count
-under `(k, k)`. Kind classes are not keys.
+The bond is credited to the kinds of its two owners, and the medium has the model's first
+kind. The keys are `(a, b)`, with kind `a` declared no later than `b` in `@kinds`. Every
+pair is a key, zeros included, and `(medium, medium)` is always 0. Two cells of one kind
+count under `(k, k)`. Kind classes are not keys.
 
 For a model whose only energy is `contacts => J[kind, neighbor_kind]` (times `weight` for a
-weighted relation), `Σ J[a, b] · L[(a, b)] == total_energy(prob, u)`.
+weighted relation), `Σ J[a, b] · L[(a, b)] == total_energy(prob, u)`. Square, hexagonal
+and 3D lattices are supported.
 
-Square, hexagonal and 3D lattices; `u` must be a host state.
+# Arguments
+- `prob::PottsProblem`: a problem built from a compiled `@potts_model`. Throws an
+  `ArgumentError` otherwise.
+- `u = prob.u0`: a host state.
+
+# Keywords
+- `relation = nothing`: a symmetric relation spec such as `Moore(1)`, resolved on the
+  problem's lattice. `nothing` is the problem's contact relation. Throws an
+  `ArgumentError` for a relation that is not symmetric.
+
+# Returns
+- `Dict{Tuple{Symbol, Symbol}, <:Real}`: the boundary length per kind pair (`Int` values
+  for an unweighted relation, `Float64` for a weighted one).
+
+# Examples
+```julia
+prob = PottsProblem(sys, op, (0, 100); seed = 1)
+L = Potts.boundary_lengths(prob)
+L[(:dark, :light)]
+```
+
+See also [`total_energy`](@ref), [`Potts.anneal`](@ref).
 """
 function boundary_lengths(prob::CorePotts.PottsProblem, u = prob.u0; relation = nothing)
     info = prob.f.sys
@@ -82,25 +101,45 @@ _same_temperature(t::_ZeroTemperature, g) = t.temperature === g
 """
     Potts.anneal(prob, [u = prob.u0,] mcs; seed = 0, alg = SequentialCPM())
 
-The annealed copy of state `u`: a new state, `u` after `mcs` MCS of `prob`'s copy dynamics
-with the copy temperature 0 for every proposal, whatever the model's temperature expression.
+Return the annealed copy of state `u`: a new state, `u` after `mcs` MCS of `prob`'s copy
+dynamics at copy temperature 0 for every proposal, whatever the model's temperature
+expression.
 
 Everything else is the run's own: the parameters `prob.p`, the lattice and relations, the
 proposal, the acceptance law and the full ΔH, drives included. The built-in laws
-(`Metropolis`, `Barker`) at T ≤ 0 accept ΔH below their offset, and ties with probability ½;
-a custom law receives temperature 0 and follows its own `accept`. A bias term vanishes at
-T = 0.
+(`Metropolis`, `Barker`) at T ≤ 0 accept ΔH below their offset, and accept ties
+with probability ½. A custom law receives temperature 0 and follows its own `accept`. A
+bias term vanishes at T = 0.
 
-Only copy attempts run, each MCS preceded by the derived refreshes the energies read (the
-model's at-init phase: integrals and population-fold energy snapshots). No other MCS
-phases, rules, updates, lifecycle events, ODE or field steps run, so every other variable
-keeps its value in `u`; an energy that reads a cell variable maintained by an update block
-sees it frozen at `u`'s value.
+Only copy attempts run. Before each MCS, Potts runs the derived refreshes that the energies
+read (the model's at-init phase: integrals and population-fold energy snapshots). No other
+MCS phases, rules, updates, lifecycle events, ODE or field steps run, so every other
+variable keeps its value in `u`. An energy that reads a cell variable maintained by an
+update block sees it frozen at its value in `u`.
 
-`u` and `prob` are not modified. The result is deterministic in `(prob, u, mcs, seed, alg)`.
-`mcs = 0` returns an equal copy of `u`; `mcs < 0` or `seed < 0` is an `ArgumentError`. A
-non-finite ΔH stops the dynamics, as in a run, and is an error here. Measure the result
-like any state, e.g. `boundary_lengths(prob, anneal(prob, u, 32))`.
+`u` and `prob` are not modified. The result is deterministic in
+`(prob, u, mcs, seed, alg)`. `mcs = 0` returns an equal copy of `u`. A non-finite
+ΔH stops the dynamics, as in a run, and throws a [`PottsSolveError`](@ref) here.
+
+# Arguments
+- `prob::PottsProblem`: the problem whose dynamics run.
+- `u = prob.u0`: the start state.
+- `mcs::Integer`: the number of MCS (non-negative; throws an `ArgumentError` otherwise).
+
+# Keywords
+- `seed::Integer = 0`: the seed of the run (non-negative; throws an `ArgumentError`
+  otherwise).
+- `alg = SequentialCPM()`: the CPM algorithm.
+
+# Returns
+- The state after `mcs` MCS at temperature 0.
+
+# Examples
+```julia
+Potts.boundary_lengths(prob, Potts.anneal(prob, u, 32))
+```
+
+See also [`Potts.boundary_lengths`](@ref), [`total_energy`](@ref).
 """
 function anneal(prob::CorePotts.PottsProblem, mcs::Integer; kwargs...)
     return anneal(prob, prob.u0, mcs; kwargs...)

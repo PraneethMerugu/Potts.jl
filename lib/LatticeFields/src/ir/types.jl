@@ -737,7 +737,7 @@ const FACE_RTOL = 1.0e-6
     degenerate(α, β) -> Bool
 
 Whether a face with lattice coefficients `α`, `β` has `α/2 + β` zero to a relative
-[`FACE_RTOL`](@ref) (the ghost value `(g − (α/2 − β) c)/(α/2 + β)` is then undefined or
+`FACE_RTOL` (the ghost value `(g − (α/2 − β) c)/(α/2 + β)` is then undefined or
 amplified past any stable step). The explicit path (`Problems.check_faces`, LatticePDE's
 `discretize`) and the solvers' Robin faces (`Solvers.CellOperator`) share this test.
 
@@ -826,7 +826,7 @@ new programs and never mutate one.
 - `spacing::NTuple{N, Float64}`: the lattice spacing per axis.
 - `nparams::Int`: the number of runtime parameters.
 
-See also [`print_program`](@ref), [`fieldid`](@ref), [`nsites`](@ref).
+See also `print_program`, [`fieldid`](@ref), [`nsites`](@ref).
 """
 struct Program{N}
     hierarchy::Vector{Level{N}}

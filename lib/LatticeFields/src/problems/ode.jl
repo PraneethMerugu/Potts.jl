@@ -27,7 +27,7 @@ One rate launch of the right side.
 
 # Fields
 - `launch`: the prebuilt launch (template arrays).
-- `S0`: its argument template with [`StateView`](@ref) markers.
+- `S0`: its argument template with `StateView` markers.
 - `derive`: the parameter derivation.
 - `np::Val`: the parameter count.
 - `c`: the compute element; its type is the right side's element type.
@@ -1180,7 +1180,7 @@ owner's calls take no lock; a task's later calls of its copy take no lock either
 neither allocates.
 
 # Fields
-- `launches::Tuple`: the rate launches ([`RHSLaunch`](@ref)).
+- `launches::Tuple`: the rate launches (`RHSLaunch`).
 - `faces::Vector{FaceCheck}`: the parameter-dependent Robin face checks.
 - `store::FieldStore`: the build's store.
 - `init`: the init plan.

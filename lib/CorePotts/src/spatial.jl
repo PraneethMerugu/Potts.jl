@@ -221,7 +221,7 @@ const _CR_FLAG = Symbol("#cr_flag")
 
 The `st.model` key of the cell-sum status word of [`CellReduce`](@ref), a `UInt32[1]`.
 
-Bit [`STATUS_SUM_RANGE`](@ref) is set when a cell sum exceeded the range of its column's
+Bit `STATUS_SUM_RANGE` is set when a cell sum exceeded the range of its column's
 number type (and was stored as ±Inf). Bits 9 to 32 hold the position of that column in
 the cell state (the largest one, if several). The integrator warns at its next host read
 point, names the column, and clears the word; the run continues.

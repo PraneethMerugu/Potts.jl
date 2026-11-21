@@ -20,7 +20,40 @@ function _owner_label(frame, owner::RenderOwner)
 end
 
 """
-Return the semantic DataInspector label for one rendered site.
+    inspection_label(frame, encoding, index) -> String
+
+Return the `DataInspector` text of one site of a 2D render frame.
+
+The text gives the site, the frame's source axes and the owner: number, generation and
+kind of a cell, or the medium number (marked as an obstacle when it is one). A
+continuous encoding adds its title, the value (or `"missing"`) and the units.
+
+# Arguments
+
+  - `frame::AbstractPottsRenderFrame{2}`: the frame.
+  - `encoding::AbstractPottsEncoding`: the encoding.
+  - `index`: the site, a `CartesianIndex`, a tuple of at least two integers or a linear
+    index. Throws an `ArgumentError` otherwise.
+
+# Returns
+
+  - `String`: the text.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> m = RenderOwner(MediumSite, 1);
+
+julia> frame = PottsRenderFrame(0, [m m; m m], RenderCellMetadata[]);
+
+julia> print(inspection_label(frame, CellTypeEncoding(), (1, 2)))
+Site (1, 2) · source axes (1, 2)
+Medium 1
+```
+
+See also [`pottsplot`](@ref).
 """
 function inspection_label(
         frame::AbstractPottsRenderFrame{2},

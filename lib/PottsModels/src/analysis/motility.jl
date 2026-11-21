@@ -26,20 +26,42 @@ end
 """
     unwrap_track(points, dims, periodic) -> Vector{NTuple{N, Float64}}
 
-The track of `points` (tuples or vectors of N reals, one per sample, as
-[`centroids`](@ref) returns per cell) with the jumps through periodic edges removed:
-`out[1] = points[1]` and `out[k] = out[k − 1] + w(points[k] − points[k − 1])`, where `w` is
-the identity on a non-periodic axis and, on a periodic axis `d`, the minimum image in
-`[−dims[d]/2, dims[d]/2)` (a displacement of exactly half the period maps to `−dims[d]/2`).
+Return the track of `points` with the jumps through periodic edges removed.
 
-`dims` holds one period per axis (the lattice size); `periodic` is one `Bool` per axis or
-one `Bool` for every axis. The result is right when every true displacement between
-consecutive samples is below half the period; this is not detected, so sample often enough.
-A `NaN` coordinate (the centroid of a cell that owns no site) is not detected either: it
-propagates to that sample and every later one on its axis.
+`out[1] = points[1]` and `out[k] = out[k − 1] + w(points[k] − points[k − 1])`, where `w`
+is the identity on a non-periodic axis and, on a periodic axis `d`, the minimum image in
+`[−dims[d]/2, dims[d]/2)` (a displacement of exactly half the period maps to
+`−dims[d]/2`).
+
+The result is right when every true displacement between consecutive samples is below
+half the period. This is not detected, so sample often enough. A `NaN` coordinate (the
+centroid of a cell that owns no site) is not detected either: it propagates to that sample
+and every later one on its axis.
+
+# Arguments
+- `points`: one point per sample, each a tuple or vector of `N` reals, as
+  [`centroids`](@ref) returns per cell.
+- `dims`: one period per axis (the lattice size). Each must be positive.
+- `periodic`: one `Bool` per axis, or one `Bool` for every axis.
 
 Throws an `ArgumentError` for an empty track, points of mixed dimensions, `dims` or
-`periodic` of another length than the points, and a non-positive period.
+`periodic` of another length than the points, and a period that is not positive.
+
+# Returns
+- `Vector{NTuple{N, Float64}}`: the unwrapped track.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> unwrap_track([(9.0, 1.0), (1.0, 1.0), (3.0, 2.0)], (10, 10), (true, false))
+3-element Vector{Tuple{Float64, Float64}}:
+ (9.0, 1.0)
+ (11.0, 1.0)
+ (13.0, 2.0)
+```
+
+See also [`mean_squared_displacement`](@ref).
 """
 function unwrap_track(points, dims, periodic)
     isempty(points) && throw(ArgumentError("unwrap_track: the track is empty"))
@@ -82,22 +104,47 @@ end
 """
     mean_squared_displacement(tracks; lags = 1:(n − 1)) -> Vector{Float64}
 
-The mean squared displacement at each lag ℓ of `lags` (in samples): for one track
-`x₁ … xₙ` (a vector of points, tuples or vectors of reals),
+Return the mean squared displacement at each lag ℓ of `lags` (in samples).
+
+For one track `x₁ … xₙ`,
 
     MSD(ℓ) = (1/(n − ℓ)) Σ_{i=1}^{n−ℓ} |x_{i+ℓ} − x_i|²
 
 over overlapping windows, with the squares of all components summed. For a vector of
-tracks of one length `n`, the mean of their MSDs with equal weights. Times are `ℓ·Δt`,
-where `Δt` is the sampling interval: pass the unwrapped tracks of [`unwrap_track`](@ref),
-projected onto the axes of interest (the xy plane for a cell crawling on a substrate). It
-costs O(n·|lags|) per track, so the default lags cost O(n²): pass `lags` for a long track
-(a 10⁵-sample track takes about 5 s with every lag; `lags = 1:1000` or a logarithmic set is
-far cheaper). A track of one sample has no lag, so its MSD is `Float64[]`. `NaN` points are
-not detected: they propagate to every lag whose windows contain them.
+tracks of one length `n`, the result is the mean of their MSDs with equal weights. Times
+are `ℓ·Δt`, where `Δt` is the sampling interval. Pass the unwrapped tracks of
+[`unwrap_track`](@ref), projected onto the axes of interest (the xy plane for a cell
+crawling on a substrate).
+
+The cost is O(n·|lags|) per track, so the default lags cost O(n²): pass `lags` for a long
+track (for example `lags = 1:1000` or a logarithmic set). A track of one sample has no lag,
+so its MSD is `Float64[]`. `NaN` points are not detected: they propagate to every lag whose
+windows contain them.
+
+# Arguments
+- `tracks`: one track (a vector of points, tuples or vectors of reals) or a vector of
+  tracks of one length.
+
+# Keywords
+- `lags = 1:(n − 1)`: the lags, each in `1:(n − 1)`.
 
 Throws an `ArgumentError` for a lag outside `1:(n − 1)`, tracks of unequal lengths, no
-track, and points of mixed dimensions.
+track, an empty track, and points of mixed dimensions.
+
+# Returns
+- `Vector{Float64}`: the MSD at each lag.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> mean_squared_displacement([(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)])
+2-element Vector{Float64}:
+ 1.0
+ 4.0
+```
+
+See also [`unwrap_track`](@ref), [`furth_fit`](@ref).
 """
 function mean_squared_displacement(tracks; lags = nothing)
     isempty(tracks) && throw(ArgumentError("mean_squared_displacement: no track"))
@@ -148,15 +195,35 @@ function _furth_params(S, D, P, what)
 end
 
 """
-    furth_mean_squared_displacement(Δt, S, D, P)
+    furth_mean_squared_displacement(Δt, S, D, P) -> Vector{Float64}
 
-The modified Fürth MSD (Fortuna et al. 2020, Eq. 1) at the times `Δt`, elementwise:
+Return the modified Fürth MSD (Fortuna et al. 2020, Eq. 1) at the times `Δt`,
+elementwise:
 
     MSD(Δt) = 2D (Δt − P (1 − e^{−Δt/P})) + (2DS/(1 − S)) Δt
 
-`D` is the diffusion constant of the persistent part, `P` its persistence time and `S`
-(`0 ≤ S < 1`) the weight of the fast, uncorrelated part, whose diffusion constant is
-`D_fast = DS/(1 − S)`. Throws an `ArgumentError` unless `0 ≤ S < 1`, `D ≥ 0` and `P > 0`.
+The fast, uncorrelated part has the diffusion constant `D_fast = DS/(1 − S)`.
+
+# Arguments
+- `Δt`: the times.
+- `S`: the weight of the fast, uncorrelated part, `0 ≤ S < 1`.
+- `D`: the diffusion constant of the persistent part, `D ≥ 0`.
+- `P`: the persistence time, `P > 0`.
+
+Throws an `ArgumentError` unless `0 ≤ S < 1`, `D ≥ 0` and `P > 0`.
+
+# Returns
+- `Vector{Float64}`: the MSD at each time.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> only(furth_mean_squared_displacement([1.0], 0.0, 1.0, 1.0)) ≈ 2exp(-1)
+true
+```
+
+See also [`furth_fit`](@ref), [`natural_units`](@ref).
 """
 function furth_mean_squared_displacement(Δt, S, D, P)
     _furth_params(S, D, P, "furth_mean_squared_displacement")
@@ -166,9 +233,28 @@ end
 """
     natural_units(Δt, m, fit) -> (τ, ρ²)
 
-The times and MSDs `m` in the natural units of Eq. 2 of Fortuna et al. (2020): `τ = Δt/P`
-and `ρ² = m/(2DP/(1 − S))`, so that the model reads `ρ² = τ − (1 − S)(1 − e^{−τ})`. `fit` is
-any object with fields `S`, `D` and `P`, such as a [`furth_fit`](@ref) result.
+Return the times and MSDs `m` in the natural units of Eq. 2 of Fortuna et al. (2020):
+`τ = Δt/P` and `ρ² = m/(2DP/(1 − S))`.
+
+In these units the model reads `ρ² = τ − (1 − S)(1 − e^{−τ})`.
+
+# Arguments
+- `Δt`: the times.
+- `m`: the MSDs, as many as `Δt`. Throws an `ArgumentError` otherwise.
+- `fit`: any value with the fields `S`, `D` and `P`, such as a [`furth_fit`](@ref) result.
+
+# Returns
+- `Tuple{Vector{Float64}, Vector{Float64}}`: `(τ, ρ²)`.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> natural_units([2.0, 4.0], [1.0, 2.0], (; S = 0.0, D = 1.0, P = 2.0))
+([1.0, 2.0], [0.25, 0.5])
+```
+
+See also [`furth_fit`](@ref).
 """
 function natural_units(Δt, m, fit)
     length(Δt) == length(m) ||
@@ -183,24 +269,27 @@ end
         -> (; S, D, P, D_fast, D_slow, v_eff, offset, method)
 
 Fit the modified Fürth model ([`furth_mean_squared_displacement`](@ref)) to an MSD `m` at
-the times `Δt` (positive, strictly increasing, at least 4 of them). The derived fields are
-`D_fast = DS/(1 − S)`, `D_slow = D + D_fast = D/(1 − S)` and the effective speed
-`v_eff = √(D/P)/(1 − S)`; `offset` is the fitted constant (the localisation error), 0 when
-`offset = false`. Both methods are deterministic.
+the times `Δt`.
+
+The derived fields are `D_fast = DS/(1 − S)`, `D_slow = D + D_fast = D/(1 − S)` and the
+effective speed `v_eff = √(D/P)/(1 − S)`. `offset` is the fitted constant (the localization
+error), 0 when `offset = false`. Both methods are deterministic.
 
 - `method = :paper` (the default) is the procedure of Fortuna et al.'s S1. `Δt` must be
-  uniformly spaced (step `h`). The second differences `dᵢ = (m_{i+1} − 2mᵢ + m_{i−1})/h²` at
-  the interior times (those in `range = (lo, hi)`, default all) that are positive are fitted
-  by ordinary least squares to `log dᵢ = c₀ + c₁Δtᵢ`, the logarithm of Eq. 1's second
-  derivative `(2D/P)e^{−Δt/P}`, which gives `P = −1/c₁` and `D = e^{c₀}P/2`. The residual
-  `m − furth_mean_squared_displacement(Δt, 0, D, P)` at the short times (`short = (lo, hi)`,
-  default `Δt ≤ P`, or the first two times when fewer than two qualify) is then fitted by
-  the line `2D_fast·Δt + offset`, and `S = D_fast/(D_fast + D)`. `D_fast` is not clamped, so
-  noise can make it, and `S`, negative. With fewer than 3 positive second differences, or a
-  non-decaying fit (`c₁ ≥ 0`), it throws: the data do not resolve a persistence (a purely
-  diffusive or a ballistic MSD), and `method = :lsq` is the cross-check.
-- `method = :lsq` minimizes the relative squared error `Σ((model − m)/m)²` of Eq. 1 (plus a
-  free `offset`) over `D`, `D_fast ≥ 0` and `P`: for fixed `P` the model is linear in
+  uniformly spaced (step `h`). The second differences `dᵢ = (m_{i+1} − 2mᵢ + m_{i−1})/h²`
+  at the interior times (those in `range = (lo, hi)`, default all) that are positive are
+  fitted by ordinary least squares to `log dᵢ = c₀ + c₁Δtᵢ`, the logarithm of Eq. 1's
+  second derivative `(2D/P)e^{−Δt/P}`, which gives `P = −1/c₁` and `D = e^{c₀}P/2`. The
+  residual `m − furth_mean_squared_displacement(Δt, 0, D, P)` at the short times
+  (`short = (lo, hi)`, default `Δt ≤ P`, or the first two times when fewer than two
+  qualify; a given `short` must hold at least 2 times) is then fitted by the line
+  `2D_fast·Δt + offset`, and `S = D_fast/(D_fast + D)`.
+  `D_fast` is not clamped, so noise can make it, and `S`, negative. With fewer than 3
+  positive second differences, or a fit that does not decay (`c₁ ≥ 0`), it throws: the data
+  do not resolve a persistence (a purely diffusive or a ballistic MSD), and
+  `method = :lsq` is the cross-check.
+- `method = :lsq` minimizes the relative squared error `Σ((model − m)/m)²` of Eq. 1 (plus
+  a free `offset`) over `D`, `D_fast ≥ 0` and `P`. For fixed `P` the model is linear in
   `a = 2D` and `b = 2D_fast`, solved exactly under `a, b ≥ 0`; `P` runs over a 200-point
   logarithmic grid on `[Δt₁/10, 100·Δt_end]`, refined by golden section to a relative
   `1e-10` (ties go to the smaller `P`). `D_slow` is `(a + b)/2` directly, which stays exact
@@ -209,9 +298,34 @@ the times `Δt` (positive, strictly increasing, at least 4 of them). The derived
   (`Δt₁/10` or `100·Δt_end`) means the persistence is not resolved by the data (a purely
   diffusive or a ballistic MSD): read `D_slow` or `v_eff`, not `P`, `D` or `S`.
 
+# Arguments
+- `Δt`: the times, positive, strictly increasing, at least 4 of them.
+- `m`: the MSD, as many values as `Δt`.
+
+# Keywords
+- `method::Symbol = :paper`: `:paper` or `:lsq`.
+- `range = nothing`: the time window `(lo, hi)` of the second differences (`:paper`).
+- `short = nothing`: the time window `(lo, hi)` of the short-time line (`:paper`).
+- `offset::Bool = true`: fit a constant offset.
+
 Throws an `ArgumentError` for fewer than 4 points, `Δt` and `m` of different lengths,
-non-finite values, a `Δt` that is not positive and strictly increasing, an unknown
+values that are not finite, a `Δt` that is not positive and strictly increasing, an unknown
 `method`, and the method-specific conditions above.
+
+# Returns
+- `NamedTuple`: `(; S, D, P, D_fast, D_slow, v_eff, offset, method)`.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> Δt = 0.5:0.5:20; m = furth_mean_squared_displacement(Δt, 0.2, 1.0, 2.0);
+
+julia> isapprox(furth_fit(Δt, m).P, 2; rtol = 1e-6)
+true
+```
+
+See also [`furth_mean_squared_displacement`](@ref), [`natural_units`](@ref).
 """
 function furth_fit(
         Δt, m; method::Symbol = :paper, range = nothing,

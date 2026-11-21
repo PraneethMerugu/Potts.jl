@@ -149,19 +149,58 @@ function _build_renderframe(
 end
 
 """
-    renderframe(state::CPMState, request=RenderRequest(); mcs=0, channels=(),
-        frozen=nothing, spacing=nothing)
+    renderframe(state::CPMState, request = RenderRequest(); mcs = 0, channels = (),
+        frozen = nothing, spacing = nothing) -> PottsRenderFrame
+    renderframe(solution, request = RenderRequest(); index = lastindex(solution.u),
+        channels = ()) -> PottsRenderFrame
 
-Defensively materialize one native Makie frame from a saved host state (a
-`CorePotts.CPMState` snapshot). Site-channel arrays describe the full saved domain and use
-the same full-domain or orthogonal-slice projection as ownership. Cell and medium
-channels retain their identity-keyed representation. Frozen medium sites render as
-obstacles.
+Return the render frame of one saved state, a copy that later steps do not change.
 
-    renderframe(solution, request=RenderRequest(); index=lastindex(solution.u), channels=())
+Each cell with a positive volume gets a [`RenderCellMetadata`](@ref) with its kind number
+as `cell_type`. Medium sites are owned by medium 1, and medium sites marked in `frozen`
+become obstacle sites. Site channels cover the full state and are cut to the extent the
+same way as the ownership; cell and medium channels are kept as given.
 
-The frame of the `index`-th saved state of `solution`, a `PottsSolution` or the frames a
-run wrote to disk (`CorePotts.PottsFrames`, given its `prob` to draw obstacles).
+The second method renders state `index` of `solution`, at MCS `solution.t[index]`, with
+the obstacles and spacing of `solution.prob`. Frames written to disk and read without
+their problem have no obstacles and unit spacing.
+
+# Arguments
+
+  - `state::CorePotts.CPMState`: the state.
+  - `solution`: a `CorePotts.PottsSolution` or the frames a run wrote to disk
+    (`CorePotts.PottsFrames`).
+  - `request::RenderRequest`: the extent and the cell metadata to keep.
+
+# Keywords
+
+  - `mcs::Integer = 0`: the MCS of the frame.
+  - `channels::Tuple = ()`: [`RenderChannel`](@ref) values. Site values have the size of
+    the full state.
+  - `frozen = nothing`: a Boolean array of the state's size marking the frozen sites, or
+    `nothing`.
+  - `spacing = nothing`: the site width on each axis, or `nothing` for 1.0.
+  - `index::Integer`: the saved state. Throws a `BoundsError` outside `solution.u`.
+
+Throws an `ArgumentError` when the extent does not fit the state (see
+[`OrthogonalSlice`](@ref)) or when cell metadata is dropped from an extent with a cell site,
+and `MakiePotts.InvalidRenderFrameError` when the frame breaks a rule of
+[`PottsRenderFrame`](@ref).
+
+# Returns
+
+  - [`PottsRenderFrame`](@ref): the frame.
+
+# Examples
+
+```julia
+using Potts, MakiePotts, CairoMakie
+sol = solve(prob, SequentialCPM(); saveat = 10)
+frame = renderframe(sol, RenderRequest(; extent = OrthogonalSlice(3, 16)))
+pottsplot(frame)
+```
+
+See also [`renderframes`](@ref), [`pottsplot`](@ref).
 """
 function renderframe(
         state::CorePotts.CPMState,
@@ -199,9 +238,26 @@ function renderframe(
     )
 end
 
-"""Eagerly materialize independent frames from a retained solution or from written frames
-(`CorePotts.PottsFrames`, read one at a time but all kept). `record_potts` and
-`explore_potts` render written frames one at a time instead."""
+"""
+    renderframes(solution, request = RenderRequest()) -> Vector{PottsRenderFrame}
+
+Return the render frames of every saved state of `solution`, all at once.
+
+Frames written to disk are read one at a time, but all frames are kept in memory.
+[`record_potts`](@ref) and [`explore_potts`](@ref) render written frames one at a time
+instead.
+
+# Arguments
+
+  - `solution`: a `CorePotts.PottsSolution` or `CorePotts.PottsFrames`.
+  - `request::RenderRequest`: as for [`renderframe`](@ref).
+
+# Returns
+
+  - `Vector{PottsRenderFrame}`: one frame per saved state, in order.
+
+See also [`renderframe`](@ref).
+"""
 function renderframes(
         solution::SavedRun,
         request::RenderRequest = RenderRequest()

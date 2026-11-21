@@ -13,17 +13,18 @@ profiles after a simulation, never inside a Monte Carlo step.
 - Chains and relaxation curves: [`chain_centroids`](@ref), [`chain_width`](@ref),
   [`crossing_time`](@ref), [`relaxation_mse`](@ref).
 - Point clouds: [`concave_hull`](@ref) (the OpenVT benchmark's Graham scan + concaveman).
-- Domain guard: [`near_edge`](@ref).
-- Foam observables (reproduction 04, spec 04 §2.8): [`stored_energy`](@ref) (φ, Eq. 8),
+- Edge guard: [`near_edge`](@ref).
+- Foam observables (Jiang et al. 1999): [`stored_energy`](@ref) (φ, Eq. 8),
   [`side_counts`](@ref), [`topology_distribution`](@ref), [`central_moment`](@ref),
   [`topology_moments`](@ref), T1 detection with [`contact_changes`](@ref) and
   [`t1_events`](@ref), spectra with [`power_spectrum`](@ref) (Eq. 9) and
   [`spectral_exponent`](@ref), [`mean_t1`](@ref) (N̄) and [`yield_strain`](@ref).
-- Motility (reproduction 14): [`unwrap_track`](@ref), [`mean_squared_displacement`](@ref),
-  the modified Fürth model [`furth_mean_squared_displacement`](@ref), its fits
-  [`furth_fit`](@ref) and [`natural_units`](@ref).
+- Motility (Fortuna et al. 2020): [`unwrap_track`](@ref),
+  [`mean_squared_displacement`](@ref), the modified Fürth model
+  [`furth_mean_squared_displacement`](@ref), its fits [`furth_fit`](@ref) and
+  [`natural_units`](@ref).
 
-Indices are 1-based throughout; cell ids are the values of σ (0 is the medium).
+Indices are 1-based throughout; cell numbers are the values of σ (0 is the medium).
 """
 module Analysis
 

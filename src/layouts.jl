@@ -14,17 +14,23 @@
 """
     AbstractLayout
 
-A layer of an initial condition. Turn layouts into an operating point with
-[`layout`](@ref); compose them with [`overlay`](@ref).
+The supertype of a layer of an initial condition.
 
-A new layout is a subtype with one method, `Potts.paint!(op::Potts.LayoutState, l, lat)`
-(the return value is ignored). `op` is opaque: the method reads and writes it only through
-[`new_cell!`](@ref), [`assign!`](@ref), [`owner`](@ref), [`kindof`](@ref),
-[`ncells`](@ref), [`record!`](@ref) and [`set_column!`](@ref), and reads the lattice only
-through `size(lat)`, [`isperiodic`](@ref)`(lat, d)` and [`indomain`](@ref)`(lat, x)` (and
-`core_lattice(lat)` for CorePotts' `shift`, `relation` and `embed`). Every name is `public`,
-so a layout in another package passes ExplicitImports' qualified-access check.
+Turn a layout into an operating point with [`layout`](@ref), and compose layouts with
+[`overlay`](@ref). A new layout is a subtype with one method,
+`Potts.paint!(op::Potts.LayoutState, l, lat)` (the return value is ignored). `op` is
+opaque: the method reads and writes it only through [`new_cell!`](@ref),
+[`assign!`](@ref), [`owner`](@ref), [`kindof`](@ref), [`ncells`](@ref),
+[`record!`](@ref) and [`set_column!`](@ref). It reads the lattice only through
+`size(lat)`, [`isperiodic`](@ref)`(lat, d)` and [`indomain`](@ref)`(lat, x)`, and
+`core_lattice(lat)` for CorePotts' `shift`, `relation` and `embed`. Every name is
+`public`, so a layout in another package passes ExplicitImports' qualified-access check.
 
+Every built-in layer (`Tiling`, `Scattered`, `Frame`, `InsertUntil`, `Voronoi`, `Eden`,
+`Splits`, `Fill`, `Objects`) takes `splits = :warn | :allow`. `remake(l; kw...)` rebuilds
+it with changed keywords: it re-runs the keyword constructor, so it validates.
+
+# Examples
 ```julia
 struct Column <: AbstractLayout
     x::Int
@@ -37,10 +43,7 @@ function Potts.paint!(op::Potts.LayoutState, l::Column, lat)
 end
 ```
 
-Every built-in layer (`Tiling`, `Scattered`, `Frame`, `InsertUntil`, `Voronoi`, `Eden`,
-`Splits`, `Fill`, `Objects`) takes
-`splits = :warn | :allow` and can be rebuilt with changed keywords by
-`remake(l; kw...)`, which re-runs the keyword constructor (so it validates).
+See also [`layout`](@ref), [`Potts.paint!`](@ref), [`LayoutState`](@ref).
 """
 abstract type AbstractLayout end
 
@@ -65,9 +68,14 @@ end
 """
     LayoutState
 
-The paint so far, handed to `paint!(op::LayoutState, l, lat)`. Opaque: use
-[`new_cell!`](@ref), [`assign!`](@ref), [`owner`](@ref), [`kindof`](@ref),
-[`ncells`](@ref) and [`record!`](@ref).
+The paint so far, handed to `Potts.paint!(op::LayoutState, l, lat)`.
+
+`LayoutState` is opaque. A layer reads and writes it only through [`new_cell!`](@ref),
+[`assign!`](@ref), [`owner`](@ref), [`kindof`](@ref), [`ncells`](@ref),
+[`record!`](@ref) and [`set_column!`](@ref). [`layout`](@ref) makes it; a user never
+constructs one. The fields are not public.
+
+See also [`AbstractLayout`](@ref).
 """
 mutable struct LayoutState{N}
     const ownership::Array{Int32, N}
@@ -98,11 +106,21 @@ function LayoutState(dims::NTuple{N, Int}) where {N}
 end
 
 """
-    new_cell!(op::LayoutState, kind) -> id
+    new_cell!(op::LayoutState, kind) -> Int
 
-Allocate the next cell, of `kind`, and return its id, `ncells(op) + 1`. Ids are those of the
-paint so far: cells left with no site are dropped (and the rest renumbered) after the whole
-layout is painted.
+Allocate the next cell, of `kind`, and return its cell number.
+
+Cell numbers are those of the paint so far. After the whole layout is painted,
+[`layout`](@ref) drops the cells left with no site and renumbers the rest.
+
+# Arguments
+- `op::LayoutState`: the paint state passed to `paint!`.
+- `kind`: the kind of the new cell (a kind name of the model, usually a `Symbol`).
+
+# Returns
+- `Int`: the new cell number, `ncells(op) + 1`.
+
+See also [`assign!`](@ref), [`ncells`](@ref).
 """
 function new_cell!(op::LayoutState, kind)
     push!(op.kinds, kind)
@@ -112,10 +130,22 @@ end
 """
     assign!(op::LayoutState, x, id) -> Int
 
-Paint the site `x` (a tuple of integers or a `CartesianIndex`) or the box `x` (a tuple of
-unit ranges) with cell `id` (0 paints medium) and return the number of sites written.
-Sites and boxes are lattice indices on the lattice: nothing wraps (a box crossing a periodic
-edge is two `assign!` calls; `CorePotts.shift` maps a displaced site back).
+Paint the site or the box `x` with cell `id`, and return the number of sites written.
+
+Sites and boxes are lattice indices. Nothing wraps: a box that crosses a periodic edge is
+two `assign!` calls, and `CorePotts.shift` maps a displaced site back.
+
+# Arguments
+- `op::LayoutState`: the paint state passed to `paint!`.
+- `x`: a site (a tuple of integers or a `CartesianIndex`) or a box (a tuple of integers and
+  unit ranges, one per axis).
+- `id::Integer`: a cell number from [`new_cell!`](@ref), or 0 to paint medium. Throws an
+  `ArgumentError` for a cell that is not allocated.
+
+# Returns
+- `Int`: the number of sites written (1 for a site).
+
+See also [`new_cell!`](@ref), [`owner`](@ref).
 """
 function assign!(op::LayoutState{N}, x::NTuple{N, Integer}, id::Integer) where {N}
     _assign_site!(op, CartesianIndex(x), _cell_id(op, id))
@@ -179,38 +209,80 @@ end
 end
 
 """
-    owner(op::LayoutState, x) -> Integer
+    owner(op::LayoutState, x) -> Int32
 
-The cell owning site `x` (a tuple of integers or a `CartesianIndex`) in the paint so far;
-0 is the medium.
+Return the cell that owns site `x` in the paint so far (0 is the medium).
+
+# Arguments
+- `op::LayoutState`: the paint state passed to `paint!`.
+- `x`: a site, as a tuple of integers or a `CartesianIndex`.
+
+# Returns
+- `Int32`: the cell number at `x`.
+
+See also [`kindof`](@ref), [`assign!`](@ref).
 """
 owner(op::LayoutState{N}, x::NTuple{N, Integer}) where {N} = op.ownership[x...]
 owner(op::LayoutState{N}, x::CartesianIndex{N}) where {N} = op.ownership[x]
 
 """
-    kindof(op::LayoutState, id)
+    kindof(op::LayoutState, id) -> kind
 
-The kind given to [`new_cell!`](@ref) for cell `id`.
+Return the kind given to [`new_cell!`](@ref) for cell `id`.
+
+# Arguments
+- `op::LayoutState`: the paint state passed to `paint!`.
+- `id::Integer`: an allocated cell number.
+
+# Returns
+- The kind, as passed to `new_cell!`.
+
+See also [`owner`](@ref), [`ncells`](@ref).
 """
 kindof(op::LayoutState, id::Integer) = op.kinds[id]
 
 """
     ncells(op::LayoutState) -> Int
 
-The number of cells allocated so far (the largest id). Not `CorePotts.ncells`, which
-counts the cells of a simulation state.
+Return the number of cells allocated so far (the largest cell number).
+
+This is not `CorePotts.ncells`, which counts the cells of a simulation state.
+
+# Arguments
+- `op::LayoutState`: the paint state passed to `paint!`.
+
+# Returns
+- `Int`: the number of cells allocated, including cells that own no site yet.
+
+See also [`new_cell!`](@ref).
 """
 ncells(op::LayoutState) = length(op.kinds)
 
 """
-    record!(op::LayoutState; requested, painted, misses = 0, counted = painted, clipped = 0)
+    record!(op::LayoutState; requested, painted, misses = 0, counted = painted,
+        clipped = 0)
 
-Set the current leaf layer's entry in the layout report (see [`layout`](@ref)): what it was
-asked for, the cells it created, the draws that missed, what a stop rule counted and the
-sites of its region lost to closed edges and the domain. A layer that does not call it
-reports `requested = painted =` the cells it allocated and `clipped = 0`. A layer that
-paints built-in layers inside its own `paint!` calls `record!` last: their entries go to the
-same row.
+Set the current leaf layer's row in the layout report (see [`layout`](@ref)).
+
+A layer that does not call `record!` reports `requested = painted =` the cells it allocated
+and `clipped = 0`. A layer that paints built-in layers inside its own `paint!` calls
+`record!` last: their entries go to the same row. Throws an `ArgumentError` when called
+outside a layer's `paint!`.
+
+# Arguments
+- `op::LayoutState`: the paint state passed to `paint!`.
+
+# Keywords
+- `requested::Integer`: what the layer was asked for.
+- `painted::Integer`: the cells it created.
+- `misses::Integer = 0`: the draws that missed.
+- `counted::Integer = painted`: what a stop rule counted.
+- `clipped::Integer = 0`: the sites of its region lost to closed edges and to the domain.
+
+# Returns
+- `nothing`.
+
+See also [`layout`](@ref), [`AbstractLayout`](@ref).
 """
 function record!(
         op::LayoutState; requested::Integer, painted::Integer, misses::Integer = 0,
@@ -228,22 +300,32 @@ end
 """
     set_column!(op::LayoutState, name::Symbol, id, value)
 
-Record `value` for cell `id` (in `1:ncells(op)`) in the column `name` of the operating point
-[`layout`](@ref) returns; a second call for the same cell overwrites the first. Call it from
-a layer's `paint!`.
+Record `value` for cell `id` in the column `name` of the operating point that
+[`layout`](@ref) returns.
 
-- `name = :cluster`: `value` is a label, compared with `isequal`; the cells with equal
-  labels form one cluster (a compartment cell). `layout` then returns `cluster => ids`,
-  where a cell's id is the final id of the lowest-id surviving cell with its label, and a
-  cell without a label is a cluster of its own. [`Group`](@ref) is built on this, and its
-  labels never equal a user's.
+Call it from a layer's `paint!`. A second call for the same cell overwrites the first.
+
+- `name = :cluster`: `value` is a cluster key, compared with `isequal`. The cells with
+  equal keys form one cluster (a compartment cell). `layout` then returns `cluster => ids`.
+  A cell's entry is the final cell number of the lowest-numbered surviving cell with its
+  key, and a cell without a key is a cluster of its own. [`Group`](@ref) is built on this,
+  and its keys never equal a user's.
 - Any other name (a model's cell variable, such as `:V_target`): `layout` returns
-  `name => values`, one value per surviving cell, so `PottsProblem` uses them in place of
-  the variable's default. Every cell that survives the whole layout, from whichever layer,
-  needs a value, otherwise `layout` throws, naming the column and the cells.
+  `name => values`, one value per surviving cell, and `PottsProblem` uses them in place of
+  the variable's default. Every cell that survives the whole layout, from any layer, needs
+  a value. Otherwise `layout` throws, and names the column and the cells.
 
-Throws an `ArgumentError` for `name` `:ownership` or `:kind`, an `id` that is not allocated,
-and a call outside a layer's `paint!`.
+# Arguments
+- `op::LayoutState`: the paint state passed to `paint!`.
+- `name::Symbol`: the column. Throws an `ArgumentError` for `:ownership` and `:kind`.
+- `id::Integer`: an allocated cell number, in `1:ncells(op)`. Throws an `ArgumentError`
+  otherwise.
+- `value`: the value for that cell.
+
+# Returns
+- `nothing`. Throws an `ArgumentError` when called outside a layer's `paint!`.
+
+See also [`Group`](@ref), [`layout`](@ref).
 """
 function set_column!(op::LayoutState, name::Symbol, id::Integer, value)
     op.layer == 0 &&
@@ -290,16 +372,35 @@ end
 """
     isperiodic(lat, d) -> Bool
 
-Whether axis `d` of the lattice a layout is painted on is periodic.
+Return whether axis `d` of the lattice that a layout is painted on is periodic.
+
+# Arguments
+- `lat`: the lattice passed to `paint!` (a [`LatticeSpec`](@ref)).
+- `d::Integer`: the axis.
+
+# Returns
+- `Bool`: `true` when axis `d` is periodic.
+
+See also [`indomain`](@ref), [`AbstractLayout`](@ref).
 """
 isperiodic(lat::LatticeSpec, d::Integer) = _periodic(lat)[d]
 
 """
     indomain(lat, x) -> Bool
 
-Whether site `x` (a tuple of integers or a `CartesianIndex`) lies on the lattice and inside
-its domain (every lattice site, without a domain). Unlike CorePotts' `in_domain(lattice, i)`
-it checks bounds and takes a layout's `lat`.
+Return whether site `x` lies on the lattice and inside its domain.
+
+Without a domain, every lattice site is in the domain. Unlike CorePotts'
+`in_domain(lattice, i)`, it checks bounds and takes a layout's `lat`.
+
+# Arguments
+- `lat`: the lattice passed to `paint!` (a [`LatticeSpec`](@ref)).
+- `x`: a site, as a tuple of integers or a `CartesianIndex`.
+
+# Returns
+- `Bool`: `true` when `x` is a lattice site in the domain.
+
+See also [`isperiodic`](@ref).
 """
 function indomain(lat::LatticeSpec{N}, x::NTuple{N, Integer}) where {N}
     return indomain(lat, CartesianIndex(x))
@@ -385,21 +486,45 @@ _splits(::AbstractLayout) = :warn
 # ------------------------------------------------------------------------------------------
 
 """
-    Tiling(size; spacing = 0, region = <whole lattice>, kinds, partial = :skip,
-        splits = :warn)
+    Tiling(size; spacing = 0, region = nothing, kinds, partial = :skip, splits = :warn)
 
-Boxes of `size` (a tuple, one entry per axis), `spacing` medium sites apart (an integer or
-a tuple), filling `region` (a tuple of ranges) in column-major order from its lower corner.
-`kinds` is cycled over the cells in placement order.
+A layer of boxes of `size`, `spacing` medium sites apart, that fill `region` in
+column-major order from its lower corner.
 
-- `partial = :skip` places whole boxes only; `region` must lie on the lattice.
-- `partial = :clip` also starts boxes up to the end of the region and keeps the part of
-  each box inside region ∩ lattice (`region` may reach beyond the lattice). Unlike
-  CompuCell3D's uniform initializer, which clips at the lattice only, boxes are clipped at
-  the region too.
+`kinds` is cycled over the cells in placement order. On a periodic axis, trailing boxes
+closer than `spacing` to the first box through the wrap are skipped, so the spacing also
+holds across the boundary. `layout` throws an `ArgumentError` when no box fits the region.
 
-On a periodic axis, trailing boxes closer than `spacing` to the first box through the wrap
-are skipped, so the spacing also holds across the boundary.
+# Arguments
+- `size`: the box size, a tuple with one positive entry per axis.
+
+# Keywords
+- `spacing = 0`: the medium sites between boxes, an integer or a tuple (non-negative).
+- `region = nothing`: a tuple of unit ranges; `nothing` is the whole lattice.
+- `kinds`: a non-empty collection of kinds.
+- `partial = :skip`: `:skip` places whole boxes only, and `region` must lie on the lattice.
+  `:clip` also starts boxes up to the end of the region and keeps the part of each box
+  inside region ∩ lattice (`region` may reach beyond the lattice). Unlike CompuCell3D's
+  uniform initializer, which clips at the lattice only, `:clip` clips boxes at the region
+  too.
+- `splits = :warn`: `:warn` or `:allow` (see [`overlay`](@ref)).
+
+# Examples
+```jldoctest
+julia> using Potts
+
+julia> op = Potts.layout(Potts.Tiling((2, 2); spacing = 1, kinds = [:a, :b]), (5, 5));
+
+julia> last(op[1])
+5×5 Matrix{Int32}:
+ 1  1  0  3  3
+ 1  1  0  3  3
+ 0  0  0  0  0
+ 2  2  0  4  4
+ 2  2  0  4  4
+```
+
+See also [`Scattered`](@ref), [`layout`](@ref).
 """
 struct Tiling{N, K} <: AbstractLayout
     size::NTuple{N, Int}
@@ -432,12 +557,24 @@ _splits(l::Tiling) = l.splits
 """
     Potts.paint!(op::LayoutState, l::AbstractLayout, lat)
 
-Paint layer `l` into the layout state `op` on lattice `lat`: the one method a new layout
-defines (see [`AbstractLayout`](@ref)). It allocates cells with [`new_cell!`](@ref), paints
-with [`assign!`](@ref), may read the paint so far with [`owner`](@ref), [`kindof`](@ref) and
-[`ncells`](@ref), and may report with [`record!`](@ref); `lat` is read with `size`,
-[`isperiodic`](@ref) and [`indomain`](@ref). The return value is ignored. Call it only from
-another layer's `paint!`; [`layout`](@ref) runs a layout.
+Paint layer `l` into the layout state `op` on lattice `lat`: the one method that a new
+layout defines (see [`AbstractLayout`](@ref)).
+
+The method allocates cells with [`new_cell!`](@ref) and paints with [`assign!`](@ref). It
+may read the paint so far with [`owner`](@ref), [`kindof`](@ref) and [`ncells`](@ref), and
+may report with [`record!`](@ref). Call it only from another layer's `paint!`;
+[`layout`](@ref) runs a layout.
+
+# Arguments
+- `op::LayoutState`: the paint state.
+- `l::AbstractLayout`: the layer.
+- `lat`: the lattice ([`LatticeSpec`](@ref)), read with `size`, [`isperiodic`](@ref) and
+  [`indomain`](@ref).
+
+# Returns
+- Anything: the return value is ignored.
+
+See also [`AbstractLayout`](@ref), [`layout`](@ref).
 """
 function paint! end
 
@@ -493,23 +630,44 @@ end
 # ------------------------------------------------------------------------------------------
 
 """
-    Scattered(n, size; region = <whole lattice>, kinds, seed, gap = 1, splits = :warn)
+    Scattered(n, size; region = nothing, kinds, seed, gap = 1, splits = :warn)
 
-`n` boxes of `size` at uniformly random positions inside `region`, at least `gap` medium
-sites apart along some axis (Chebyshev: with `gap = 1` no two cells touch under Moore(1)).
-On a periodic axis the separation is measured through the wrap. On a hexagonal lattice the
-gap is Chebyshev in axial coordinates, which is conservative (hex neighbors are a subset of
-Moore(1)). Like every layer it overwrites earlier layers (pass a `region` to keep clear of a
-[`Frame`](@ref)).
+A layer of `n` boxes of `size` at uniformly random positions inside `region`, at least
+`gap` medium sites apart along some axis.
 
-Placement is random sequential: box after box is drawn with a `StableRNG(seed)` (so it is
-deterministic in `seed` across Julia versions) and rejected while it is too close to a
-box placed earlier by this layer (cells of earlier layers do not count). The test runs on an
-occupancy mask of the region, so a draw costs `prod(size .+ 2gap)` site reads, independent
-of the number placed. `kinds` is cycled over the cells. Throws an `ArgumentError` when the
-boxes cannot fit the region, and also when a box cannot be placed after 10,000 draws: random
-sequential placement jams at about half of the densest packing, so a feasible but dense
-request can throw.
+The gap is a Chebyshev distance: with `gap = 1` no two cells touch under `Moore(1)`. On a
+periodic axis the gap is measured through the wrap. On a hexagonal lattice the gap is
+Chebyshev in axial coordinates, which is conservative (hexagonal neighbors are a subset of
+`Moore(1)`). Like every layer it overwrites earlier layers: pass a `region` to keep clear
+of a [`Frame`](@ref).
+
+Placement is random sequential. Each box is drawn with a `StableRNG(seed)`, so placement is
+deterministic in `seed` across Julia versions. A draw is rejected while it is too close to
+a box that this layer placed earlier (cells of earlier layers do not count). The test runs
+on an occupancy mask of the region, so a draw costs `prod(size .+ 2gap)` site reads,
+independent of the number placed. `kinds` is cycled over the cells.
+
+`layout` throws an `ArgumentError` when the boxes cannot fit the region, and when a box
+cannot be placed after 10,000 draws. Random sequential placement jams at about half of the
+densest packing, so a request that a denser packing could satisfy can still throw.
+
+# Arguments
+- `n::Integer`: the number of boxes (non-negative).
+- `size`: the box size, a tuple with one positive entry per axis.
+
+# Keywords
+- `region = nothing`: a tuple of unit ranges; `nothing` is the whole lattice.
+- `kinds`: a non-empty collection of kinds.
+- `seed::Integer`: the seed, in `0:typemax(UInt64)`.
+- `gap::Integer = 1`: the minimum number of medium sites between boxes (non-negative).
+- `splits = :warn`: `:warn` or `:allow` (see [`overlay`](@ref)).
+
+# Examples
+```julia
+Scattered(20, (5, 5); kinds = [:a, :b], seed = 1)
+```
+
+See also [`Tiling`](@ref), [`layout`](@ref).
 """
 struct Scattered{N, K} <: AbstractLayout
     n::Int
@@ -648,18 +806,35 @@ end
 """
     Frame(kind; width = 1, splits = :warn)
 
-One cell of `kind` owning every site within `width` of the lattice edge (a wall; pair it
-with a `[frozen]` kind). Periodic axes have no edge: on a `(Periodic(), Closed())` lattice
-the frame is two walls, at both ends of y (a channel), that are still one cell (one id, one
-kind). A lattice periodic along every axis has no edge and throws an `ArgumentError`.
+A layer of one cell of `kind` that owns every site within `width` of the lattice edge.
 
-On a lattice with a domain the frame follows the domain boundary: it owns every in-domain
+Pair it with a frozen kind, so that its cell is an obstacle. Periodic axes have no edge: on
+a `(Periodic(), Closed())` lattice the frame is two strips, at both ends of y (a channel),
+that are still one cell (one cell number, one kind). `layout` throws an `ArgumentError` on
+a lattice that is periodic along every axis.
+
+On a lattice with a domain the frame follows the domain boundary. It owns every in-domain
 site within Chebyshev distance `width`, in lattice indices, of a site outside the domain or
 of a closed lattice edge (through the wrap on periodic axes). Without a domain this is the
-rule above. Chebyshev distance is Moore(1) graph distance on a square lattice; on a
-hexagonal lattice it is measured in axial indices and is conservative (hex neighbors are a
-subset of Moore(1)), so the frame seals the domain under any Moore(1)/Hex(1)
-neighborhood. A domain whose only boundary would be periodic wrap throws, as above.
+rule above. Chebyshev distance is `Moore(1)` graph distance on a square lattice. On a
+hexagonal lattice it is measured in axial indices and is conservative (hexagonal neighbors
+are a subset of `Moore(1)`), so the frame seals the domain under any `Moore(1)` or
+hexagonal first-order relation. A domain whose only boundary is a periodic wrap throws, as
+above.
+
+# Arguments
+- `kind`: the kind of the frame cell.
+
+# Keywords
+- `width::Integer = 1`: the frame width in sites (at least 1).
+- `splits = :warn`: `:warn` or `:allow` (see [`overlay`](@ref)).
+
+# Examples
+```julia
+overlay(Frame(:border), Tiling((5, 5); spacing = 2, region = (3:48, 3:48), kinds = [:a]))
+```
+
+See also [`Fill`](@ref), [`overlay`](@ref).
 """
 struct Frame{K} <: AbstractLayout
     kind::K
@@ -737,40 +912,61 @@ end
 # ------------------------------------------------------------------------------------------
 
 """
-    InsertUntil(kind; into, fraction = nothing, number = nothing, seed,
-        region = <whole lattice>,
-                misses = :retry, splits = :warn)
+    InsertUntil(kind; into, fraction = nothing, number = nothing, seed, region = nothing,
+        misses = :retry, splits = :warn)
 
-One-site cells of `kind` inserted at random into cells of the kinds `into`, until a count is
-reached. Each draw picks a site of `region` (a tuple of ranges) uniformly with
-`StableRNG(seed)`. It *hits* when the site belongs to a cell whose kind is in `into` and
-that was painted before this layer: the site becomes a new one-site cell of `kind`. Any
-other draw (medium, a site outside the domain, another kind, a cell this layer
-inserted) *misses*.
+A layer of one-site cells of `kind`, inserted at random into cells of the kinds `into`
+until a count is reached.
 
-- `misses = :retry`: a miss changes nothing and is drawn again.
-- `misses = :count`: a miss also counts towards the stop rule, without creating a cell (the
-  empty cells that CompuCell3D-style seeding scripts create on a miss; they never own a
-  site, so they are never alive and are not allocated).
+Each draw picks a site of `region` uniformly with `StableRNG(seed)`. It *hits* when the
+site belongs to a cell that was painted before this layer and whose kind is in `into`: the
+site becomes a new one-site cell of `kind`. Any other draw *misses* (medium, a site outside
+the domain, another kind, or a cell that this layer inserted). The count is `counted`: the
+hits, plus the misses under `misses = :count`.
 
-The count is `counted` = hits (+ misses under `:count`). Give exactly one stop rule:
+Give exactly one stop rule:
 
-- `number = n`: stop once `counted ≥ n`;
-- `fraction = r` (`0 < r < 1`): stop once `K + counted ≥ r·(N + counted)`, where `N` is
-  the number of cells painted before this layer and `K` the number of those of `kind`, both
-  counting only cells that still own a site.
-  Pass a `Rational` (e.g. `1//4`) to emulate a script's `K/(N) < r` loop exactly: with a
-  floating-point `r` the product form can disagree with the ratio form at the boundary.
+- `number = n`: stop once `counted ≥ n`.
+- `fraction = r` (`0 < r < 1`): stop once `K + counted ≥ r·(N + counted)`. `N` is the
+  number of cells painted before this layer, and `K` the number of those of `kind`. Both
+  count only cells that still own a site. Pass a `Rational` (for example `1//4`) to emulate
+  a script's `K/N < r` loop exactly: with a floating-point `r`, the product form can
+  disagree with the ratio form at the boundary.
 
-The rule is checked before the first draw and after every hit, not after a miss, so under
-`:count` the count can overshoot by the misses drawn since the last hit (as in a script that
-recomputes its ratio only when it paints). A hit may take the last site of a cell, which
-then drops out of `N` (and `K`). Throws an `ArgumentError` when `region` holds no site to
-insert into, when the allowed sites run out before the rule is met, and for a missing,
-doubled or out-of-range stop rule. `layout(l, x; report = true)` reports how many cells the
-layer inserted (`painted`), how many draws missed (`misses`, in both modes) and what its
-stop rule counted (`counted`); `requested` is `number`, or `counted` under a `fraction`
-rule.
+The rule is checked before the first draw and after every hit, not after a miss. Under
+`:count` the count can therefore overshoot by the misses drawn since the last hit (as in a
+script that recomputes its ratio only when it paints). A hit may take the last site of a
+cell, which then drops out of `N` (and `K`). `layout` throws an `ArgumentError` when
+`region` holds no site to insert into, and when the allowed sites run out before the rule
+is met.
+
+`layout(l, x; report = true)` reports the cells that the layer inserted (`painted`), the
+draws that missed (`misses`, in both modes) and what its stop rule counted (`counted`).
+`requested` is `number`, or `counted` under a `fraction` rule.
+
+# Arguments
+- `kind`: the kind of the inserted cells.
+
+# Keywords
+- `into`: a non-empty collection of the kinds to insert into.
+- `fraction = nothing`: the fraction stop rule, a real number strictly between 0 and 1.
+- `number = nothing`: the count stop rule, a non-negative integer.
+- `seed::Integer`: the seed, in `0:typemax(UInt64)`.
+- `region = nothing`: a tuple of unit ranges; `nothing` is the whole lattice.
+- `misses = :retry`: `:retry` (a miss changes nothing and is drawn again) or `:count` (a
+  miss also counts toward the stop rule, without creating a cell, like the empty cells
+  that CompuCell3D-style seeding scripts create on a miss).
+- `splits = :warn`: `:warn` or `:allow` (see [`overlay`](@ref)).
+
+The constructor throws an `ArgumentError` for a missing or doubled stop rule and for a
+value out of range.
+
+# Examples
+```julia
+overlay(Fill(:a), InsertUntil(:b; into = [:a], fraction = 1//4, seed = 1))
+```
+
+See also [`layout`](@ref).
 """
 struct InsertUntil{K} <: AbstractLayout
     kind::K
@@ -915,20 +1111,35 @@ end
 """
     Interior(s)
 
-The open (strict) interior of the round shape `s` (a `Circle`, `Sphere` or `HyperSphere`):
-a site belongs to `Interior(Circle(c, r))` when its embedded position is at distance `< r`
-from `c`, up to rounding (a relative `1e-12`, so a site at exactly `r` is out, the mirror of
-the closed shape's tolerance). It wraps, clips and counts `clipped` exactly as the closed
-shape does, and is accepted wherever a shape is: the shape of [`Objects`](@ref) and the
-`region` of [`Fill`](@ref), [`RandomPoints`](@ref), [`Voronoi`](@ref) and [`Eden`](@ref).
-`r = 0` is the empty set.
+The open (strict) interior of the round shape `s` (a `Circle`, `Sphere` or
+`HyperSphere`).
 
-On a square lattice with the center on a site, `Interior(Circle(c, 2.0))` is the 3 × 3 block
-(9 sites) where the closed `Circle(c, 2.0)` has 13; a ball tangent to a plane must be strict
-to stay off it (`Interior(Sphere(Point(x, y, R + 1.0), R))` has no site at `z = 1`).
+A site belongs to `Interior(Circle(c, r))` when its embedded position is at a distance
+`< r` from `c`, up to rounding. The tolerance is a relative `1e-12`, so a site at exactly
+`r` is out: the mirror of the closed shape's tolerance. `Interior` wraps, clips and counts
+`clipped` exactly as the closed shape does. It is accepted wherever a shape is: the shape
+of [`Objects`](@ref) and the `region` of [`Fill`](@ref), [`RandomPoints`](@ref),
+[`Voronoi`](@ref) and [`Eden`](@ref). `r = 0` is the empty set.
 
-Throws an `ArgumentError` for anything but a round shape (including an `Interior`), a
-non-finite center, or a radius that is negative or not finite.
+On a square lattice with the center on a site, `Interior(Circle(c, 2.0))` is the 3 × 3
+block (9 sites), where the closed `Circle(c, 2.0)` has 13. A ball tangent to a plane must
+be strict to stay off it: `Interior(Sphere(Point(x, y, R + 1.0), R))` has no site at
+`z = 1`.
+
+# Arguments
+- `s`: a `HyperSphere` (`Circle`, `Sphere`) with a finite center and a finite,
+  non-negative radius. Throws an `ArgumentError` for anything else, including an
+  `Interior`.
+
+# Fields
+- `shape::HyperSphere`: the closed shape.
+
+# Examples
+```julia
+Objects(Interior(Circle(Point(10.0, 10.0), 4.0)); kinds = [:a])
+```
+
+See also [`Objects`](@ref), [`Fill`](@ref).
 """
 struct Interior{N, T}
     shape::HyperSphere{N, T}
@@ -1030,32 +1241,61 @@ end
 """
     Center()
 
-A point pattern: the center of the lattice, the Cartesian point
-`embed((size(lat) .+ 1) ./ 2)` (`(20.5, 21.5)` on a 40 × 42 square lattice). Use it as a
-[`Voronoi`](@ref) generator, alone or in a vector of `Point`s. A shape's own center is an
+A point pattern: the center of the lattice.
+
+The center is the Cartesian point `embed((size(lat) .+ 1) ./ 2)`, which is `(20.5, 21.5)`
+on a 40 × 42 square lattice. Use it as a [`Voronoi`](@ref), [`Eden`](@ref) or
+[`Objects`](@ref) point, alone or in a vector of `Point`s. A shape's own center is an
 explicit `Point`.
+
+# Examples
+```jldoctest
+julia> using Potts
+
+julia> Potts.points(Potts.Center(), (40, 42))
+1-element Vector{GeometryBasics.Point{2, Float64}}:
+ [20.5, 21.5]
+```
+
+See also [`RandomPoints`](@ref), [`Potts.points`](@ref).
 """
 struct Center end
 
 """
-    RandomPoints(n; region = <whole lattice>, replace = false, seed)
+    RandomPoints(n; region = nothing, replace = false, seed)
 
 A point pattern: `n` lattice sites of `region` that lie in the lattice's domain, drawn
-uniformly. `region` is a shape (`Circle`, `Sphere`, `HyperSphere`, or an [`Interior`](@ref)
-of one; Cartesian, wrapping through periodic edges) or a tuple of index ranges. With the
-region's in-domain sites in column-major order s₁…sₘ and `rng = Potts.layer_rng(seed)`, each
-point draws `i = rand(rng, 1:m)`:
+uniformly.
 
-- `replace = false`: the points are distinct; a draw is repeated while sᵢ is already taken,
-  and `n > m` throws.
+Take the region's in-domain sites in column-major order s₁…sₘ and
+`rng = Potts.layer_rng(seed)`. Each point draws `i = rand(rng, 1:m)`:
+
+- `replace = false`: the points are distinct. A draw is repeated while sᵢ is already
+  taken, and `n > m` throws.
 - `replace = true`: point k is sᵢ of its one draw, so points may coincide and `n > m` is
   allowed (TST-style seeding: coinciding seeds merge in [`Eden`](@ref)). The two rules
   draw the same stream, so they agree up to the first repeated site.
 
-The points are in draw order (as a Cartesian `Point` each, see [`Potts.points`](@ref)).
-Throws an `ArgumentError` for `n < 0`, a seed outside `0:typemax(UInt64)` and, on a lattice,
-`n > m` (without replacement) or `n > 0` with `m = 0`. `remake(p; seed)` redraws;
-`remake(p; replace = true)` switches the rule.
+The points are in draw order, each a Cartesian `Point` (see [`Potts.points`](@ref)). On a
+lattice, throws an `ArgumentError` for `n > m` without replacement, or `n > 0` with
+`m = 0`. `remake(p; seed)` redraws, and `remake(p; replace = true)` switches the rule.
+
+# Arguments
+- `n::Integer`: the number of points (non-negative).
+
+# Keywords
+- `region = nothing`: a shape (`Circle`, `Sphere`, `HyperSphere`, or an
+  [`Interior`](@ref) of one; Cartesian, wrapping through periodic edges) or a tuple of
+  index ranges. `nothing` is the whole lattice.
+- `replace::Bool = false`: draw with replacement.
+- `seed::Integer`: the seed, in `0:typemax(UInt64)`.
+
+# Examples
+```julia
+Voronoi(RandomPoints(30; seed = 1); lloyd = 10, kinds = [:a])
+```
+
+See also [`Center`](@ref), [`Voronoi`](@ref), [`Eden`](@ref).
 """
 struct RandomPoints{R}
     n::Int
@@ -1147,8 +1387,28 @@ end
 """
     Potts.points(pattern, x) -> Vector{Point{N, Float64}}
 
-The Cartesian points of a point pattern (`RandomPoints`, `Center()`, or a vector of `Point`s
-and `Center()`s) on `x`, anything [`layout`](@ref) takes. A given `Point` is returned as is.
+Return the Cartesian points of a point pattern on `x`.
+
+A given `Point` is returned as it is.
+
+# Arguments
+- `pattern`: a point pattern: `RandomPoints`, `Center()`, or a vector of `Point`s and
+  `Center()`s.
+- `x`: anything that [`layout`](@ref) takes (a size tuple, a `Lattice` or a model).
+
+# Returns
+- `Vector{Point{N, Float64}}`: one point per pattern point, in order.
+
+# Examples
+```jldoctest
+julia> using Potts
+
+julia> Potts.points([Potts.Center()], (10, 10))
+1-element Vector{GeometryBasics.Point{2, Float64}}:
+ [5.5, 5.5]
+```
+
+See also [`RandomPoints`](@ref), [`Center`](@ref).
 """
 function points(pattern, x)
     lat = _layout_spec(x)
@@ -1175,35 +1435,52 @@ end
 # ------------------------------------------------------------------------------------------
 
 """
-    Voronoi(points; region = <whole lattice>, lloyd = 0, kinds, splits = :warn)
+    Voronoi(points; region = nothing, lloyd = 0, kinds, splits = :warn)
 
-One cell per generator of `points` (`RandomPoints`, `Center()`, or a vector of `Point`s and
-`Center()`s), ids in generator order, `kinds` cycled over them. It *fills*: it paints only
-the sites of `region` (a shape, an [`Interior`](@ref) of one, or a tuple of index ranges)
-that are in the lattice's domain and still medium, so earlier layers are never cut
-(Morpheus' InitVoronoi).
+A layer of one cell per generator of `points`, each site going to its nearest generator.
+
+Cell numbers follow generator order, and `kinds` is cycled over them. The layer *fills*:
+it paints only the sites of `region` that are in the lattice's domain and still medium,
+so earlier layers are never cut (Morpheus' InitVoronoi).
 
 - Each site goes to the nearest generator, Euclidean in the lattice's Cartesian embedding,
-  minimum image along periodic axes. Ties, in floating point, go to the lower generator; on
-  hexagonal lattices rounding can break exact geometric ties either way.
-- `lloyd = k`: k times, every generator that owns a site moves to the centroid of its sites
-  (minimum image along periodic axes, Lloyd's algorithm), and the sites are reassigned: a
-  centroidal tessellation of compact cells of similar volume.
-- Then every cell is made one piece under the geometry's nearest-neighbor steps (the 2N axis
-  steps on square lattices, the 6 neighbors on hexagonal ones; wrapping on periodic axes),
-  hence under any neighborhood that contains them: a stray piece joins the neighboring
-  cell whose largest piece it touches most (ties: the lower id), and a cell's largest piece
-  never moves.
+  minimum image along periodic axes. Ties, in floating point, go to the lower generator.
+  On hexagonal lattices rounding can break exact geometric ties either way.
+- `lloyd = k`: k times, every generator that owns a site moves to the centroid of its
+  sites (minimum image along periodic axes, Lloyd's algorithm), and the sites are
+  reassigned. The result is a centroidal tessellation of compact cells of similar volume.
+- Then every cell is made one piece under the geometry's nearest-neighbor steps: the 2N
+  axis steps on square lattices, the 6 neighbors on hexagonal ones, wrapping on periodic
+  axes. So each cell is one piece under any relation that contains these steps. A stray
+  piece joins the neighboring cell whose largest piece it touches most (ties: the lower
+  cell number), and a cell's largest piece never moves.
 
-`Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd = 30, kinds)` with
-`ball = Circle(Point(c), r)` is a round aggregate of `n` compact cells (the former
-`VoronoiBall`). The report row has `requested = painted =` the generators, `dropped` those
-left with no site and `clipped` the region's points lost to closed edges and the domain.
-With a domain, `clipped` depends on whether a region is given: the default (the whole
-lattice) is the domain's sites and clips nothing, while an explicit box, even the full
-lattice, counts its out-of-domain sites.
-Throws an `ArgumentError` for `lloyd < 0`, empty `kinds`, a bad `splits`, no generator, or a
+The report row has `requested = painted =` the generators, `dropped` the generators left
+with no site, and `clipped` the region's points lost to closed edges and the domain. With
+a domain, `clipped` depends on whether a region is given. The default (the whole lattice)
+is the domain's sites and clips nothing, while an explicit box, even the full lattice,
+counts its out-of-domain sites. `layout` throws an `ArgumentError` for no generator, or a
 shape or point of another dimension than the lattice. `remake(v; lloyd = …)` works.
+
+# Arguments
+- `points`: a point pattern: `RandomPoints`, `Center()`, a `Point`, or a vector of
+  `Point`s and `Center()`s.
+
+# Keywords
+- `region = nothing`: a shape, an [`Interior`](@ref) of one, or a tuple of index ranges;
+  `nothing` is the whole lattice.
+- `lloyd::Integer = 0`: the number of Lloyd iterations (non-negative).
+- `kinds`: a non-empty collection of kinds.
+- `splits = :warn`: `:warn` or `:allow` (see [`overlay`](@ref)).
+
+# Examples
+```julia
+# a round aggregate of 40 compact cells
+ball = Circle(Point(50.0, 50.0), 30.0)
+Voronoi(RandomPoints(40; region = ball, seed = 1); region = ball, lloyd = 30, kinds = [:a])
+```
+
+See also [`RandomPoints`](@ref), [`Eden`](@ref).
 """
 struct Voronoi{P, R, K} <: AbstractLayout
     points::P
@@ -1466,49 +1743,64 @@ end
 # ------------------------------------------------------------------------------------------
 
 """
-    Eden(points; rounds, region = <whole lattice>, kinds, seed, neighborhood = nothing,
-         shortfall = :error, splits = :warn)
+    Eden(points; rounds, region = nothing, kinds, seed, neighborhood = nothing,
+        shortfall = :error, splits = :warn)
 
-Seed-and-grow (TST's `GrowInCells`): one-site cells at `points`, grown by `rounds` rounds of
-synchronous random (Eden) growth into the medium.
+A seed-and-grow layer (TST's `GrowInCells`): one-site cells at `points`, grown by `rounds`
+rounds of synchronous random (Eden) growth into the medium.
 
-- **Seeding.** `points` is a point pattern as for [`Voronoi`](@ref) (`RandomPoints`,
-  `Center()`, a `Point`, or a vector of `Point`s and `Center()`s). Each point is mapped to
-  lattice indices and rounded half up, `floor(xᵢ + 1/2)` (so `Center()` on 200² is site
-  (101, 101), TST's `sizex/2`), wrapping along periodic axes. In point order, a point whose
-  site is on the lattice, in `region` ∩ domain and still medium becomes a new one-site cell;
-  any other point is not placed, so coinciding points merge (the first one wins). `kinds` is
-  cycled over the cells created; ids follow creation order.
-- **Growth.** Each round visits the medium sites of `region` ∩ domain in column-major order.
-  A site with a neighbor (under `neighborhood`, default the lattice's own) owned by a cell
-  of this layer at the start of the round draws one neighbor uniformly, `j = rand(rng, 1:K)`
+- **Seeding.** Each point is mapped to lattice indices and rounded half up,
+  `floor(xᵢ + 1/2)`, wrapping along periodic axes. So `Center()` on a 200 × 200 lattice is
+  site (101, 101), TST's `sizex/2`. In point order, a point whose site is on the lattice,
+  in `region` ∩ domain and still medium becomes a new one-site cell. Any other point is not
+  placed, so coinciding points merge (the first one wins). `kinds` is cycled over the cells
+  created, and cell numbers follow creation order.
+- **Growth.** Each round visits the medium sites of `region` ∩ domain in column-major
+  order. Take a site with a neighbor (under `neighborhood`) that a cell of this layer owns
+  at the start of the round. The site draws one neighbor uniformly, `j = rand(rng, 1:K)`
   over the `K` offsets of `CorePotts.relation`, with one
-  `rng = Potts.layer_rng(seed, :eden)` for the whole layer; if that neighbor is a cell of
+  `rng = Potts.layer_rng(seed, :eden)` for the whole layer. If that neighbor is a cell of
   this layer at the start of the round, the site joins it at the end of the round. This is
-  TST's law (every medium site draws one of its neighbors and copies it only from a growing
-  cell); sites with no growing neighbor cannot change, so they draw nothing. TST grows with
-  8 neighbors even on a lattice with a larger neighborhood: pass `neighborhood = Moore(1)`
+  TST's law: every medium site draws one of its neighbors and copies it only from a growing
+  cell. Sites with no growing neighbor cannot change, so they draw nothing. TST grows with
+  8 neighbors even on a lattice with a larger relation: pass `neighborhood = Moore(1)`
   there.
 
-Eden only fills: it never paints a site an earlier layer owns, nor outside `region` (a box
-of ranges, a shape or an [`Interior`](@ref) of one) or the domain. Each cell grows from one
-site, so it is one piece under `neighborhood`.
+Eden only fills: it never paints a site that an earlier layer owns, nor a site outside
+`region` or the domain. Each cell grows from one site, so it is one piece under
+`neighborhood`.
 
 The report row has `requested` = the points, `painted` = the cells created, `misses` = the
-points not placed, and `clipped` as for `Voronoi`. When fewer cells are painted than
-requested, `shortfall = :error` (the default) throws, `:warn` warns and `:allow` accepts it
-(seeds drawn with replacement merge by design: `RandomPoints(n; replace = true)`).
+points not placed, and `clipped` as for `Voronoi`. `layout` throws an `ArgumentError` for
+an empty point list and for a point or shape of another dimension than the lattice.
+`remake(e; rounds = …)` works.
 
-Throws an `ArgumentError` for `rounds < 0`, empty `kinds`, a bad seed, `shortfall` or
-`splits`, a `neighborhood` that is not a relation spec such as `Moore(1)`, an empty point
-list and (at layout) a point or shape of another dimension. `remake(e; rounds = …)` works.
+# Arguments
+- `points`: a point pattern as for [`Voronoi`](@ref): `RandomPoints`, `Center()`, a
+  `Point`, or a vector of `Point`s and `Center()`s.
 
+# Keywords
+- `rounds::Integer`: the number of growth rounds (non-negative).
+- `region = nothing`: a tuple of index ranges, a shape or an [`Interior`](@ref) of one;
+  `nothing` is the whole lattice.
+- `kinds`: a non-empty collection of kinds.
+- `seed::Integer`: the seed, in `0:typemax(UInt64)`.
+- `neighborhood = nothing`: a relation spec such as `Moore(1)`; `nothing` is the lattice's
+  own relation.
+- `shortfall = :error`: what to do when fewer cells are painted than requested. `:error`
+  throws, `:warn` warns and `:allow` accepts it. Seeds drawn with replacement
+  (`RandomPoints(n; replace = true)`) merge by design.
+- `splits = :warn`: `:warn` or `:allow` (see [`overlay`](@ref)).
+
+# Examples
 ```julia
 # TST's de novo vasculogenesis start: 360 seeds with replacement, 10 rounds
-overlay(Frame(:border), Eden(RandomPoints(360; region = (2:199, 2:199), replace = true, \
-seed = 1);
-    rounds = 10, kinds = [:endothelial], seed = 1, shortfall = :allow))
+seeds = RandomPoints(360; region = (2:199, 2:199), replace = true, seed = 1)
+overlay(Frame(:border),
+    Eden(seeds; rounds = 10, kinds = [:endothelial], seed = 1, shortfall = :allow))
 ```
+
+See also [`Voronoi`](@ref), [`Splits`](@ref), [`RandomPoints`](@ref).
 """
 struct Eden{P, R, K, H} <: AbstractLayout
     points::P
@@ -1654,42 +1946,53 @@ end
 """
     Splits(layer, k; shortfall = :error, splits = :warn)
 
-`layer`, with each of its cells divided `k` times (`0 ≤ k ≤ 30`) on the host before the
-simulation starts (TST's `DivideCells`): k passes, each cutting every cell of this layer
-with at least 2 sites in two across its long axis. It is not the simulation's division
-routine (no state, no trackers); it shares only the cut geometry with
-`CorePotts.AlongMinorAxis`.
+The layer `layer`, with each of its cells divided `k` times on the host before the
+simulation starts (TST's `DivideCells`).
 
-- Pass j visits the layer's cells in id order as they stand at the start of the pass; the
-  daughter of each cut is a new cell of the mother's kind, allocated right after the cut.
-  Cells of earlier layers are never touched.
-- The cut: sites in Cartesian coordinates (`embed`), unwrapped along periodic axes to the
-  image nearest the cell's first site in column-major order; `c` the centroid, `v` the unit
-  eigenvector of the largest eigenvalue of `C = Σ (p − c)(p − c)ᵀ` (in 2D by
-  `AlongMinorAxis`' rule; for a repeated largest eigenvalue, the first standard axis
-  projected onto its eigenspace), its first nonzero component positive. The daughter takes
-  the sites with `(p − c)·v > 0`; sites on the plane (up to a relative 1e-9 of the cell's
-  largest `|(p − c)·v|`) stay with the mother. A cell spanning more than half a periodic
-  axis is unwrapped relative to its first site all the same, so its cut can be torn into
-  pieces (deterministically).
-- After the passes, every cell of this layer that is not one piece under the lattice
-  neighborhood (whether a cut or `layer` itself left it so) counts once in the report row's
-  `splits` and, under `splits = :warn`, `layout` names it, by its id in the result, in a
-  warning, unless later layers left it one piece in the final state; `splits = :allow`
-  silences the warning, not the count.
+`Splits` makes `k` passes. Each pass cuts every cell of this layer that has at least 2
+sites in two, across its long axis. It is not the simulation's division routine (no state,
+no trackers); it shares only the cut geometry with `CorePotts.AlongMinorAxis`.
 
-The report row (one row for `Splits` and its `layer`) has `requested` = m·2ᵏ, m the cells of
-`layer` that own a site, `painted` = the cells owning a site after the passes, `misses` =
-their difference and the inner layer's `clipped`. A one-site cell cannot be cut, so fewer
-cells than requested is a shortfall: `shortfall = :error` (the default) throws, `:warn`
-warns, `:allow` accepts it. Throws an `ArgumentError` for `k` outside `0:30` or a bad
-`shortfall` or `splits`. `remake(s; k = …)` works.
+- Pass j visits the layer's cells in cell-number order as they stand at the start of the
+  pass. The daughter of each cut is a new cell of the mother's kind, allocated right after
+  the cut. Cells of earlier layers are never touched.
+- The cut: take the sites in Cartesian coordinates (`embed`), unwrapped along periodic
+  axes to the image nearest the cell's first site in column-major order. Let `c` be the
+  centroid and `v` the unit eigenvector of the largest eigenvalue of
+  `C = Σ (p − c)(p − c)ᵀ`, with its first nonzero component positive. In 2D `v` follows
+  `AlongMinorAxis`' rule. For a repeated largest eigenvalue, `v` is the first standard axis
+  projected onto its eigenspace. The daughter takes the sites with `(p − c)·v > 0`. Sites
+  on the plane (up to a relative 1e-9 of the cell's largest `|(p − c)·v|`) stay with the
+  mother. A cell that spans more than half a periodic axis is unwrapped relative to its
+  first site all the same, so its cut can be torn into pieces (deterministically).
+- After the passes, count every cell of this layer that is not one piece under the lattice
+  relation, whether a cut or `layer` itself left it so. Each counts once in the report
+  row's `splits`. Under `splits = :warn`, `layout` names it, by its cell number in the
+  result, in a warning, unless later layers left it one piece in the final state.
+  `splits = :allow` silences the warning, not the count.
 
+`Splits` and its `layer` share one report row. It has `requested` = m·2ᵏ (m the cells of
+`layer` that own a site), `painted` = the cells that own a site after the passes,
+`misses` = their difference, and the inner layer's `clipped`. A one-site cell cannot be
+cut, so fewer cells than requested is a shortfall. `remake(s; k = …)` works.
+
+# Arguments
+- `layer::AbstractLayout`: the layer whose cells are divided.
+- `k::Integer`: the number of passes, in `0:30`.
+
+# Keywords
+- `shortfall = :error`: what to do on a shortfall. `:error` throws, `:warn` warns and
+  `:allow` accepts it.
+- `splits = :warn`: `:warn` or `:allow`.
+
+# Examples
 ```julia
 # TST's sprout start: one Eden blob of 50 rounds at the center, divided 7 times (128 cells)
-overlay(Frame(:border), Splits(Eden(Center(); rounds = 50, kinds = [:endothelial], seed = \
-1), 7; splits = :allow))
+blob = Eden(Center(); rounds = 50, kinds = [:endothelial], seed = 1)
+overlay(Frame(:border), Splits(blob, 7; splits = :allow))
 ```
+
+See also [`Eden`](@ref), [`layout`](@ref).
 """
 struct Splits{L <: AbstractLayout} <: AbstractLayout
     layer::L
@@ -1910,12 +2213,36 @@ end
 """
     overlay(layers...)
 
-Layers painted in order: later layers overwrite earlier ones, and cell ids follow layer
-order. Cells left with no site are dropped (ids stay consecutive); a partly covered cell
-keeps its remaining sites, which may fall apart into pieces. `layout` warns, naming the
-cell, when later layers split a cell into pieces that are not connected under the lattice
-neighborhood, unless every layer that cut that cell has `splits = :allow`. Nested overlays
-are flattened, so each leaf layer is one row of the layout report.
+Compose layers that are painted in order: later layers overwrite earlier ones.
+
+Cell numbers follow layer order. Cells left with no site are dropped, and the cell
+numbers stay consecutive. A partly covered cell keeps its remaining sites, which may fall
+apart into pieces. `layout` warns, and names the cell, when later layers split a cell into
+pieces that are not connected under the lattice relation, unless every layer that cut that
+cell has `splits = :allow`. Nested overlays are flattened, so each leaf layer is one row
+of the layout report.
+
+# Arguments
+- `layers::AbstractLayout...`: the layers, in paint order.
+
+# Returns
+- An `AbstractLayout` that paints `layers` in order.
+
+# Examples
+```jldoctest
+julia> using Potts
+
+julia> l = Potts.overlay(Potts.Fill(:a), Potts.Fill(:b; region = (1:2, 1:4)));
+
+julia> last(Potts.layout(l, (4, 4))[1])
+4×4 Matrix{Int32}:
+ 2  2  2  2
+ 2  2  2  2
+ 1  1  1  1
+ 1  1  1  1
+```
+
+See also [`layout`](@ref), [`Group`](@ref).
 """
 function overlay(layers::AbstractLayout...)
     flat = AbstractLayout[]
@@ -1962,22 +2289,43 @@ end
 # ------------------------------------------------------------------------------------------
 
 """
-    Fill(kind; region = <whole lattice>, splits = :warn)
+    Fill(kind; region = nothing, splits = :warn)
 
-One cell of `kind` owning every in-domain lattice site of `region`, painted over whatever
-earlier layers put there. `region` is `nothing` (every in-domain site), a round shape
-(`Circle`, `Sphere`, `HyperSphere` or an [`Interior`](@ref) of one) or a tuple of index
-ranges (axial on a hexagonal lattice, where a box is a rhombus). Planes, slabs, backgrounds
-and boxes are all `Fill`s: `Fill(:lid; region = (1:L, 1:L, Lz:Lz))` is the plane `z = Lz`.
+A layer of one cell of `kind` that owns every in-domain lattice site of `region`.
+
+It paints over whatever earlier layers put there. Planes, slabs, backgrounds and boxes are
+all `Fill`s: `Fill(:lid; region = (1:L, 1:L, Lz:Lz))` is the plane `z = Lz`. It draws
+nothing, so it is deterministic.
 
 The report row has `requested = painted = counted = 1`, `misses = 0`, `dropped = 1` when
 later layers paint over every site, and `clipped` the points of the region that are not
-in-domain lattice sites (a shape's points lost to closed edges and the domain, a box's sites
-outside the domain). Deterministic: it draws nothing.
+in-domain lattice sites. These are a shape's points lost to closed edges and the domain,
+or a box's sites outside the domain. `layout` throws an `ArgumentError` for a region with
+no in-domain site, a box that reaches outside the lattice, and a region of another
+dimension than the lattice. `remake(f; region = …)` works.
 
-Throws an `ArgumentError` for a region with no in-domain site, a box that reaches outside
-the lattice, a region of another dimension than the lattice, a bad `splits` and a vector of
-kinds (`Fill` paints one cell). `remake(f; region = …)` works.
+# Arguments
+- `kind`: one kind. Throws an `ArgumentError` for a vector or tuple of kinds.
+
+# Keywords
+- `region = nothing`: `nothing` (every in-domain site), a round shape (`Circle`, `Sphere`,
+  `HyperSphere` or an [`Interior`](@ref) of one) or a tuple of index ranges (axial on a
+  hexagonal lattice, where a box is a rhombus).
+- `splits = :warn`: `:warn` or `:allow` (see [`overlay`](@ref)).
+
+# Examples
+```jldoctest
+julia> using Potts
+
+julia> last(Potts.layout(Potts.Fill(:a; region = (2:3, 2:3)), (4, 4))[1])
+4×4 Matrix{Int32}:
+ 0  0  0  0
+ 0  1  1  0
+ 0  1  1  0
+ 0  0  0  0
+```
+
+See also [`Objects`](@ref), [`Frame`](@ref).
 """
 struct Fill{K, R} <: AbstractLayout
     kind::K
@@ -2019,30 +2367,41 @@ end
 """
     Objects(shape, points = nothing; kinds, splits = :warn)
 
-One cell per copy of the round `shape` (`Circle`, `Sphere`, `HyperSphere` or an
-[`Interior`](@ref) of one). Without `points` there is one copy, the shape where it is. With
-`points` (`RandomPoints`, `Center()`, a `Point`, or a vector of `Point`s and `Center()`s),
-copy k is the shape translated by the Cartesian vector of point k, so write the template
-centered at the origin. Ids follow copy order and `kinds` is cycled over the copies.
+A layer of one cell per copy of the round `shape`.
 
-Each copy owns the in-domain sites of its shape (wrapping through periodic edges, clipped at
-closed edges and the domain) and paints over earlier layers; within the layer the first copy
-wins, so a copy never takes a site an earlier copy of the same layer owns.
+Without `points` there is one copy, the shape where it is. With `points`, copy k is the
+shape translated by the Cartesian vector of point k, so write the template centered at the
+origin. Cell numbers follow copy order, and `kinds` is cycled over the copies.
 
+Each copy owns the in-domain sites of its shape (wrapping through periodic edges, clipped
+at closed edges and the domain) and paints over earlier layers. Within the layer the first
+copy wins, so a copy never takes a site that an earlier copy of the same layer owns.
+
+The report row has `requested = painted = counted =` the copies, `misses = 0`, `dropped`
+the copies left with no site after the whole layout, and `clipped` the sum over the copies
+of their shapes' points that are not in-domain lattice sites (sites lost to an earlier copy
+are not clipped). Randomness comes only from a `RandomPoints` pattern's own seed. `layout`
+throws an `ArgumentError` for a shape or point of another dimension than the lattice.
+`remake(o; points = …)` works.
+
+# Arguments
+- `shape`: a round shape (`Circle`, `Sphere`, `HyperSphere` or an [`Interior`](@ref) of
+  one). Throws an `ArgumentError` otherwise.
+- `points = nothing`: a point pattern (`RandomPoints`, `Center()`, a `Point`, or a vector
+  of `Point`s and `Center()`s), or `nothing` for one copy in place.
+
+# Keywords
+- `kinds`: a non-empty collection of kinds.
+- `splits = :warn`: `:warn` or `:allow` (see [`overlay`](@ref)).
+
+# Examples
 ```julia
 # two balls of radius 3, strict, so neither touches a plane at distance 3
-Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), 3.0)), [Point(5.0, 5.0, 4.0), Point(13.0, \
-5.0, 4.0)]; kinds = [:cell])
+ball = Interior(Sphere(Point(0.0, 0.0, 0.0), 3.0))
+Objects(ball, [Point(5.0, 5.0, 4.0), Point(13.0, 5.0, 4.0)]; kinds = [:cell])
 ```
 
-The report row has `requested = painted = counted =` the copies, `misses = 0`, `dropped` the
-copies left with no site after the whole layout, and `clipped` the sum over the copies of
-their shapes' points that are not in-domain lattice sites (sites lost to an earlier copy are
-not clipped). Randomness comes only from a `RandomPoints` pattern's own seed.
-
-Throws an `ArgumentError` for a shape that is not round, empty `kinds`, an empty point list,
-a bad `splits` and (at layout) a shape or point of another dimension than the lattice.
-`remake(o; points = …)` works.
+See also [`Fill`](@ref), [`Interior`](@ref).
 """
 struct Objects{S, P, K} <: AbstractLayout
     shape::S
@@ -2107,23 +2466,31 @@ end
 """
     Group(layers...)
 
-The `layers`, painted in order exactly as by [`overlay`](@ref) (each one a row of the layout
-report, ids in paint order), with every cell they create in one cluster: a compartment cell.
-[`layout`](@ref) then also returns `cluster => ids` (see [`Potts.set_column!`](@ref)), which
-`PottsProblem` takes for a model with compartments. Many compartment cells are one `Group`
-per cell, `overlay((Group(…) for c in centers)...)`.
+The `layers`, painted in order exactly as by [`overlay`](@ref), with every cell they create
+in one cluster: a compartment cell.
 
-```julia
-# a cytoplasm disc and a nucleus box, one cell of two compartments, beside a wall
-overlay(Group(Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:cyto]), \
-Fill(:nuc; region = (5:6, 5:6))),
-    Fill(:wall; region = (1:10, 1:1)))
-```
+Each layer is a row of the layout report, and cell numbers follow paint order.
+[`layout`](@ref) then also returns `cluster => ids` (see [`Potts.set_column!`](@ref)),
+which `PottsProblem` takes for a model with compartments. Many compartment cells are one
+`Group` per cell, `overlay((Group(…) for c in centers)...)`.
 
 A `Group` is the top-level layout or a member of a top-level `overlay`. It throws an
-`ArgumentError` with no layers, inside another `Group` (directly or through an `overlay`),
-as the layer of a `Splits`, or painted by a custom layer's `paint!` (which groups its cells
-with `Potts.set_column!(op, :cluster, label)` instead). `remake` does not apply to it.
+`ArgumentError` inside another `Group` (directly or through an `overlay`), as the layer of
+a `Splits`, or when a custom layer's `paint!` paints it. A custom layer groups its cells
+with `Potts.set_column!(op, :cluster, id, key)` instead. `remake` does not apply to it.
+
+# Arguments
+- `layers::AbstractLayout...`: the layers of the compartment cell (at least one; throws an
+  `ArgumentError` with none).
+
+# Examples
+```julia
+# a cytoplasm disc and a nucleus box, one cell of two compartments, beside an obstacle
+cyto = Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:cyto])
+overlay(Group(cyto, Fill(:nuc; region = (5:6, 5:6))), Fill(:obstacle; region = (1:10, 1:1)))
+```
+
+See also [`overlay`](@ref), [`Potts.set_column!`](@ref).
 """
 struct Group <: AbstractLayout
     layers::Vector{AbstractLayout}
@@ -2281,49 +2648,76 @@ end
 # ------------------------------------------------------------------------------------------
 
 """
-    layout(l, x; report = false) -> [ownership => σ, kind => kinds]
-    layout(l, x; report = true) -> ([ownership => σ, kind => kinds], report)
+    layout(l, x; report = false)
 
-Paint the layout `l` (see [`overlay`](@ref)) on an empty lattice and return an operating
-point for `PottsProblem`: `σ` is an `Int32` array (0 = medium).
+Paint the layout `l` on an empty lattice and return an operating point for
+`PottsProblem`.
 
-When some cell got a cluster label (from a [`Group`](@ref) or
-[`set_column!`](@ref)`(op, :cluster, …)`), the point also holds `cluster => ids`: a cell's
-id is the final id of the lowest-id surviving cell with its label, and an unlabeled cell
-is a cluster of its own. Then come the other columns of `set_column!`, `name => values`,
-one per name in order of first use, one value per surviving cell. Without either, the point
-is exactly the two entries above.
+The point is `[ownership => σ, kind => kinds]`, where `σ` is an `Int32` array (0 is the
+medium). When some cell got a cluster key (from a [`Group`](@ref) or
+[`set_column!`](@ref)`(op, :cluster, …)`), the point also holds `cluster => ids`. A cell's
+entry is the final cell number of the lowest-numbered surviving cell with its key, and a
+cell without a key is a cluster of its own. Then come the other columns of `set_column!`,
+`name => values`, one per name in order of first use, one value per surviving cell.
+Without either, the point is exactly the two entries above.
 
-`x` is a `dims` tuple, meaning a closed square lattice with the `Moore(1)` neighborhood. For
-a hexagonal, periodic, domain-restricted or non-Moore lattice pass the `PottsSystem` (or
-`CompiledPottsSystem`), whose boundaries, neighborhood, domain and geometry the layouts
-use; a CorePotts `Lattice` carries boundaries, domain and geometry but no neighborhood,
-so `Moore(1)` is assumed (it only matters for split cells). On a lattice with a domain, no
-cell may cover a site outside it.
+On a lattice with a domain, no cell may cover a site outside it.
 
-With `report = true` it also returns one row per leaf layer, in paint order (an `overlay`
-contributes its flattened leaves), with the properties
+With `report = true`, `layout` also returns one row per leaf layer, in paint order (an
+`overlay` contributes its flattened leaves). Each row is a `NamedTuple` with the fields:
 
-- `layer`: the leaf's position; `type`: `nameof` of its type (`:Tiling`, `:InsertUntil`, …);
-- `requested`: `Tiling` the boxes placed, `Scattered` `n`, `Frame` and `Fill` 1, `Objects`
-  its copies, `InsertUntil` its `number` (`counted` under a `fraction` rule), `Voronoi` and
-  `Eden` their points, `Splits` m·2ᵏ (m the inner layer's cells), a custom layer what it
-  passed to [`record!`](@ref);
-- `painted`: the cells the layer created; `dropped`: of those, the cells left with no site
-  after the whole layout;
+- `layer`: the leaf's position. `type`: `nameof` of its type (`:Tiling`, `:InsertUntil`,
+  …).
+- `requested`: `Tiling` the boxes placed, `Scattered` `n`, `Frame` and `Fill` 1,
+  `Objects` its copies, `InsertUntil` its `number` (`counted` under a `fraction` rule),
+  `Voronoi` and `Eden` their points, `Splits` m·2ᵏ (m the inner layer's cells), and a
+  custom layer what it passed to [`record!`](@ref).
+- `painted`: the cells that the layer created. `dropped`: of those, the cells left with no
+  site after the whole layout.
 - `misses`: `InsertUntil` the missed draws (in both `misses` modes), `Eden` and `Splits`
   `requested − painted` (their shortfall), a custom layer its `record!` value, other layers
-  0;
+  0.
 - `counted`: `InsertUntil` what its stop rule counted (`painted`, plus `misses` under
-  `misses = :count`), other layers `painted`;
-- `clipped`: `Voronoi`, `Eden`, `Fill` and `Objects` (and a `Splits` of them) the points of
-  its region (a shape or a box) that are not in-domain lattice sites, lost to closed edges
-  and to the domain (nothing is lost through a periodic edge: a shape wraps); sites it
-  skipped because an earlier layer owns them are not clipped. A custom layer its `record!`
-  value, other layers 0;
+  `misses = :count`), other layers `painted`.
+- `clipped`: for `Voronoi`, `Eden`, `Fill` and `Objects` (and a `Splits` of them), the
+  points of its region (a shape or a box) that are not in-domain lattice sites, lost to
+  closed edges and to the domain. Nothing is lost through a periodic edge: a shape wraps.
+  Sites skipped because an earlier layer owns them are not clipped. A custom layer reports
+  its `record!` value, other layers 0.
 - `splits`: the cells cut only by this layer (it took at least one of their sites) whose
-  remaining sites are disconnected after the whole layout, whatever its `splits` setting;
-  for `Splits`, plus its own cells left in pieces by its divisions.
+  remaining sites are disconnected after the whole layout, whatever its `splits` setting.
+  For `Splits`, also its own cells left in pieces by its divisions.
+
+# Arguments
+- `l::AbstractLayout`: the layout.
+- `x`: the lattice. A `dims` tuple is a closed square lattice with the `Moore(1)` relation.
+  For a hexagonal, periodic, domain-restricted or non-Moore lattice pass the
+  `PottsSystem` (or `CompiledPottsSystem`): the layouts use its boundaries, relation,
+  domain and geometry. A CorePotts `Lattice` carries boundaries, domain and geometry but no
+  relation, so `Moore(1)` is assumed (it matters only for split cells).
+
+# Keywords
+- `report::Bool = false`: also return the layout report.
+
+# Returns
+- The operating point, a `Vector` of pairs, or with `report = true` the tuple
+  `(point, rows)`.
+
+# Examples
+```jldoctest
+julia> using Potts
+
+julia> op = Potts.layout(Potts.Tiling((2, 2); spacing = 1, kinds = [:a, :b]), (5, 5));
+
+julia> last(op[2])
+4-element Vector{Symbol}:
+ :a
+ :b
+ :a
+ :b
+```
+
+See also [`overlay`](@ref), [`AbstractLayout`](@ref), [`set_column!`](@ref).
 """
 function layout(l::AbstractLayout, x; report::Bool = false)
     lat = _layout_spec(x)
