@@ -75,6 +75,9 @@ The paint so far, handed to `Potts.paint!(op::LayoutState, l, lat)`.
 [`record!`](@ref) and [`set_column!`](@ref). [`layout`](@ref) makes it; a user never
 constructs one.
 
+# Fields
+None public. Use the functions above.
+
 See also [`AbstractLayout`](@ref).
 """
 mutable struct LayoutState{N}

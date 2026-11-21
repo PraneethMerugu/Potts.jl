@@ -14,12 +14,15 @@ as for the model it was compiled from. SymbolicIndexingInterface getters built f
 
 It also holds what a CPM sweep needs and no MTK system holds: the energy terms classified
 by domain with their derived copy deltas, the trackers and relations that the model needs,
-and its footprint. Its fields are not public.
+and its footprint.
 
 It is read-only. `setmetadata`, `rename`, `compose`, `extend`, `toggle_namespacing` and its
 use as a component of an MTK System (`system ∘ csys`) throw an `ArgumentError`: apply them
 to the model, then compile it. [`Potts.inner`](@ref)`(csys)` is the System of the model as
 compiled.
+
+# Fields
+None public. Read it through the MTK accessors and [`Potts.inner`](@ref).
 
 # Examples
 ```julia
