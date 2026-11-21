@@ -80,6 +80,11 @@ end
     pottsboundaries(frame; color=:black, linewidth=1)
 
 Composable semantic boundary overlay for a two-dimensional frame.
+
+Every attribute is live: setting one after the plot is made (`plt.medium_color = :red`)
+redraws it. The frame and attributes given at creation are checked at once and throw their
+own error; an invalid value set later throws when the plot next resolves, wrapped in
+Makie's `ResolveException`.
 """
 Makie.@recipe(PottsBoundaries, frame) do scene
     Makie.Attributes(
@@ -126,6 +131,11 @@ end
     pottsplot(frame; encoding=CellTypeEncoding(), kwargs...)
 
 Native Makie recipe for validated two-dimensional Potts render frames.
+
+Every attribute is live: setting one after the plot is made (`plt.medium_color = :red`)
+redraws it. The frame and attributes given at creation are checked at once and throw their
+own error; an invalid value set later throws when the plot next resolves, wrapped in
+Makie's `ResolveException`.
 """
 Makie.@recipe(PottsPlot, frame) do scene
     Makie.Attributes(
@@ -297,6 +307,11 @@ end
 """
 Experimental true-three-dimensional volume recipe. Orthogonal slices should use
 the stable `PottsPlot` recipe.
+
+Every attribute is live: setting one after the plot is made (`plt.medium_color = :red`)
+redraws it. The frame and attributes given at creation are checked at once and throw their
+own error; an invalid value set later throws when the plot next resolves, wrapped in
+Makie's `ResolveException`.
 """
 Makie.@recipe(PottsVolume, frame) do scene
     Makie.Attributes(
