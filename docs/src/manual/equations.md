@@ -608,10 +608,17 @@ u = solve(prob, SequentialCPM(); save_everystep = false).u[end]
   diffusion. Periodicity is per field and axis. A periodic pair
   (`c(t, x, 0) ~ c(t, x, L)`) makes that field wrap on that axis, also where the lattice
   is closed. A face condition on an axis the lattice wraps closes that field there; the
-  other fields still wrap. A condition on an axis the lattice lacks, a face condition and
-  a periodic pair of one field on the same axis, a pair that joins two fields, or a
-  condition on a field whose equation has no spatial operator of it is an error naming
-  it.
+  other fields still wrap. A read of a field follows that field's own conditions, in
+  every equation that reads it: with `c` periodic on x and `d` closed there,
+  `laplacian(c)` in the rate of `d` wraps, and `laplacian(d)` in the rate of `c` takes
+  the faces of `d` (as in MethodOfLines). An aux field (`K ~ k * d`) wraps where the
+  fields it reads wrap, so `DivKGrad(:arithmetic)(K, d)` keeps the zero-flux face of `d`.
+  An input wraps only where every field wraps. On an axis where the fields differ, a
+  neighbor read of an input, or of an aux field that reads fields of both kinds
+  (`K ~ c + d`), is an error, and so is a `domain` mask. A condition on an axis the
+  lattice lacks, a face condition and a periodic pair of one field on the same axis, a
+  pair that joins two fields, or a condition on a field whose equation has no spatial
+  operator of it is an error naming it.
 - **Site masks.** `c ~ masked(condition, v)` is a node value: every explicit substep writes
   `v` at every site where the condition holds (after the `lower_bound` clip, so a mask value
   below `lower_bound` wins), and a fresh initial state (the problem's `u0`, `init`, `reinit!`) is
