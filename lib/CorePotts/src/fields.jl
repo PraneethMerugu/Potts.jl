@@ -48,7 +48,7 @@ steps standalone groups. The constructor plans the group's program once, for val
 substeps, since the masks follow σ) and one substep.
 
 `K` names the entry of the run context that holds the trajectory's runtime (see
-[`phase_context`](@ref)). The field ends every MCS in its `st.site` array: after an odd
+`phase_context`). The field ends every MCS in its `st.site` array: after an odd
 number of substeps, one copy brings the scratch buffer back.
 
 # Arguments
@@ -85,7 +85,7 @@ number of substeps, one copy brings the scratch buffer back.
 - `rule_tables = Pair{String, Symbol}[]`: the tables that only the substep rule reads, as
   `key => name`.
 
-See also [`field_clamp`](@ref), [`phase_context`](@ref), [`table_values`](@ref).
+See also [`field_clamp`](@ref), `phase_context`, [`table_values`](@ref).
 """
 struct FieldPhase{K, G, AL, A, F, PR, SP}
     group::G
@@ -454,7 +454,7 @@ end
     phase_contexts(phases, st, p, backend; abstol = 1 // 10^6, reltol = 1 // 10^3)
         -> NamedTuple
 
-Return the merged [`phase_context`](@ref) of every phase in `phases`.
+Return the merged `phase_context` of every phase in `phases`.
 
 The MCS entries (including the entries of each `Repeat`) and the at-init phases are
 visited.

@@ -321,7 +321,7 @@ function Krylov.kfill!(x::CoupledVector{K}, v::K) where {K <: AbstractFloat}
 end
 
 """
-One row of a coupled solve (`CoupledKrylov`): its [`ImplicitRow`](@ref) (the
+One row of a coupled solve (`CoupledKrylov`): its `ImplicitRow` (the
 residual launches, the state, the preconditioner's solver), its sites `n`, its offset `voff`
 in the coupled vectors, its block offset `off` and block count `nb` in the iterate's
 partials, the perturbed state `pert`, its residual `g2` and the residual launches bound to

@@ -43,7 +43,7 @@ julia> length(o), o[1], o[8]
 (8, (-1, -1), (1, 1))
 ```
 
-See also [`shell_owners`](@ref).
+See also `shell_owners`.
 """
 @inline shell_offsets(::Lattice{2, M, Hexagonal}) where {M} = _HEX_SHELL
 @inline shell_offsets(::Lattice{2}) = _SQUARE_SHELL
@@ -96,7 +96,7 @@ julia> CorePotts.shell_owners(l, σ, (1, 1))
 (-1, -1, -1, -1, 1, -1, 2, 1)
 ```
 
-See also [`read_shell`](@ref), [`shell_mask`](@ref).
+See also [`read_shell`](@ref), `shell_mask`.
 """
 @inline function shell_owners(lat::Lattice{N}, σ, x) where {N}
     offs = shell_offsets(lat)
@@ -147,7 +147,7 @@ check on the host when a problem is built, and [`recompute_euler`](@ref) runs it
 # Returns
 - `nothing`.
 
-See also [`shell_owners`](@ref).
+See also `shell_owners`.
 """
 function check_shell_lattice(lat::Lattice{N}, quantity::AbstractString) where {N}
     for d in 1:N
@@ -173,7 +173,7 @@ generated function.
 [`euler_change`](@ref) and the `ring_*` built-ins take it in place of `σ`.
 
 # Fields
-- `owners::NTuple{K, Int32}`: the owners, as [`shell_owners`](@ref) returns them.
+- `owners::NTuple{K, Int32}`: the owners, as `shell_owners` returns them.
 
 See also [`read_shell`](@ref).
 """
@@ -183,7 +183,7 @@ end
 """
     read_shell(σ, ctx, prop) -> ShellRead
 
-Read the shell of the copy's target into a [`ShellRead`](@ref).
+Read the shell of the copy's target into a `ShellRead`.
 
 If `σ` is already a `ShellRead`, it is returned as it is.
 
@@ -195,7 +195,7 @@ If `σ` is already a `ShellRead`, it is returned as it is.
 # Returns
 - `ShellRead`.
 
-See also [`shell_owners`](@ref).
+See also `shell_owners`.
 """
 @inline read_shell(σ, ctx, prop::Proposal) = ShellRead(shell_owners(ctx.lattice, σ, prop.x))
 @inline read_shell(s::ShellRead, ctx, prop::Proposal) = s
@@ -378,7 +378,7 @@ julia> CorePotts.shell_pieces(l, m, false), CorePotts.shell_pieces(l, m, true)
 (2, 1)
 ```
 
-See also [`shell_mask`](@ref).
+See also `shell_mask`.
 """
 @inline function shell_pieces(lat::Lattice, mask::UInt32, full::Bool)
     r = _ring_bits(lat)
@@ -399,7 +399,7 @@ all of these hold:
   or any shell site when `full`.
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt.
 - `gain::Bool`: also require the gaining cell next to the target.
@@ -435,7 +435,7 @@ cells and no medium are on the shell. The out-of-domain positions, if any, count
 extra cell (the frame of the Tissue Simulation Toolkit).
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt.
 
@@ -479,7 +479,7 @@ background. The result is `true` when `c` is the medium.
 - Hexagonal: one arc of `c` and one arc of the background.
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt; the function reads its target.
 - `c`: the cell to test.

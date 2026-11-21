@@ -24,7 +24,7 @@ fingerprint, or one whose MCS is outside the problem's `tspan`.
   parameters can change at a restart; `p` records the old ones.
 - `fingerprint::UInt64`: the model fingerprint.
 - `stats::PottsStats`: the statistics, with an exact `accepted_energy_change`.
-- `format::Int`: the checkpoint format, [`CHECKPOINT_FORMAT`](@ref) when written.
+- `format::Int`: the checkpoint format, `CHECKPOINT_FORMAT` when written.
 
 See also [`save_checkpoint`](@ref), [`load_checkpoint`](@ref).
 """

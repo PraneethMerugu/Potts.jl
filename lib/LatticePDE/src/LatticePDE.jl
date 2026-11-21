@@ -63,10 +63,9 @@ using TermInterface: TermInterface
 import SciMLBase: discretize, symbolic_discretize
 
 public Δ, pdesystem, pdesystem_refusal, is_crossgrid_key, operand_reads, LatticeCutField,
-    euler_update, bound_parts, StabilityBound, lower_group, DeferredBound,
-    DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind,
-    velocity_terms, as_written,
-    derivation, VCycle, steady_rows, steady_form, steady_choice, steady_sign
+    bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator,
+    resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written, derivation,
+    VCycle, steady_rows, steady_choice
 export laplacian, DivKGrad, Advect, AbstractAdvectionScheme, Upwind1, value_at, ismember,
     masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing,

@@ -259,7 +259,7 @@ are expressions over it: `local_components == 1` (hard, exactly one piece) or
 `λ * (local_components > 1)` (soft).
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt.
 
@@ -295,7 +295,7 @@ Return `true` if the losing cell stays exactly one local piece:
 Zero pieces (the cell's last site, an isolated fragment) is rejected like two.
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt.
 
@@ -322,7 +322,7 @@ the medium. Out-of-domain sites are not part of the cell; periodic axes wrap. Th
 is fixed, whatever the model's neighborhood.
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt.
 
@@ -339,7 +339,7 @@ See also [`ring_cells`](@ref), [`ring_medium`](@ref).
 Count the distinct cells on the target's neighbor shell, the medium excluded.
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt.
 
@@ -378,7 +378,7 @@ Out-of-domain sites (off a closed face, or outside a domain mask) are not medium
 periodic axis the shell wraps.
 
 # Arguments
-- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `σ`: the `ownership` array, or a `ShellRead`.
 - `ctx`: the kernel context; the function reads `ctx.lattice`.
 - `prop::Proposal`: the copy attempt.
 
