@@ -7,7 +7,21 @@
 const IR_FORMAT = 1
 
 """
+    fingerprint_text(p::Program; T = Float32, passes = SEMANTIC_PASSES) -> String
+
 The fingerprint source text: format version, compute type `T`, then the semantic program.
+The text names ops and keys, never codes or ids. The schedule, fusion, index strategy,
+hoisting, emission and the debug flag are not part of it.
+
+# Arguments
+- `p`: a field program (`LatticeFields.IR.Program`).
+
+# Keywords
+- `T = Float32`: the compute type written into the text.
+- `passes = SEMANTIC_PASSES`: the semantic passes given to [`semantic`](@ref).
+
+# Returns
+- The text, as a `String`. Its SHA-1, truncated to `UInt64`, is the program's fingerprint.
 """
 function fingerprint_text(p::Program; T::Type = Float32, passes = SEMANTIC_PASSES)
     s = semantic(p; passes)
