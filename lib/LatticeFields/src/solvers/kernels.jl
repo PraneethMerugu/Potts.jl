@@ -5,46 +5,72 @@
 # on the finest level the residual norm and the PCG kernels K1, K2 and the true residual.
 
 """
-    CellOperator(dims; periodic, face, shift, mask, value, dirichlet, robin, name, axes)
+    CellOperator(dims; periodic = (false, …), face = (1.0, …), shift = 0.0,
+                 mask = nothing, value = 0.0, dirichlet = ((nothing, nothing), …),
+                 robin = ((nothing, nothing), …), name = nothing, axes = ("1", "2", …),
+                 robin_full = false, hex = false)
 
 A cell-centered Helmholtz operator in coefficient form, the input of a solver group:
-`A u = s u + Σ_faces w (u − u_nb)` on active sites, with
-
-  - `face[a]`: the face coefficient to `+e_a`, a number or the key of an input field;
-  - `shift`: `s`, a number or an input field key;
-  - `mask`: key of a `U8` input field, nonzero = masked Dirichlet node with `value` (a
-    number or an input field key: each masked site then takes its own value, which its
-    active neighbors see through the right-hand side);
-  - `dirichlet[a] = (g_low, g_high)`: face-Dirichlet values on a non-periodic axis
-    (`nothing`: no flux); the ghost rule adds `2w` to the diagonal and `2w g` to the
-    right-hand side;
-  - `robin[a] = (low, high)`: Robin faces `α u + β ∂u/∂n = g` on a non-periodic axis, each
-    `nothing` or `(α, β, g)` in lattice units (`β` per lattice spacing, `n` the outward
-    normal), as `IR.FaceRule`. The ghost rule gives the boundary row the diagonal `w·d` and
-    the right-hand side `w·q`, with `d = α/(α/2 + β)` and `q = g/(α/2 + β)` (Dirichlet is
-    `(1, 0, g)`: `d = 2`). `α/2 + β = 0` leaves the ghost value undefined and is refused.
-    The sign rule: `d ≥ 0` (α and β of the same sign) enters the operator;
-    a negative `d` would break the M-matrix, so it stays out of the operator and enters the
-    right-hand side as `−d·w·x` at the current iterate `x` (a defect correction): each
-    `lift!` takes it at the current `x`, and `steady!` iterates lift and solve until the
-    full operator's residual is at the tolerance;
-    With `robin_full = true` the whole `d` enters the operator, either sign (a steady solve,
-    whose operator has no time-step shift to keep dominant: it stays symmetric, and it is
-    positive definite exactly when the steady problem is well posed);
-  - `name`: the user's field, which every message names (`nothing`: "the solver group");
-    `axes`: the axis names for messages (default `"1"`, `"2"`, …);
-  - `hex = true`: a hexagonal lattice in axial coordinates (2D), whose sites have six
-    neighbors `±e₁`, `±e₂`, `±(e₁ − e₂)`: `face` then has three entries, the face to `+e₁`,
-    to `+e₂` and to `+e₁ − e₂` (the hexagonal Laplacian `2/(3h²) Σₙ (uₙ − u)` has the three
-    faces `2/(3h²)`). A diagonal face that leaves the box crosses the face of axis 1 when it
-    leaves along axis 1 (a corner site's included), else that of axis 2, and takes that
-    face's condition with the ghost rule above.
+`A u = s u + Σ_faces w (u − u_nb)` on active sites.
 
 On an axis with a face-Dirichlet value or a Robin face, the boundary face takes the face
 coefficient at the boundary site (for an input field, the field's value at that site: the
 ghost term is a site value). The right-hand side is the input field `"in.f"`. Masked rows
 are eliminated (§3.5). The checks refuse only input that is invalid or numerically unsafe,
 in the user's words (`ArgumentError`).
+
+# Arguments
+- `dims`: the number of sites per axis, an `NTuple{N, Integer}`.
+
+# Keywords
+- `periodic = ntuple(_ -> false, N)`: the periodic axes.
+- `face`: the face coefficient `w` to `+e_a` per axis, each a number or the key of an input
+  field. The default is `1.0` per face direction.
+- `shift = 0.0`: `s`, a number or an input field key.
+- `mask = nothing`: the key of a `U8` input field; nonzero marks a masked Dirichlet node
+  with `value`.
+- `value = 0.0`: the value of masked sites, a number or an input field key. With a key,
+  each masked site takes its own value, which its active neighbors see through the
+  right-hand side.
+- `dirichlet`: `dirichlet[a] = (g_low, g_high)`, face-Dirichlet values on a non-periodic
+  axis (`nothing`: no flux). The ghost rule adds `2w` to the diagonal and `2w g` to the
+  right-hand side.
+- `robin`: `robin[a] = (low, high)`, Robin faces `α u + β ∂u/∂n = g` on a non-periodic
+  axis. Each side is `nothing` or `(α, β, g)` in lattice units (`β` per lattice spacing,
+  `n` the outward normal), as `IR.FaceRule`. The ghost rule gives the boundary row the
+  diagonal `w·d` and the right-hand side `w·q`, with `d = α/(α/2 + β)` and
+  `q = g/(α/2 + β)` (Dirichlet is `(1, 0, g)`: `d = 2`). `α/2 + β = 0` leaves the ghost
+  value undefined and is refused. The sign rule: `d ≥ 0` (α and β of the same sign) enters
+  the operator. A negative `d` would break the M-matrix, so it stays out of the operator
+  and enters the right-hand side as `−d·w·x` at the current iterate `x` (a defect
+  correction): each [`lift!`](@ref) takes it at the current `x`, and [`steady!`](@ref)
+  iterates lift and solve until the full operator's residual is at the tolerance.
+- `name = nothing`: the user's field, which every message names (`nothing`: "the solver
+  group").
+- `axes`: the axis names for messages (default `"1"`, `"2"`, …).
+- `robin_full = false`: with `true` the whole `d` of a Robin face enters the operator,
+  either sign. This is for a steady solve, whose operator has no time-step shift to keep
+  dominant: it stays symmetric, and it is positive definite exactly when the steady
+  problem is well posed.
+- `hex = false`: a hexagonal lattice in axial coordinates (2D, at least two sites per
+  axis), whose sites have six neighbors `±e₁`, `±e₂`, `±(e₁ − e₂)`. `face` then has three
+  entries, the face to `+e₁`, to `+e₂` and to `+e₁ − e₂` (the hexagonal Laplacian
+  `2/(3h²) Σₙ (uₙ − u)` has the three faces `2/(3h²)`). A diagonal face that leaves the box
+  crosses the face of axis 1 when it leaves along axis 1 (a corner site's included), else
+  that of axis 2, and takes that face's condition with the ghost rule above.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> op = LatticeFields.Solvers.CellOperator((8, 8); shift = 1.0,
+                                               dirichlet = ((0.0, 1.0), (nothing, nothing)));
+
+julia> op.dims, op.shift
+((8, 8), 1.0)
+```
+
+See also [`FieldSolver`](@ref), [`robin_parts`](@ref).
 """
 struct CellOperator{N}
     dims::NTuple{N, Int}
@@ -157,6 +183,20 @@ The ghost rule of a Robin face `α u + β ∂u/∂n = g` (lattice units): the bo
 diagonal factor `d = α/(α/2 + β)` split by sign into the operator's part `d⁺ = max(d, 0)`
 and the defect part `d⁻ = min(d, 0)`, and the right-hand side factor `q = g/(α/2 + β)`
 (each times the face coefficient `w`).
+
+# Arguments
+- `α`, `β`, `g`: the Robin coefficients, in lattice units.
+
+# Returns
+- The tuple `(d⁺, d⁻, q)`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> LatticeFields.Solvers.robin_parts(1.0, 0.0, 3.0)  # Dirichlet u = 3
+(2.0, 0.0, 6.0)
+```
 """
 function robin_parts(α::Real, β::Real, g::Real)
     den = α / 2 + β
