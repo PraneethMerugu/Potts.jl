@@ -11,8 +11,8 @@ module PottsModels
 using Potts: Potts, @potts_model, Closed, DiscreteCallback, Lattice, Metropolis, Moore,
     NeighborOrder, Periodic,
     RandomPlane, VonNeumann, kind, major_length, ownership, terminate!
-using Potts.Layouts: Center, Circle, Eden, Frame, InsertUntil, Point, RandomPoints,
-    Scattered, Splits, Tiling, Voronoi,
+using Potts.Layouts: Center, Circle, Eden, Fill, Frame, Group, InsertUntil, Interior,
+    Objects, Point, RandomPoints, Scattered, Sphere, Splits, Tiling, Voronoi,
     layout, overlay
 # for the compile workload (end of this file)
 using Potts: CheckerboardCPM, ExplicitEuler, PottsProblem, SequentialCPM, init, mtkcompile,
@@ -26,12 +26,12 @@ using TOML: TOML
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer,
     AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer, Merks2006, Merks2008,
-    ShearedFoam
+    ShearedFoam, FortunaMigration
 export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout,
     akeeb_contacts, akeeb_observables,
     akeeb_phenotype, openvt_monolayer_state, merks_state, openvt_reference_state,
     merks_layout, merks2006_layout,
-    merks2008_sprout, merks2008_denovo, sheared_foam_state
+    merks2008_sprout, merks2008_denovo, sheared_foam_state, fortuna_lattice, fortuna_layout
 export openvt_chain, openvt_release, spring_dashpot_width
 
 include("analysis/Analysis.jl")
@@ -49,6 +49,7 @@ include("openvt_reference.jl")
 public openvt_snapshot, openvt_frame, stop_at_cells, edge_guard
 include("akeeb.jl")
 include("foam.jl")
+include("fortuna.jl")
 
 # OpenVT figure functions (D-175). The methods live in the `PottsModelsMakieExt` extension,
 # which loads with Makie and MakiePotts (`using CairoMakie, MakiePotts`); without them

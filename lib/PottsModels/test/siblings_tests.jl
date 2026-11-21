@@ -246,6 +246,55 @@ end
     @drive copy => λx * direction[1]
     @sweep Metropolis(; temperature = T)
 end
+# A front compartment that makes its own field and extends up its gradient, as Fortuna's
+# lamellipodium, in 2D with no substrate: the field is a plain MTK `PDESystem` coupled with
+# `@fields`, its source every front site, and the drive acts on front extensions only
+module FrontField
+    using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters,
+        t_nounits as t
+    using Potts.LatticePDE: laplacian, lattice_domain
+    const Dt = Differential(t)
+    @parameters x y
+    @variables F(..) source(..) [input = true]
+    function front_field(lattice)
+        @parameters D_F = 0.05 k = 0.5
+        X, S = F(t, x, y), source(t, x, y)
+        return PDESystem(
+            [Dt(X) ~ D_F * laplacian(X) - k * X + k * S], [F(0, x, y) ~ 0.0],
+            lattice_domain(t, (x, y), lattice), [t, x, y], [X, S], [D_F, k];
+            name = :front
+        )
+    end
+end
+@potts_model FrontCrawler begin
+    @kinds medium body front
+    @parameters begin
+        λ = 2.0
+        T = 10.0
+        λ_F = 20.0
+        J[kind, kind] = Pairs(
+            default = 0.0, (medium, body) => 10, (medium, front) => 6, (body, front) => 6
+        )
+    end
+    @variables V_target(cell) = ifelse(kind == front, 30.0, ifelse(kind == body, 60.0, 0.0))
+    @lattice Lattice((48, 48); boundary = Periodic(), neighborhood = Moore(1))
+    @fields F = FrontField.front_field((48, 48)) (
+        FrontField.source => 1.0 * (kind == front),
+    )
+    @energy begin
+        cells(body, front) => λ * (volume - V_target)^2
+        contacts => J[kind, neighbor_kind]
+    end
+    @drive copy => ifelse(
+        (kind[new] == front) & (old == 0), λ_F * (F[target] - F[source]), 0.0
+    )
+    @observed begin
+        bx(cell) ~ centroid(1)
+        by(cell) ~ centroid(2)
+        fx(cell) ~ centroid(sibling(front), 1)
+    end
+    @sweep Metropolis(; temperature = T)
+end
 function block(dims, blocks...)
     s = zeros(Int32, dims)
     foreach(((k, b),) -> s[b...] .= k, enumerate(blocks))
@@ -449,6 +498,26 @@ const SIBLINGS = Dict(
             end
             # λx < 0 pushes the cells +x
             @test mean(drift(-2.0)) > 4 && abs(mean(drift(0.0))) < 2.5
+        end
+    ),
+    :FortunaMigration => (
+        "2D front-field crawler", function ()
+            σ = block((48, 48), (20:27, 20:27), (28:31, 20:27))
+            op = [ownership => σ, kind => [:body, :front], cluster => [1, 1]]
+            sys = FrontCrawler(; name = :f)
+            @test selfcheck(PottsProblem(sys, op, (0, 1))) < 1.0e-9
+            # the body's displacement over 300 MCS, x and y unwrapped
+            function displacement(λ_F, seed)
+                p = PottsProblem(sys, [op; :λ_F => λ_F], (0, 300); seed)
+                sol = solve(p, SequentialCPM(); saveat = 0:10:300)
+                xy = [(observe(p, :bx, u)[1], observe(p, :by, u)[1]) for u in sol.u]
+                tr = PottsModels.Analysis.unwrap_track(xy, (48, 48), true)
+                return hypot((tr[end] .- tr[1])...)
+            end
+            driven = [displacement(20.0, s) for s in 1:3]
+            free = [displacement(0.0, s) for s in 1:3]
+            # the field drive moves the cell; control: without it, the cell wanders less
+            @test minimum(driven) > maximum(free)
         end
     ),
     :OpenVTChain => (
