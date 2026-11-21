@@ -4,13 +4,13 @@
 using Potts, ForwardDiff
 
 # ∂(total chemical)/∂k of a run, at a fixed seed
-f(k) = sum(solve(PottsProblem(sys, [op; :k => k], (0, 100); seed = 1), SequentialCPM(); save_everystep = false).u[end].site.c)
+f(k) = sum(solve(PottsProblem(sys, [op; :k => k], (0, 100); seed = 1), SequentialCPM(); save_everystep = false)[:c][end])
 ForwardDiff.derivative(f, 0.1)
 
 # or seed by hand: a Dual in the operating point or in `remake`
 prob = remake(PottsProblem(sys, op, (0, 100)); p = [:k => ForwardDiff.Dual(0.1, 1.0)])
 sol = solve(prob, SequentialCPM(); save_everystep = false)
-ForwardDiff.partials.(sol.u[end].site.c, 1)      # ∂c/∂k at every site
+ForwardDiff.partials.(sol[:c][end], 1)      # ∂c/∂k at every site
 ```
 
 ## What is differentiated
@@ -29,7 +29,7 @@ ODEs. It differentiates only the fields' response to the parameters along the pa
 - An implicit field solver gives the derivative of each converged stage. For a nonlinear term,
   give `nlsolve = LatticeNewton(; max_iter = k)` (k ≥ 2), so that the run converges too; a warning names the case.
 - Central differences of the run agree with it at the same seed, as long as the ± runs keep the
-  same path. Check that `sol.u[i].ownership` is equal across them.
+  same path. Check that `ownership(sol.u[i])` is equal across them.
 
 ## Seeding and reading
 

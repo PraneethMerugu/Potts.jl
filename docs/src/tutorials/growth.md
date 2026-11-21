@@ -86,7 +86,7 @@ site. The result `true` below shows it.
 ```@example growth
 shipped = OpenVTGrowingMonolayer(; name = :openvt, lattice = (80, 80))
 sol_shipped = solve(PottsProblem(shipped, start, (0, 420); seed = 1, capacity = 200), SequentialCPM(); save_everystep = false)
-sol_shipped.u[end].ownership == sol.u[end].ownership
+ownership(sol_shipped.u[end]) == ownership(sol.u[end])
 ```
 
 ## Counting cells

@@ -87,12 +87,34 @@ sol2.t
 `derivative_discontinuity!(integ, true)`. On a GPU backend it holds device arrays.
 `current_state(integ)` is a host copy of the current state.
 
+The setup in `init` and `solve` is not type-inferable, by design. It runs on the host behind
+a function barrier, so it compiles once per session, not once per model. The inferred
+return type of `init` is the abstract `PottsIntegrator`, and `@inferred init(prob, alg)`
+fails. The work after the barrier is specialized: a warm `step!` does not allocate.
+
 ## A saved state
 
-A state holds plain arrays: `u.ownership` (cell numbers), `u.cell` (per-cell arrays: `kind`,
-`volume`, declared cell variables, …), `u.site` (site and field variables, as arrays over
-the lattice) and `u.model`. Prefer `sol[:name]` (see [Symbolic indexing](@ref
-manual-indexing)), which works for every quantity, derived ones included.
+A state holds plain arrays. Read them with the accessors: `ownership(u)` (cell numbers),
+`cell_kinds(u)`, `volumes(u)` and `cell_generations(u)` (one entry per cell). The other
+quantities (declared cell variables, site and field variables, model variables) have no
+accessor: read them with `sol[:name]` (see [Symbolic indexing](@ref manual-indexing)), which
+works for every quantity, derived ones included.
+
+```jldoctest
+julia> using Potts
+
+julia> u = CPMState(Int32[0 1; 1 2], (kind = Int32[1, 2], volume = [2, 1]));
+
+julia> ownership(u)
+2×2 Matrix{Int32}:
+ 0  1
+ 1  2
+
+julia> volumes(u)
+2-element Vector{Int64}:
+ 2
+ 1
+```
 
 ## Checkpoints
 

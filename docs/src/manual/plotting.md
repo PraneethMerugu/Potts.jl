@@ -49,7 +49,7 @@ sol = solve(PottsProblem(mix, op, (0, 300); field_solver = ExplicitEuler(substep
 
 u = sol.u[end]
 key = SiteChannelKey(:c, Float64)
-frame = renderframe(u; channels = (RenderChannel(key, u.site.c; label = "c"),))
+frame = renderframe(u; channels = (RenderChannel(key, sol[:c][end]; label = "c"),))
 fig = Figure(size = (900, 300))
 for (i, enc) in enumerate((CellTypeEncoding(), CellIdentityEncoding(), ChannelEncoding(key)))
     ax = Axis(fig[1, i]; aspect = DataAspect())
@@ -58,7 +58,7 @@ for (i, enc) in enumerate((CellTypeEncoding(), CellIdentityEncoding(), ChannelEn
     if enc isa ChannelEncoding       # show the cells over the field as a translucent fill, not outlines
         nx, ny = frame_size(frame)
         ox, oy = frame_geometry(frame).origin
-        heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), [c != 0 ? 1.0 : NaN for c in Array(u.ownership)];
+        heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), [c != 0 ? 1.0 : NaN for c in Array(ownership(u))];
             colormap = [(:white, 0.35), (:white, 0.35)], colorrange = (0, 1), nan_color = :transparent)
     end
 end

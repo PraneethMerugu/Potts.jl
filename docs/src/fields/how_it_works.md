@@ -45,6 +45,34 @@ n = \left\lceil \frac{dt \, \rho(p)}{1.8} \right\rceil
 - `substeps = n` is a minimum. The count is the larger of `n` and the bound over the terms
   that the bound sees. When the bound sees no term, `n` is used.
 
+Diffusion with `Dc = 1` and a decay `k = 0.1` on a lattice of spacing 1 has `ρ = 8.1`, so a
+window `dt = 1` takes 5 substeps. A larger `substeps` is used as given, and a smaller one
+is raised to 5:
+
+```jldoctest fhow
+julia> using ModelingToolkitBase, LatticePDE
+
+julia> using ModelingToolkitBase: t_nounits as t, D_nounits as D
+
+julia> @parameters x y Dc = 1.0 k = 0.1;
+
+julia> @variables c(..);
+
+julia> dom = lattice_domain(t, (x, y), (32, 32); tspan = (0.0, 1.0));
+
+julia> @named heat = PDESystem(D(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) - k * c(t, x, y),
+           [c(0, x, y) ~ 1.0], dom, [t, x, y], [c(t, x, y)], [Dc, k]);
+
+julia> prob = discretize(heat, LatticeDiscretization(Grid((32, 32))));
+
+julia> [only(substep_counts(solve(prob, ExplicitEuler(; substeps = n); dt = 1.0)))
+        for n in (nothing, 8, 2)]
+3-element Vector{Int64}:
+ 5
+ 8
+ 5
+```
+
 An implicit algorithm takes one substep per window by default. It raises the count only
 where its operator needs it: a positive local derivative `g` that the operator holds takes
 `n ≥ ⌈2 dt g⌉`. Here too `substeps = n` is a minimum.

@@ -70,7 +70,7 @@ end
 c0 = [x / 60 for x in 1:60, y in 1:30]                               # a fixed linear gradient
 op = layout(Tiling((5, 5); region = (6:10, 13:17), kinds = [:cell]), drives)
 sol = solve(PottsProblem(drives, [op; :c => c0], (0, 200); seed = 1), SequentialCPM(); saveat = 50)
-[sum(x[1] for x in CartesianIndices(u.ownership) if u.ownership[x] == 1) / count(==(1), u.ownership) for u in sol.u]   # centroid x
+[sum(x[1] for x in CartesianIndices(ownership(u)) if ownership(u)[x] == 1) / count(==(1), ownership(u)) for u in sol.u]   # centroid x
 ```
 
 ## Chemotaxis

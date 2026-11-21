@@ -149,7 +149,7 @@ The cells crawl towards the source at the right. The mean x-coordinate of their 
 shows it. `sol[:position]` is not needed, because the saved states hold the cell numbers:
 
 ```@example chemo
-mean_x(u) = sum(x[1] for x in CartesianIndices(u.ownership) if u.ownership[x] != 0) / count(!=(0), u.ownership)
+mean_x(u) = sum(x[1] for x in CartesianIndices(ownership(u)) if ownership(u)[x] != 0) / count(!=(0), ownership(u))
 fig = Figure(size = (600, 300))
 ax = Axis(fig[1, 1]; xlabel = "MCS", ylabel = "mean x of the cells")
 lines!(ax, sol.t, mean_x.(sol.u); label = "χ = 0")
@@ -205,7 +205,7 @@ function short(sys)
     prob = PottsProblem(sys, start, (0, 100); field_solver = ExplicitEuler(substeps = 8, lower_bound = 0.0), seed = 1)
     return solve(remake(prob; p = [:χ => 300.0]), SequentialCPM(); save_everystep = false)
 end
-short(by_hand).u[end].ownership == short(gradient).u[end].ownership
+ownership(short(by_hand).u[end]) == ownership(short(gradient).u[end])
 ```
 
 The result is `true`. With the same seed both runs make the same copies, so the drive is
@@ -269,9 +269,9 @@ To show the field, follow these steps:
 
 ```@example chemo
 key = SiteChannelKey(:c, Float64)
-frames = [renderframe(u; mcs = t, channels = (RenderChannel(key, u.site.c; label = "c"),))
-          for (u, t) in zip(sol.u, sol.t)]
-cellfill(u) = [c != 0 ? 1.0 : NaN for c in Array(u.ownership)]      # cell sites; NaN is transparent
+frames = [renderframe(u; mcs = t, channels = (RenderChannel(key, c; label = "c"),))
+          for (u, t, c) in zip(sol.u, sol.t, sol[:c])]
+cellfill(u) = [c != 0 ? 1.0 : NaN for c in Array(ownership(u))]      # cell sites; NaN is transparent
 nx, ny = frame_size(frames[1])
 ox, oy = frame_geometry(frames[1]).origin
 k = Observable(1)

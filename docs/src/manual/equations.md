@@ -326,8 +326,8 @@ end
 σ = zeros(Int32, 30, 20); σ[14:17, 1:20] .= 1; σ[4:8, 8:12] .= 2
 prob = PottsProblem(absorbed, [ownership => σ, kind => [:border, :cell]], (0, 20);
     field_solver = ExplicitEuler(substeps = 2))
-u = solve(prob, SequentialCPM(); save_everystep = false).u[end]
-(wall = maximum(u.site.c[14:17, :]), low_face = sum(u.site.c[1, :]) / 20)
+cend = solve(prob, SequentialCPM(); save_everystep = false)[:c][end]
+(wall = maximum(cend[14:17, :]), low_face = sum(cend[1, :]) / 20)
 ```
 
 [Boundary conditions](@ref fields-boundaries) gives the face conditions, their values,
@@ -421,7 +421,7 @@ pde = PDESystem([Dt(C) ~ Dk * laplacian(C) - kk * C + (kin(t, x, y) == 1)], [],
 withdrug = compose(dosed, Potts.component(:drug, pde, dosed))
 s = solve(PottsProblem(withdrug, layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), withdrug), (0, 5)),
     SequentialCPM(); save_everystep = false)
-maximum(s.u[end].site.drug₊c)
+maximum(s[:drug₊c][end])
 ```
 
 ## [The SciML path: `Potts.couple` and `Potts.field_inputs`](@id manual-sciml-path)
@@ -464,12 +464,12 @@ integ = init(PottsProblem(coupled, [ownership => σs, kind => [:A, :A]], (0, 6);
 for _ in 1:5
     step!(integ)
 end
-c5 = copy(Array(current_state(integ).site.c))
+c5 = copy(Array(integ[:c]))
 fprob = discretize(Potts.fields(coupled), LatticeDiscretization(Grid((24, 20)); T = Float64);
     inputs = collect(Potts.field_inputs(integ)))
 fsol = solve(remake(fprob; u0 = vec(c5), tspan = (0.0, 1.0)), Tsit5(); abstol = 1e-11, reltol = 1e-11)
 step!(integ)
-maximum(abs, reshape(fsol.u[end], 24, 20) .- Array(current_state(integ).site.c))
+maximum(abs, reshape(fsol.u[end], 24, 20) .- Array(integ[:c]))
 ```
 
 The difference is the time error of the owned run's 400 explicit substeps.

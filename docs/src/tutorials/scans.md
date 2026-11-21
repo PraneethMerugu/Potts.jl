@@ -33,7 +33,7 @@ neighbors wrap around:
 
 ```@example scans
 function heterotypic_fraction(u)
-    σ, k = u.ownership, u.cell.kind
+    σ, k = ownership(u), cell_kinds(u)
     mixed = total = 0
     for x in CartesianIndices(σ), step in ((1, 0), (0, 1), (1, 1), (1, -1))
         y = CartesianIndex(mod1.(Tuple(x) .+ step, size(σ)))

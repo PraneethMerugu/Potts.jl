@@ -215,8 +215,8 @@ nothing #hide
 #
 # ## Measuring the invasion
 #
-# Each saved state holds the owner array `u.ownership` and each cell's kind `u.cell.kind`
-# (1 leader, 2 follower). The mean height of each kind's sites shows leaders moving ahead
+# For each saved state `u`, `ownership(u)` gives the owner array and `cell_kinds(u)` each
+# cell's kind (1 leader, 2 follower). The mean height of each kind's sites shows leaders moving ahead
 # of the followers:
 
 using Statistics: mean
@@ -225,8 +225,8 @@ function mean_height(
         k
     )
     return mean(
-        I[2] for I in CartesianIndices(u.ownership)
-            if u.ownership[I] > 0 && u.cell.kind[u.ownership[I]] == k
+        I[2] for I in CartesianIndices(ownership(u))
+            if ownership(u)[I] > 0 && cell_kinds(u)[ownership(u)[I]] == k
     )
 end
 CairoMakie.activate!(type = "png")
