@@ -1258,7 +1258,9 @@ end
 # do not would not share. A neighbor read of either on such an axis is refused (keying
 # one input per reader would cost a copy per periodicity), naming the reader and the fields
 function _check_mixed_reads(prog::Program{N}, ambig, follow, fper::F) where {N, F}
-    shifted(a, d) = a.level != 0 || a.offset.a[d] != 0 ||
+    # (a read of a finer level folds over the children, as emission reads neighbors; a
+    # coarser one reads the node of the site's block, a neighbor only through its offset)
+    shifted(a, d) = a.level < 0 || a.offset.a[d] != 0 ||
         (a.offset.cond != 0 && a.offset.b[d] != 0)
     for kern in prog.kernels
         readers = unique!([prog.fields[s.access.field].key for s in kern.stores])

@@ -325,3 +325,58 @@ end
     su = solve(pu, ee; dt = 2.5e-4)
     @test !isapprox(fin(su, de), fin(se, de); rtol = 2.0e-2)
 end
+
+@testitem "another group's field read at an offset keeps its own periodicity" setup = [
+    LP_field_periodicity,
+] tags = [:latticepde, :field_periodicity] begin
+    using ModelingToolkitBase: Shift
+    using LatticePDE: LatticeFields
+    using LatticeFields.IR: fieldid, fieldperiodic
+    @parameters dx [lattice_spacing = 1]
+    @variables N(..) M(..)
+    Ne, Me = N(t, x, y), M(t, x, y)
+    # `N` wraps on x, `M` is closed there; the map of `M` reads `N` at an offset on x
+    bcs = [N(t, 0, y) ~ N(t, 1, y), N(0, x, y) ~ x, M(0, x, y) ~ 0.0]
+    function npers(rhs)
+        sys = psys([Shift(t, 1)(Ne) ~ Ne, Shift(t, 1)(Me) ~ rhs], bcs, [Ne, Me], [dx])
+        disc = LatticeDiscretization(Grid((NX, NY)))
+        # the group of `M` alone, where `N` is another group's field, and the whole system
+        g = LatticePDE.lower_group(sys, disc; fields = [Me]).rate
+        w = LatticePDE.symbolic_discretize(sys, disc).program
+        return fieldperiodic(g, fieldid(g, "N")), fieldperiodic(w, fieldid(w, "N"))
+    end
+    offset = [Shift(t, 1)(Me) ~ N(t, x + dx, y)]
+    @test length(LatticePDE.operand_reads(offset, Any[N])) == 1
+    # the group reads `N` with `N`'s pair, as the whole system does
+    @test npers(N(t, x + dx, y)) == ((true, false), (true, false))
+    # control: read at its own site, `N` is a plain input of the group (closed as `M` is)
+    @test isempty(LatticePDE.operand_reads([Shift(t, 1)(Me) ~ Ne], Any[N]))
+    @test npers(Ne)[1] == (false, false)
+end
+
+@testitem "a coarse field read at its block's node on an axis the fields differ" setup = [
+    LP_field_periodicity,
+] tags = [:latticepde, :field_periodicity] begin
+    using Symbolics: Symbolics
+    using SymbolicUtils: SymbolicUtils
+    # `Kc ~ 1 + x` on Coarse(2) reads no field, so it follows its reader like an input; the
+    # periodic `c` reads it at the node of its block (no neighbor), which compiles
+    Kc = Symbolics.wrap(
+        SymbolicUtils.setmetadata(
+            Symbolics.unwrap(first(@variables Kc(..))), LatticePDE.LatticeLevel, Coarse(2)
+        )
+    )
+    Kce = Kc(t, x, y)
+    eqs(rc) = [D(ce) ~ rc, D(de) ~ RD, Kce ~ 1 + x]
+    @test prob(eqs(RC - kd * Kce * ce), [PC; PD], [ce, de, Kce], [Dc, Dd, kd]) isa
+        SciMLBase.AbstractODEProblem
+    # control: read across its neighbors by the periodic `c`, it is refused
+    @test occursin(
+        "`c` reads `Kc` at a neighbor site on axis 1",
+        refusal(
+            () -> prob(
+                eqs(DivKGrad(:arithmetic)(Kce, ce)), [PC; PD], [ce, de, Kce], [Dd, kd]
+            )
+        )
+    )
+end
