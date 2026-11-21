@@ -273,6 +273,30 @@ those rules is one MCS times `mcs_duration`. These rules hold only in a Potts mo
   in a new session (see [Checkpoints](@ref)).
 - `remake(prob; ode_solver = …)` regenerates the code with the new solver and keeps the
   state, parameters and seed.
+- `field_solver = FieldGroups(u => ExplicitEuler(substeps = 4); default = ExplicitEuler())`
+  and `solvers = [u => ExplicitEuler(substeps = 4)]` give the same groups. The linear
+  solvers (`LatticePCG`, `LatticeMultigrid`, `LatticeGMRES`) are not field solvers:
+  `field_solver`, `solvers` and `FieldGroups` refuse them and name the `linsolve` route.
+- A loop of groups past the coupling limit has a Potts route of its own: step the fields
+  more often, with `repeat(n, …)` of the fields or a smaller `mcs_duration`.
+- A field that reads `mcs`, or a diffusion multiplier that reads a bound cell quantity
+  (`vol * laplacian(c)` with `vol => volume[owner]`), is a term the stability bound cannot
+  see: give `substeps = n`.
+- A reaction coefficient that reads a kind table is bounded at every entry, the medium's
+  entry included.
+- A field that reads `kind`, a binding or `mcs` has data that can jump every MCS, so
+  `CrankNicolson` damps the first substep of every MCS. A move of the cells is no start for
+  `BDF2`.
+- `QuasiSteady` solves at the cells of each MCS. A mask does not count in the gain of a
+  steady field in a loop, since it moves with the cells. A region that the cells cut off
+  with neither a decay nor a fixed value (a decay only inside the cells, and a medium
+  pocket with none) stops the run with `ReturnCode.ConvergenceFailure`.
+- The growth check of a coupled steady group runs at the start only: a parameter write and
+  a change of the cells' kinds are not checked again. In LatticePDE every parameter write
+  is.
+- `field_report` takes a `PottsProblem`, a `PottsIntegrator` or a `PottsSolution`.
+- Merks' model on 100² takes about 4.9 ms per MCS with `BackwardEuler(; lower_bound = 0.0)`
+  against 0.8 ms with `ExplicitEuler(; substeps = 15)` (4 CPU threads).
 
 ```@example equations
 prob2 = remake(prob; ode_solver = Adaptive(Tsit5(); reltol = 1e-8), solvers = [:g => Potts.RK4(substeps = 4)])
@@ -294,10 +318,9 @@ The time step is one MCS times `mcs_duration` (default 1), set in `@sweep`.
 
 ## Boundary conditions
 
-A field's boundary conditions are the conditions of its `PDESystem`, its second argument.
-A field is read at a face by its coordinates, with one of them fixed: `c(t, 0, y)` is the
-low face of `x`, and `c(t, Lx, y)` the high face, with `Lx` the extent of `x` in the
-domain:
+A coupled field takes the conditions of its `PDESystem`, written as in
+[Boundary conditions](@ref fields-boundaries). This model holds the low `x` face at a value,
+closes the high one, and absorbs at an obstacle that the cells' kinds mark:
 
 ```@example equations
 using Potts.LatticePDE: masked
