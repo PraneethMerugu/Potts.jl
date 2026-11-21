@@ -27,7 +27,7 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
     program,
     node!, constant!, param!, runtime!, coord!, table!, call!, cast!,
     arith!,
-    compare!, select!, cond!, load!, access!, store!, isfloat, CALLS,
+    compare!, select!, cond!, load!, access!, store!, isfloat, CALLS, call_arity,
     F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO,
     PERSIGMA,
     ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,

@@ -378,6 +378,7 @@ const _MAXIND = 6
 const _MAXEVALS = 4096
 const _PLAIN = (
     +, -, *, /, ^, inv, abs, sqrt, cbrt, exp, log, sin, cos, tan, tanh, min, max, identity,
+    sign, mod, rem, clamp,
 )   # (`identity`: an irrational, `identity(Const(π))`)
 _plainop(f) = any(g -> f === g, _PLAIN)
 function _coef_bound(x, params, tabs = Dict{Any, String}(), ivars = (); box = ())

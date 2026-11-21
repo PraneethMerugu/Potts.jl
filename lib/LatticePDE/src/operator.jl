@@ -112,9 +112,26 @@ end
 # or nothing when a derivative stays unexpanded (a registered function of `c` with no rule)
 function _local_derivative(term, c)
     v = Symbolics.variable(:__f3_u)
-    d = Symbolics.derivative(substitute(term, Dict(c => v); fold = Val(false)), v)
+    w = _ae_form(unwrap(substitute(term, Dict(c => v); fold = Val(false))))
+    d = Symbolics.derivative(w, v)
     _hasdiff(unwrap(d)) && return nothing
     return substitute(d, Dict(unwrap(v) => c); fold = Val(false))
+end
+# `mod(x, y)` as `x - y floor(x / y)` and `rem(x, y)` as `x - y trunc(x / y)`: equal values,
+# and the derivative that holds away from the jumps (Symbolics' rule gives NaN at each jump,
+# where `x / y` is an integer)
+function _ae_form(u)
+    iscall(u) || return u
+    a0 = arguments(u)
+    a = map(y -> _ae_form(unwrap(y)), a0)
+    f = operation(u)
+    if f === mod || f === rem
+        x, y = Symbolics.wrap(a[1]), Symbolics.wrap(a[2])
+        q = x / y
+        return unwrap(x - y * (f === mod ? floor(q) : ifelse(q < 0, ceil(q), floor(q))))
+    end
+    all(i -> a[i] === a0[i], eachindex(a)) && return u
+    return TermInterface.maketerm(typeof(u), f, a, TermInterface.metadata(u))
 end
 function _hasdiff(u)
     return iscall(u) &&
@@ -350,6 +367,20 @@ function _interval(x, params::Dict{Any, Int}, tabs, box)
     f === max &&
         return pp -> (qs = map(b -> b(pp), bs); (maximum(first, qs), maximum(last, qs)))
     (f === sin || f === cos) && return _ -> (-1.0, 1.0)
+    f === sign && return pp -> (q = bs[1](pp); (sign(q[1]), sign(q[2])))
+    # `mod(x, y)` has the sign of `y`, `rem(x, y)` the sign of `x`; each is below `|y|`
+    f === mod && return pp -> (q = bs[2](pp); (min(q[1], 0.0), max(q[2], 0.0)))
+    if f === rem
+        return pp -> begin
+            q, w = bs[1](pp), bs[2](pp)
+            m = max(abs(w[1]), abs(w[2]))
+            (max(min(q[1], 0.0), -m), min(max(q[2], 0.0), m))
+        end
+    end
+    f === clamp && return pp -> begin
+        q, lo, hi = bs[1](pp), bs[2](pp), bs[3](pp)
+        (min(max(q[1], lo[1]), hi[1]), min(max(q[2], lo[2]), hi[2]))
+    end
     return nothing
 end
 # the Gershgorin bound of a diffusion term out of the operator, `4 max|m| max|K| Σ_a 1/h_a²`

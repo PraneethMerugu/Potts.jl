@@ -684,7 +684,7 @@ const _CMP = (
 )
 # the other calls `lower` takes by identity: arithmetic, `ifelse` and the logic of
 # conditions
-const _OPS = (+, -, *, /, ^, min, max, ifelse, !=, !, &, |)
+const _OPS = (+, -, *, /, ^, min, max, clamp, ifelse, !=, !, &, |)
 
 # the declared size of the array parameter `T` (`(n,)` for `T[1:n]`, `(n1, n2)` for `J[1:n1,
 # 1:n2]`); a table is stored flat, in column-major order (`vec(J)`)
@@ -711,14 +711,24 @@ function _pair_read(e::Env, u, a)
     return table!(e.kb, e.tables[J]..., select!(e.kb, z, k(0), flat))
 end
 
+# the supported calls, for the refusal of any other call
+const CALLS_HINT = "the supported calls are `+ - * / ^`, `min`, `max`, `clamp`, \
+    `== != < <= > >= ! & |`, `ifelse`, `sqrt`, `exp`, `log`, `abs`, \
+    $(join(("`$f`" for f in CALLS), ", ")); a registered or special function \
+    (`erf`, `@register_symbolic`) has no device body and is not one of them"
+
 """
     lowers_call(f) -> Bool
 
 Whether the lattice lowering takes a call of `f` inside a term: arithmetic (`+ - * / ^`,
-`min`, `max`), comparisons and logic (`== != < <= > >= ! & |`), `ifelse`, `sqrt`, `exp`,
-`log`, `abs` and the calls of the IR (`sin`, `cos`, `tan`, `tanh`, `sinh`, `cosh`, `cbrt`,
-`exp2`, `log2`, `log10`, `expm1`, `log1p`, `atan`, `floor`, `ceil`, `round`), and `identity`
-(SymbolicUtils keeps `π` and `ℯ` as `identity(π)`). It is the one
+`min`, `max`, `clamp`), comparisons and logic (`== != < <= > >= ! & |`), `ifelse`, `sqrt`,
+`exp`, `log`, `abs` and the calls of the IR (`sin`, `cos`, `tan`, `tanh`, `sinh`, `cosh`,
+`cbrt`, `exp2`, `log2`, `log10`, `expm1`, `log1p`, `atan`, `floor`, `ceil`, `round`,
+`sign`, `mod`, `rem`), and `identity` (SymbolicUtils keeps `π` and `ℯ` as
+`identity(π)`). `mod` and `rem` are Base's float methods; `clamp(x, lo, hi)` lowers as
+Base's `ifelse(x > hi, hi, ifelse(x < lo, lo, x))`. A special function (`erf`) or a
+function registered with `@register_symbolic` is not taken: it has no device body in the
+IR. It is the one
 allowlist across callers: any caller that converts its own terms (`Potts`) asks it, so a
 call lowers consistently everywhere.
 The operators (`laplacian`, `DivKGrad`, `Advect`, `Differential`), the reads (`value_at`,
@@ -853,7 +863,12 @@ function lower(x, e::Env{N}) where {N}
     end
     i = findfirst(r -> r[1] === f, _UNARY)
     i === nothing || return arith!(e.kb, _UNARY[i][2], _real(e, ids[1]); type = REAL)
-    f isa Function && nameof(f) in CALLS && length(ids) == 1 &&
-        return call!(e.kb, nameof(f), ids[1])
-    return _lerr(u, "`$f` has no lattice lowering")
+    # `clamp(x, lo, hi)` as Base defines it: `ifelse(x > hi, hi, ifelse(x < lo, lo, x))`
+    if f === clamp && length(ids) == 3
+        x, lo, hi = _num(e, ids)
+        return cond!(e.kb, _cmp(e, LT, hi, x), hi, cond!(e.kb, _cmp(e, LT, x, lo), lo, x))
+    end
+    f isa Function && nameof(f) in CALLS && length(ids) == call_arity(nameof(f)) &&
+        return call!(e.kb, nameof(f), ids...)
+    return _lerr(u, "`$f` has no lattice lowering; $CALLS_HINT")
 end

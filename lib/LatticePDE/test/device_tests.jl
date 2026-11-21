@@ -1226,3 +1226,26 @@ end
     sh = solve(mk(KernelAbstractions.CPU()), ExplicitEuler(); dt = 0.01f0)
     @test isapprox(Array(sd.u[end]), sh.u[end]; rtol = 1.0f-5)
 end
+
+@testitem "sign, mod, rem and clamp on pgpu equal the host" setup = [LP_device] tags = [
+    :latticepde, :device, :gpu_only,
+] begin
+    @parameters kg = 0.3 lg = -0.25 hg = 0.5
+    rhs = sign(ce - kg) + mod(ce, kg) - rem(ce, 2kg) + clamp(ce, lg, hg)
+    sys = PDESystem(
+        [D(ce) ~ rhs], [c(0, x, y) ~ 0.0],
+        [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+        [t, x, y], [ce], [kg, lg, hg]; name = :callsdev
+    )
+    u0 = Float32[sin(0.7f0 * i) * 2 for i in 1:256]
+    function rate(be)
+        o = discretize(
+            sys, LatticeDiscretization(Grid((16, 16)); T = Float32, backend = be)
+        )
+        u = copyto!(similar(o.u0), u0)
+        du = similar(u)
+        o.f(du, u, o.p, 0.0f0)
+        return Array(du)
+    end
+    @test rate(PDEV) == rate(KernelAbstractions.CPU())
+end
