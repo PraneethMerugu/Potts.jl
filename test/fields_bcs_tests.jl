@@ -256,17 +256,40 @@ end
     end
 end
 
-@testitem "the refusals, each with its route" setup = [
+@testitem "a field periodic where the lattice is closed, closed where it wraps" setup = [
     FieldsSetup,
     FieldsOpBcsSetup,
 ] tags = [
     :potts, :fields,
 ] begin
-    @testset "the refusals, each with its route" begin
-        # a periodic pair on an axis the lattice closes: per-field periodicity is not
-        # supported yet (`Robin` with β = 0 or α = 0, a face set twice and an initial
-        # condition were refusals of the removed boundary-condition section, gone with it)
-        err = something(fd_err(() -> mtkcompile(FbPeriodicBcs(; name = :f))), "")
-        @test occursin("periodic", err) || (println("periodic: ", err); false)
+    LP = Potts.LatticePDE
+    dims, n = (8, 6), 4
+    c0 = rand(StableRNG(7), dims...)
+    function run(M; k = 2)
+        integ = init(
+            PottsProblem(
+                M(; name = :f), [fd_empty(dims); :c => c0], (0, k);
+                field_solver = ExplicitEuler(; substeps = n)
+            ), SequentialCPM()
+        )
+        foreach(_ -> step!(integ), 1:k)
+        return Array(current_state(integ).site.c)
     end
+    function alone(sys; k = 2)
+        p = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
+        s = LP.solve(
+            LP.remake(p; u0 = vec(c0), tspan = (0.0, Float64(k))),
+            LP.ExplicitEuler(; substeps = n); dt = 1.0
+        )
+        return s[:c, end]
+    end
+    # a pair on y of a closed lattice: `c` wraps on y and stays closed on x, as the same
+    # PDESystem discretized on its own (base: refused, "per-field periodicity")
+    @test run(FbPeriodicBcs) == alone(FieldsOpBcsSetup.FpPDE.periodic_bcs())
+    @test sum(run(FbPeriodicBcs)) ≈ sum(c0) rtol = 1.0e-13
+    @test run(FbPeriodicBcs) != run(FbNone)                         # control
+    # a face on x of a periodic lattice: `c` is closed on x and wraps on y with the lattice
+    @test run(FbFaceOnPeriodic) ==
+        alone(FieldsOpBcsSetup.FpPDE.face_periodic_y())
+    @test run(FbFaceOnPeriodic) != run(FbBcsFace)   # control
 end

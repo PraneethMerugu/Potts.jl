@@ -661,17 +661,21 @@ end
 
 # The conditions of the fields `names` as PDESystem conditions, after the
 # checks that need the model's words: an initial condition is refused (a field's initial
-# value is its default); a face on an axis the lattice makes periodic, or a periodic pair on
-# an axis it closes, is refused (per-field periodicity is planned); a periodic pair on an
-# axis the lattice makes periodic is the lattice's own and is dropped
-function _bcs_equations(sys, names, cv, core, ext; faced = Symbol[])
+# value is its default). Periodicity is per field: a periodic pair makes its field wrap on
+# its axis, a face condition closes its field there, whatever the lattice does. `own`
+# collects each `(field, axis)` that has a condition of its own (a pair or a face): the
+# lattice's pair is added only for the others
+function _bcs_equations(
+        sys, names, cv, core, ext; faced = Symbol[],
+        own = Set{Tuple{Symbol, Int}}()
+    )
     out = Equation[]
     kinds = _p(sys, :kinds)
     N = length(ext)
     stepped = Symbol[info(x).name for (x, _) in _field_equations(sys)]
     for b in _p(sys, :bcs)
         eq = _located(
-            () -> _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped),
+            () -> _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped, own),
             sys, _BcsLine(b)
         )
         # a face condition of another group's field that an operator here reads (`faced`):
@@ -679,7 +683,7 @@ function _bcs_equations(sys, names, cv, core, ext; faced = Symbol[])
         if eq === nothing && !isempty(faced) && first(_bcs_reads(b, ext)[1]) in faced &&
                 !(iscall(_unwrap(b.rhs)) && operation(_unwrap(b.rhs)) === LatticePDE.masked)
             eq = _located(
-                () -> _bcs_equation(sys, b, faced, cv, core, ext, kinds, N, stepped),
+                () -> _bcs_equation(sys, b, faced, cv, core, ext, kinds, N, stepped, own),
                 sys, _BcsLine(b)
             )
         end
@@ -689,9 +693,8 @@ function _bcs_equations(sys, names, cv, core, ext; faced = Symbol[])
     end
     return out
 end
-# one condition's checks and its translation (`nothing`: another group's, or the lattice's
-# own pair)
-function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
+# one condition's checks and its translation (`nothing`: another group's)
+function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped, own)
     text = "`" * _bc_text(b, kinds) * "`"
     fields, pins = _bcs_reads(b, ext)
     isempty(fields) && throw(
@@ -720,29 +723,8 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
     r = _unwrap(b.rhs)
     periodic = iscall(r) && _is_field_at(operation(r))
     masked = iscall(r) && operation(r) === LatticePDE.masked
-    drop = false
-    for d in axes
-        d <= N || continue                       # LatticePDE names the missing axis
-        ax = _AXIS_NAMES[d]
-        if periodic
-            core.periodic[d] && (drop = true; break)    # the lattice's own pair
-            throw(
-                PottsCompileError(
-                    "the condition $text makes axis `$ax` of `$n` periodic, but the " *
-                        "lattice closes `$ax`; periodicity is the lattice's, for every " *
-                        "field (per-field periodicity is not supported yet): make the \
-                            lattice periodic on `$ax`, or remove the condition"
-                )
-            )
-        end
-        core.periodic[d] && throw(
-            PottsCompileError(
-                "the condition $text sets a face of axis `$ax`, which the " *
-                    "lattice makes periodic (per-field periodicity is not supported " *
-                    "yet); close `$ax` on the lattice, or remove the condition"
-            )
-        )
-    end
+    # (a pair or a face of `n` on axis `d`: the lattice's pair is not added for it)
+    masked || foreach(d -> push!(own, (n, d)), axes)
     # a face condition sets the ghost values of a spatial operator of `n`: with none in any
     # field's equation (`D(u) ~ laplacian(n)` reads the ghosts of `n` too, and so does an
     # aux field `K ~ laplacian(n)`) it would do nothing
@@ -761,7 +743,6 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
             )
         )
     end
-    drop && return nothing
     masked || periodic || _check_robin_coefs(b, N)
     return Symbolics.wrap(_field_term(b.lhs, cv)) ~ Symbolics.wrap(_field_term(b.rhs, cv))
 end
@@ -918,17 +899,20 @@ function _field_system(
     end
     fvar(n) = haskey(states, n) ? states[n] : cv.direct[n]
     at_face(n, d, v) = (args = Any[ivs...]; args[d + 1] = v; operation(fvar(n))(args...))
+    # the conditions: each condition of a field of this group, translated as the
+    # equations are, so `lower_group` parses it with `parse_bcs` as LatticePDE does
+    own = Set{Tuple{Symbol, Int}}()
+    fbcs = _bcs_equations(sys, names, cv, core, ext; faced, own)
+    # the lattice's periodic pairs, for each field (and another group's field read here)
+    # with no condition of its own on that axis
     bcs = Equation[]
-    for n in names, d in 1:N
-        core.periodic[d] && push!(
+    for n in [names; faced], d in 1:N
+        core.periodic[d] && !((n, d) in own) && push!(
             bcs, Symbolics.wrap(at_face(n, d, 0.0)) ~
                 Symbolics.wrap(at_face(n, d, ext[d]))
         )
     end
-    # the conditions: each condition of a field of this group, translated as the
-    # equations are and appended, so `lower_group` parses it with `parse_bcs` as LatticePDE
-    # does
-    append!(bcs, _bcs_equations(sys, names, cv, core, ext; faced))
+    append!(bcs, fbcs)
     _has_domain(lat) && _filled_input!(cv, _DOMAIN_FILL, :domain__in, Bool)
     dvs = Any[
         [states[n] for n in [names; auxnames]];
