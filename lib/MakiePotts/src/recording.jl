@@ -63,31 +63,50 @@ end
     record_potts(filename, solution; request=RenderRequest(), kwargs...)
 
 Thin recording wrapper over `Makie.record`. All frames are validated before the
-first output frame is written. `solution` is a `PottsSolution` or the frames a run wrote
-to disk (`CorePotts.PottsFrames`); its states are rendered first (`renderframes`).
+first output frame is written. `solution` is a `PottsSolution`, whose states are rendered
+first (`renderframes`), or the frames a run wrote to disk (`CorePotts.PottsFrames`), which
+are read and rendered one at a time; each is validated when it is rendered, and a failure
+leaves no file.
 """
 function record_potts(
         filename::AbstractString,
         frames::AbstractVector{<:AbstractPottsRenderFrame{2}};
-        framerate::Real = 30, kwargs...
+        kwargs...
     )
     _validate_recording_frames(frames)
-    rate = _validate_framerate(framerate)
-    fig, _, _, frame = _record_figure(first(frames); kwargs...)
-    return _atomic_record(filename) do temporary
-        Makie.record(
-            fig, temporary, eachindex(frames);
-            framerate = rate
-        ) do index
-            frame[] = frames[index]
-        end
-    end
+    return _record_frames(
+        i -> frames[i], first(frames), eachindex(frames), filename; kwargs...
+    )
 end
 
 function record_potts(
         filename::AbstractString,
-        solution::SavedRun;
+        solution::CorePotts.PottsSolution;
         request::RenderRequest = RenderRequest(), kwargs...
     )
     return record_potts(filename, renderframes(solution, request); kwargs...)
+end
+
+function record_potts(
+        filename::AbstractString,
+        frames::CorePotts.PottsFrames;
+        request::RenderRequest = RenderRequest(), kwargs...
+    )
+    first_frame = _first_written_frame(frames, request)
+    getframe(i) = _next_written_frame(frames, request, i, first_frame)
+    return _record_frames(getframe, first_frame, eachindex(frames.t), filename; kwargs...)
+end
+
+# record `getframe(i)` for each `i` in `indices`, starting the figure with `first_frame`
+function _record_frames(
+        getframe::F, first_frame, indices, filename::AbstractString;
+        framerate::Real = 30, kwargs...
+    ) where {F}
+    rate = _validate_framerate(framerate)
+    fig, _, _, frame = _record_figure(first_frame; kwargs...)
+    return _atomic_record(filename) do temporary
+        Makie.record(fig, temporary, indices; framerate = rate) do index
+            frame[] = getframe(index)
+        end
+    end
 end

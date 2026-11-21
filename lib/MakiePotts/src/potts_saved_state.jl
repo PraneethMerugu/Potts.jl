@@ -200,10 +200,37 @@ function renderframe(
 end
 
 """Eagerly materialize independent frames from a retained solution or from written frames
-(`CorePotts.PottsFrames`, read one at a time)."""
+(`CorePotts.PottsFrames`, read one at a time but all kept). `record_potts` and
+`explore_potts` render written frames one at a time instead."""
 function renderframes(
         solution::SavedRun,
         request::RenderRequest = RenderRequest()
     )
     return [renderframe(solution, request; index) for index in eachindex(solution.u)]
+end
+
+# the first frame of written frames, checked; the frames that follow are rendered one at a
+# time (`_next_written_frame`) and must have its geometry
+function _first_written_frame(frames::CorePotts.PottsFrames, request::RenderRequest)
+    isempty(frames.t) && throw(ArgumentError("written frames: the run wrote no frames"))
+    first_frame = renderframe(frames, request; index = 1)
+    assert_render_frame_conformance(first_frame)
+    return first_frame
+end
+function _next_written_frame(
+        frames::CorePotts.PottsFrames, request::RenderRequest, index::Integer,
+        first_frame
+    )
+    index == 1 && return first_frame
+    frame = renderframe(frames, request; index)
+    assert_render_frame_conformance(frame)
+    expected = frame_geometry(first_frame)
+    actual = frame_geometry(frame)
+    actual == expected || throw(
+        ArgumentError(
+            "written frame $index has incompatible geometry; expected $expected, \
+                got $actual"
+        )
+    )
+    return frame
 end

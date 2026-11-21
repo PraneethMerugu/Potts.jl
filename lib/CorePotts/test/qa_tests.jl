@@ -39,9 +39,6 @@ const COREPOTTS_NONPUBLIC_QUALIFIED = (
     # Base.@nospecializeinfer (documented, not declared public): the host setup of `init`,
     # `remake` and `PottsProblem` inferred once for every model
     Symbol("@nospecializeinfer"),
-    # KernelAbstractions.pagelock!(backend, x): KA's documented host-memory pinning (the
-    # frame writer's buffers); KA declares no public API
-    :pagelock!,
 )
 include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")

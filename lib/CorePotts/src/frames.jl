@@ -9,7 +9,10 @@
 # finished when the callback returns. The run waits only when both buffers are still in
 # use. A failure of the writer task is raised on the run's task at the next frame or at the
 # end of the run (`FrameWriteError`); the writer task closes the writer whatever happens,
-# and `solve!` stops the writer task when the run fails or is interrupted.
+# and `solve!` stops the writer task when the run fails or is interrupted. Before the
+# buffers are unpinned, the run's device queue is waited for, so that no copy is still
+# writing into them. `FrameFile` writes segment files that it closes every `checkpoint`
+# frames, so that a killed process keeps the frames of the closed segments (D-300).
 
 """
     AbstractFrameWriter
@@ -75,21 +78,41 @@ end
 Base.close(::AbstractFrameWriter) = nothing
 
 """
-    FrameFile(path)
+    FrameFile(path; checkpoint = 10)
 
-The built-in frame writer and reader: a JLD2 file at `path` that holds each frame as a
-`CPMState` and its MCS. Load JLD2 (`using JLD2`) to write or read one. Each run that writes
-to it (`init`, `reinit!`) replaces the file. `PottsFrames(path)` reads it.
+The built-in frame writer and reader: a directory at `path` of JLD2 files (segments), each
+holding up to `checkpoint` frames as `CPMState`s with their MCS. Load JLD2 (`using JLD2`)
+to write or read one. `PottsFrames(path)` reads the segments as one run.
+
+A segment is closed when it holds `checkpoint` frames, and a closed segment is not written
+again. If the process is killed (a `SIGKILL`, an out-of-memory kill or a device reset), the
+closed segments stay readable: the run loses the frames of the open segment (fewer than
+`checkpoint`) and the frames still in the host buffers (at most 2). A crash of the
+operating system can also lose data that it had not yet written to the disk. After a
+normal finish, an error or an interrupt, every segment is closed.
+
+A `FrameFile` holds one run. A second start (another `solve` with the same callback,
+`reinit!`, another trajectory of an ensemble) is refused: give each run its own
+`FrameFile`. A new `FrameFile` at the path of an earlier run replaces that run's segments.
 """
 mutable struct FrameFile <: AbstractFrameWriter
     const path::String
-    io::Any                 # the open file (for writing or for reading), or nothing
-    count::Int              # frames written by this writer
+    const checkpoint::Int
+    @atomic state::Int      # 0 new, 1 writing, 2 written (set when the writing starts)
+    io::Any                 # the segment open for writing, or nothing
+    segment::Int            # the number of the last segment started
+    count::Int              # frames in the open segment
+    reader::Any             # the index and open segment of a reader (JLD2 extension)
 end
-FrameFile(path::AbstractString) = FrameFile(String(path), nothing, 0)
+function FrameFile(path::AbstractString; checkpoint::Integer = 10)
+    checkpoint >= 1 || throw(
+        ArgumentError("FrameFile: `checkpoint` = $checkpoint; give at least 1 frame")
+    )
+    return FrameFile(String(path), Int(checkpoint), 0, nothing, 0, 0, nothing)
+end
 
 function Base.show(io::IO, w::FrameFile)
-    return print(io, "FrameFile(", repr(w.path), ")")
+    return print(io, "FrameFile(", repr(w.path), "; checkpoint = ", w.checkpoint, ")")
 end
 
 @noinline function _no_frame_method(name::Symbol, w)
@@ -127,21 +150,23 @@ _frame_copy_async!(dst::Array, src::AbstractArray) = (_copy_to_host!(dst, src); 
 _frame_copied(backend) = nothing
 # wait (on the writer task) until the copies of `token` are done
 _wait_frame_copied(::Nothing) = nothing
-# release a host buffer pinned by `KernelAbstractions.pagelock!`
+# pin a host buffer for fast device copies, and release it (only backends that can do both
+# pin: the AMDGPU extension)
+_pin!(backend, a::Array) = nothing
 _unpin!(backend, a::Array) = nothing
 
 # ---------------------------------------------------------------------------------------
 # Host buffers
 
 """Adaptor: each array leaf becomes an uninitialized host array of its shape, pinned for
-`backend` (`KernelAbstractions.pagelock!`; a no-op on the CPU)."""
+`backend` (`_pin!`; a no-op on the CPU)."""
 struct _PinnedBuffer{B}
     backend::B
 end
 function Adapt.adapt_storage(b::_PinnedBuffer, a::AbstractArray)
     h = Array{eltype(a)}(undef, size(a))
     # (pinning an empty array is not allowed on every backend; an empty copy needs none)
-    isempty(h) || KernelAbstractions.pagelock!(b.backend, h)
+    isempty(h) || _pin!(b.backend, h)
     return h
 end
 
@@ -196,9 +221,12 @@ mutable struct _FrameWriting{W}
     const save_start::Bool
     const save_end::Bool
     const save_idxs::Any
+    const lock::ReentrantLock           # makes the start of a run atomic
     times::Vector{Int}                  # the `saveat` MCS of the current run
     leaves::Any                         # the resolved `save_idxs` (or nothing)
     session::Any                        # a `_FrameSession` while a run writes, or nothing
+    ended::Bool                         # a run's writing ended (no restart since)
+    warned::Bool                        # the "no frames" warning of `_FrameDue` was given
 end
 
 struct _FrameDue{F}
@@ -206,7 +234,20 @@ struct _FrameDue{F}
 end
 function (d::_FrameDue)(u, t, integ)
     fw = d.fw
-    return fw.session !== nothing && (fw.save_everystep || insorted(t, fw.times))
+    if fw.session === nothing
+        # a run restarted without `initialize` (`reinit!(…; reinit_callbacks = false)`)
+        fw.ended && !fw.warned && _warn_no_frames(fw, t)
+        return false
+    end
+    return fw.save_everystep || insorted(t, fw.times)
+end
+
+@noinline function _warn_no_frames(fw, t)
+    fw.warned = true
+    @warn "FrameWritingCallback: the run continues at MCS $t after its frames ended, and \
+        writes no frames. Restart a run with `reinit!(integ)` (`reinit_callbacks = true`) \
+        to write its frames"
+    return nothing
 end
 
 (fw::_FrameWriting)(integ) = (_send_frame!(fw, integ); nothing)
@@ -228,11 +269,18 @@ not wait for the device), and a writer task (`Threads.@spawn`) appends it to the
 run waits only when both buffers are still being written. Start Julia with 2 or more
 threads (`julia -t 2`) to write while the run continues.
 
+A frame is the state when the callback runs. Put this callback first in a `CallbackSet`:
+then a callback that changes the state at the same MCS changes it after the frame, as it
+does after the solution's save at that MCS.
+
 A failure of the writer is raised as a [`FrameWriteError`](@ref) at the next frame or at
-the end of the run. The file is closed at the end of the run, after a writer failure and
-when `solve` fails or is interrupted. A hand-driven integrator (`init` and `step!`) closes
-it at `solve!`. One callback writes one run at a time; give each trajectory of an ensemble
-its own callback and writer. Runs with derivative parts are refused.
+the end of the run. The writer is closed at the end of the run, after a writer failure and
+when `solve` fails or is interrupted. A hand-driven integrator (`init` and `step!`) writes
+until `solve!(integ)` ends the run; to stop early, call `terminate!(integ)` and then
+`solve!(integ)`. One callback writes one run at a time; give each trajectory of an ensemble
+its own callback and writer (build them in `prob_func`). Runs with derivative parts are
+refused. A warning is given when the frames of a run are more than 16 GiB in total and
+`save_everystep` is on, and for `saveat` times outside the run.
 """
 function FrameWritingCallback(
         writer; saveat = Int[], save_everystep::Bool = isempty(saveat),
@@ -246,8 +294,8 @@ function FrameWritingCallback(
         foreach(s -> _mcs(s, "saveat"), saveat)
     end
     fw = _FrameWriting(
-        writer, saveat, save_everystep, save_start, save_end, save_idxs, Int[], nothing,
-        nothing
+        writer, saveat, save_everystep, save_start, save_end, save_idxs, ReentrantLock(),
+        Int[], nothing, nothing, false, false
     )
     return DiscreteCallback(
         _FrameDue(fw), fw; initialize = _frames_initialize, finalize = _frames_finalize,
@@ -259,6 +307,20 @@ function _frames_initialize(cb, u, t, integ)
     fw = cb.affect!
     integ isa PottsIntegrator ||
         throw(ArgumentError("FrameWritingCallback writes the frames of a PottsProblem run"))
+    lock(fw.lock)
+    try
+        _start_frames!(fw, integ)
+    finally
+        unlock(fw.lock)
+    end
+    fw.save_start && _send_frame!(fw, integ)
+    return nothing
+end
+
+# frames above this many bytes in a run with `save_everystep` get a warning
+const LARGE_FRAMES_BYTES = 16 * 2^30
+
+function _start_frames!(fw::_FrameWriting, integ)
     s = fw.session
     if s !== nothing
         s.owner == objectid(integ) || throw(
@@ -278,13 +340,14 @@ function _frames_initialize(cb, u, t, integ)
     fw.times = fw.save_everystep ? Int[] : _saveat_list(fw.saveat, integ.t, integ.tstop)
     fw.leaves = _saved_leaves(integ.prob, fw.save_idxs)
     src = _select(integ.state, fw.leaves)
+    _warn_frames(fw, integ, src)
     b = _PinnedBuffer(integ.backend)
     buffers = (Adapt.adapt(b, src), Adapt.adapt(b, src))
     try
         open_frames!(fw.writer, buffers[1])
     catch err
         _unpin_buffers!(integ.backend, buffers)
-        rethrow(err)
+        rethrow()
     end
     s = _FrameSession(
         buffers, integ.backend, objectid(integ), Channel{Int}(2),
@@ -294,7 +357,27 @@ function _frames_initialize(cb, u, t, integ)
     put!(s.free, 2)
     s.task = Threads.@spawn _frame_writer_loop($(fw.writer), $s)
     fw.session = s
-    fw.save_start && _send_frame!(fw, integ)
+    fw.ended = false
+    fw.warned = false
+    return nothing
+end
+
+# the warnings of `solve` on saves, for frames: `saveat` times outside the run, and a large
+# total with `save_everystep`
+function _warn_frames(fw::_FrameWriting, integ, src)
+    t0, t1 = integ.t, integ.tstop
+    outside = filter(t -> !(t0 <= t <= t1), fw.times)
+    isempty(outside) || !integ.opts.verbose ||
+        @warn "FrameWritingCallback: `saveat` times outside the run ($t0, $t1) are never \
+            reached: $outside"
+    fw.save_everystep || return nothing
+    bytes = (t1 - t0 + 1) * Base.summarysize(src)
+    bytes > LARGE_FRAMES_BYTES || return nothing
+    @warn string(
+        "FrameWritingCallback: this run writes ", t1 - t0 + 1, " frames, about ",
+        round(bytes / 2^30; digits = 1), " GiB (every MCS: `save_everystep` is true when \
+            `saveat` is empty, as in SciML). Give `saveat` or `save_idxs`"
+    ) maxlog = 1
     return nothing
 end
 
@@ -312,6 +395,17 @@ function _send_frame!(fw::_FrameWriting, integ)
     s = fw.session::_FrameSession
     integ.t == s.last && return nothing
     (@atomic s.failure) === nothing || _finish_frames!(fw)
+    if integ.t < s.last
+        # a restart without `initialize`: the frames would go back in time
+        _abort_frames!(fw)
+        throw(
+            ArgumentError(
+                "FrameWritingCallback: the run went back from MCS $(s.last) to \
+                    $(integ.t) without a new start of its frames; restart a run with \
+                    `reinit!(integ)` (`reinit_callbacks = true`)"
+            )
+        )
+    end
     i = try
         take!(s.free)
     catch e
@@ -368,27 +462,40 @@ function _unpin_buffers!(backend, buffers)
 end
 
 # The end of a run's writing: the writer task writes the frames sent so far and closes the
-# writer; a failure of it is raised here. Does nothing when no run writes.
+# writer; a failure of it is raised here. Does nothing when no run writes. Runs on the
+# run's task: the device wait covers every copy that the run enqueued into the buffers,
+# also those that the writer task never waited for (after its failure, or a copy whose
+# frame was not handed over), before the buffers are unpinned and can be freed.
 function _finish_frames!(fw::_FrameWriting)
     s = fw.session
     s === nothing && return nothing
     fw.session = nothing
+    fw.ended = true
     close(s.work)
-    s.task === nothing || wait(s.task)
-    _unpin_buffers!(s.backend, s.buffers)
+    try
+        s.task === nothing || wait(s.task)
+    finally
+        _device_wait(s.backend)
+        _unpin_buffers!(s.backend, s.buffers)
+    end
     f = @atomic s.failure
     f === nothing || throw(FrameWriteError(f))
     return nothing
 end
 
-# The run failed or was interrupted: the writing ends as `_finish_frames!`, and a failure
-# of the writer is logged, not raised (the run's own error is the one to see).
+# The run failed or was interrupted: the writing ends as `_finish_frames!`, and any error
+# of it is logged, not raised (the run's own error is the one to see). Never throws.
 function _abort_frames!(fw::_FrameWriting)
     try
         _finish_frames!(fw)
     catch e
-        e isa FrameWriteError || rethrow()
-        @error "writing frames also failed" exception = e.error
+        if e isa FrameWriteError
+            @error "writing frames also failed" exception = e.error
+        else
+            @error "ending the frames of a failed run failed" exception = (
+                e, catch_backtrace(),
+            )
+        end
     end
     return nothing
 end

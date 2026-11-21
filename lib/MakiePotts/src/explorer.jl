@@ -18,7 +18,8 @@ end
     explore_potts(solution; request=RenderRequest(), kwargs...)
 
 Build the experimental reference explorer from already materialized frames, or from the
-states of `solution` (a `PottsSolution` or `CorePotts.PottsFrames`).
+states of `solution`: a `PottsSolution`, or `CorePotts.PottsFrames`, whose frames are read
+and rendered one at a time, when the slider shows them.
 Call `close(explorer)` to release its slider subscription and optional
 `DataInspector`; closing is idempotent.
 """
@@ -32,16 +33,43 @@ function explore_potts(
     expected_geometry = frame_geometry(first(frames))
     all(frame -> frame_geometry(frame) == expected_geometry, frames) ||
         throw(ArgumentError("explorer frames must have compatible geometry"))
+    return _explorer(
+        i -> frames[i], eachindex(frames); title, inspector, encoding, figure, axis, plot
+    )
+end
 
+function explore_potts(
+        solution::CorePotts.PottsSolution;
+        request::RenderRequest = RenderRequest(), kwargs...
+    )
+    return explore_potts(renderframes(solution, request); kwargs...)
+end
+
+function explore_potts(
+        frames::CorePotts.PottsFrames;
+        request::RenderRequest = RenderRequest(), kwargs...
+    )
+    first_frame = _first_written_frame(frames, request)
+    getframe(i) = _next_written_frame(frames, request, i, first_frame)
+    return _explorer(getframe, eachindex(frames.t); kwargs...)
+end
+
+# the explorer of the frames `getframe(i)`, `i` in `indices` (each built when shown)
+function _explorer(
+        getframe::F, indices;
+        title::AbstractString = "Potts model", inspector::Bool = true,
+        encoding::AbstractPottsEncoding = CellTypeEncoding(),
+        figure = (;), axis = (;), plot = (;)
+    ) where {F}
     fig = Makie.Figure(; figure...)
     ax = Makie.Axis(
         fig[1, 1];
         title = String(title), aspect = Makie.DataAspect(), axis...
     )
-    index = Makie.Observable(1)
-    frame = Makie.lift(i -> frames[i], index)
+    index = Makie.Observable(first(indices))
+    frame = Makie.lift(getframe, index)
     rendered = pottsplot!(ax, frame; encoding, plot...)
-    slider = Makie.Slider(fig[2, 1], range = eachindex(frames), startvalue = 1)
+    slider = Makie.Slider(fig[2, 1], range = indices, startvalue = first(indices))
     subscription = Makie.on(slider.value) do value
         index[] = Int(value)
     end
@@ -50,13 +78,6 @@ function explore_potts(
         fig, ax, rendered, slider, index,
         subscription, data_inspector, Ref(false)
     )
-end
-
-function explore_potts(
-        solution::SavedRun;
-        request::RenderRequest = RenderRequest(), kwargs...
-    )
-    return explore_potts(renderframes(solution, request); kwargs...)
 end
 
 Base.showable(::MIME"text/plain", ::PottsExplorer) = true

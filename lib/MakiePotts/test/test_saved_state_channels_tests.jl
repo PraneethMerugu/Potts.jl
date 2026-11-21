@@ -8,6 +8,23 @@ import Makie
 import CorePotts
 import JLD2
 include("shared/makiepotts.jl")
+
+# a frame source that reads from `source` and records each read: its index, and whether a
+# recording of `record_potts` (its temporary directory in `dir`) was in progress then
+struct CountingFrames{S}
+    source::S
+    dir::String
+    reads::Vector{Int}
+    recording::Vector{Bool}
+end
+CountingFrames(source, dir) = CountingFrames(source, dir, Int[], Bool[])
+CorePotts.frame_times(c::CountingFrames) = CorePotts.frame_times(c.source)
+function CorePotts.read_frame(c::CountingFrames, i)
+    push!(c.reads, i)
+    push!(c.recording, any(startswith(".makiepotts-recording-"), readdir(c.dir)))
+    return CorePotts.read_frame(c.source, i)
+end
+Base.close(c::CountingFrames) = close(c.source)
 function _site_slice_oracle(values, axis, index)
     retained_axes = Tuple(filter(!=(axis), ntuple(identity, ndims(values))))
     retained_size = ntuple(i -> size(values, retained_axes[i]), Val(2))
@@ -307,5 +324,29 @@ end
         @test vacated > 0
         @test obstacles(renderframe(frames[end]; frozen = prob.frozen)) == vacated
         close(frames)
+        # recording and exploring read and render one frame at a time
+        mktempdir() do dir
+            source = CountingFrames(CorePotts.FrameFile(path), dir)
+            lazy = CorePotts.PottsFrames(source; prob)
+            output = joinpath(dir, "lazy.gif")
+            record_potts(output, lazy; framerate = 2, figure = (; size = (180, 140)))
+            @test source.reads == eachindex(sol.t)
+            # every frame after the first was read while the recording was in progress
+            @test all(source.recording[2:end])
+            # negative control: `renderframes` reads every frame before any recording
+            empty!(source.reads)
+            empty!(source.recording)
+            record_potts(output, renderframes(lazy); framerate = 2)
+            @test source.reads == eachindex(sol.t)
+            @test !any(source.recording)
+            # the explorer reads a frame when the slider shows it
+            empty!(source.reads)
+            explorer = explore_potts(lazy; inspector = false)
+            @test source.reads == [1]
+            Makie.set_close_to!(explorer.slider, 3)
+            @test source.reads == [1, 3]
+            close(explorer)
+            close(lazy)
+        end
     end
 end
