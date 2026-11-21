@@ -173,9 +173,9 @@ Print the model to see what `Chemotaxis(c; strength = χ)` expands to:
 gradient
 ```
 
-The printout is Potts's internal form of the model. `LatticePDE.value_at(c(t), target(t))` is the
-field at the target site, and `LatticePDE.value_at(J, kind(t), neighbor_kind(t))` is the table entry. In the notation of
-`@potts_model` the drive line reads
+The printout is Potts's internal form of the model. `LatticePDE.value_at(c(t), target(t))` is
+the field at the target site, and `LatticePDE.value_at(J, kind(t), neighbor_kind(t))` is the
+table entry. In the notation of `@potts_model` the drive line reads
 `copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)`. Here is the same model
 with that line in place of `Chemotaxis`:
 

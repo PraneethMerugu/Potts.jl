@@ -18,9 +18,11 @@ callback) and per trajectory of an ensemble, without regenerating code.
 
 Every parameter is a ModelingToolkit parameter (`ModelingToolkitBase.isparameter` is true). A
 kind table is an array parameter, `J[1:n, 1:n]` for `n` kinds with the medium. A model reads a
-table entry `J[kind, neighbor_kind]` as LatticePDE's registered read `value_at(J, kind, neighbor_kind)` (`value_at` for a
-one-kind table). It never uses ModelingToolkit's own indexing, because a compiled cell template
-cannot take an input as an index.
+table entry `J[kind, neighbor_kind]` as LatticePDE's registered read
+`value_at(J, kind, neighbor_kind)` (`value_at(J, kind)` for a one-kind table). It never uses
+ModelingToolkit's own indexing, because a compiled cell template cannot take an input as an
+index. A field equation reads a pair table the same way, with two integer inputs as the
+indices.
 
 ```@example params
 using Potts
