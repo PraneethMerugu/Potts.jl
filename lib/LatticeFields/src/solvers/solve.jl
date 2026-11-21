@@ -8,6 +8,22 @@
 
 A V-cycle with `nu1` pre- and `nu2` post-smoothing Chebyshev steps, integers ≥ 1. A
 `LatticeMultigrid`'s `cycle` also takes the pair `(nu1, nu2)`, which is how it prints.
+
+# Arguments
+- `nu1`: the number of pre-smoothing steps, an integer ≥ 1 (not a `Bool`).
+- `nu2`: the number of post-smoothing steps, an integer ≥ 1 (not a `Bool`).
+
+Any other value throws an `ArgumentError`.
+
+# Examples
+```jldoctest
+julia> using LatticePDE: VCycle
+
+julia> VCycle(2, 2) == VCycle(2, 2)
+true
+```
+
+See also [`LatticeMultigrid`](@ref).
 """
 struct VCycle
     nu1::Int
@@ -61,7 +77,9 @@ end
         maxiters = nothing, warn_tol = nothing)
 
 The lattice multigrid, both as a LinearSolve algorithm (stationary multigrid solve) and as a
-LinearSolve `precs` function (`precs(A, p) -> (Pl, Pr)`):
+LinearSolve `precs` function (`precs(A, p) -> (Pl, Pr)`). The cycle is a cell-centered
+V-cycle with Chebyshev smoothing. As a preconditioner of [`LatticePCG`](@ref) the cycle must
+be symmetric.
 
   - As a stationary linear solver (`linsolve = LatticeMultigrid(…)`): `cycles = k` runs
     exactly `k` cycles (no early exit; the sentinel warns above `warn_tol`, default `1e-3`).
@@ -81,9 +99,26 @@ LinearSolve `precs` function (`precs(A, p) -> (Pl, Pr)`):
       of the problem at the solver's state and applies `something(cycles, 1)` V-cycles per
       field as `ldiv!`.
 
-`cycle` is `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)`, `cycles` and `maxiters` are integers ≥ 1 (or left
-out), `reltol` and `warn_tol` finite and > 0; any other value is an `ArgumentError` naming
-the keyword.
+# Keywords
+- `cycle = VCycle(2, 2)`: the V-cycle, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)`.
+- `cycles = nothing`: the exact number of cycles, an integer ≥ 1; `nothing` stops on
+  `reltol`.
+- `reltol = nothing`: the relative residual a solve stops at, finite and > 0.
+- `maxiters = nothing`: the most cycles per solve, an integer ≥ 1.
+- `warn_tol = nothing`: the residual the sentinel warns above, finite and > 0 (`1e-3` when
+  unset).
+
+Any other value is an `ArgumentError` naming the keyword.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> LatticeMultigrid(; cycle = (2, 2)) == LatticeMultigrid()
+true
+```
+
+See also [`LatticePCG`](@ref), [`LatticeGMRES`](@ref), [`VCycle`](@ref).
 """
 struct LatticeMultigrid <: LinearSolve.SciMLLinearSolveAlgorithm
     cycle::VCycle
@@ -385,7 +420,7 @@ end
 
 """
     FieldSolver(exec, op::CellOperator; linsolve = :auto, T = Float32, solver_type = :auto,
-        rule = RULE_M, stages, deflate = :auto, inputs = ())
+        rule = RULE_M, stages = LOWERING, deflate = :auto, inputs = (), bound = nothing)
 
 Build the solver group of `op`: the program, its compiled bodies and its arrays on `exec`.
 
@@ -414,6 +449,29 @@ solution `pcg.x − mean(pcg.x) + c` is written to `pcg.u` after every solve.
 `deflate = false` is the undeflated reference form. A Float32 solution array limits its own
 true residual (upper bound `eps(Float32)·|c|·‖A‖∞` relative to ‖b‖∞), whatever the
 solver precision.
+
+# Arguments
+- `exec`: the executor, a KernelAbstractions backend (`CPU()` runs on the host executor).
+- `op`: the operator, a [`CellOperator`](@ref).
+
+# Keywords
+- `linsolve = :auto`: the inner solver: `:auto` (PCG with a `LatticeMultigrid()`
+  preconditioner, 8 iterations, `reltol = 1e-6`), a [`LatticePCG`](@ref) whose `precs` is
+  a symmetric single-cycle `LatticeMultigrid`, or a stationary
+  [`LatticeMultigrid`](@ref). A `LatticeGMRES` is refused.
+- `T = Float32`: the state type (see above).
+- `solver_type = :auto`: the solver's number type (see above).
+- `rule = RULE_M`: the [`RuleWeights`](@ref) of the hierarchy build.
+- `stages = LOWERING`: the lowering passes of the kernel compiler.
+- `deflate = :auto`: deflate the constant mode (see above), or `true` or `false`.
+- `inputs = ()`: `key => A` pairs that bind input fields to the caller's arrays.
+- `bound = nothing`: the `BoundOperator` that a LinearSolve cache built this solver from,
+  or `nothing`.
+
+# Returns
+- A `FieldSolver`. Call [`rebuild!`](@ref), then [`lift!`](@ref) and [`solve!`](@ref).
+
+See also [`steady!`](@ref), [`field`](@ref), [`solution_key`](@ref).
 """
 function FieldSolver(
         exec, op::CellOperator{N}; linsolve = :auto, T = Float32,
@@ -611,6 +669,14 @@ tid(sv::FieldSolver, key) = Int32(findfirst(t -> t.key == key, sv.prog.tables))
 
 The current array of the solver's field `key` (two-buffer fields: the current slot): an
 input (`"in.f"`, the operator's input keys) or the solution (`solution_key(sv)`).
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+- `key`: the field key, a `String`. A key that is not a field of the solver throws an
+  `ArgumentError` that lists the inputs and the solution.
+
+# Returns
+- The array itself, on the executor's device (no copy).
 """
 function field(sv::FieldSolver, key)
     (id = fid(sv, key); sv.bufs[id][sv.slot[id]])
@@ -620,6 +686,12 @@ end
 
 The solution field, an array of the state type: `pcg.u` under deflation, `out.u` when the
 solver type differs from the state type, else `pcg.x` under PCG or the finest level's `x`.
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+
+# Returns
+- The key of the solution field, a `String`. Read the array with [`field`](@ref).
 """
 function solution_key(sv::FieldSolver)
     return if sv.deflate
@@ -645,7 +717,16 @@ those of `op`, which must have the same structure (dims, periodicity, mask, fiel
 same coefficients numeric): new parameter values for every body, no recompile. The held
 plans are dropped and rebuilt at their next use (the set keeps its size: one plan per
 kind, budget and rotation); the next `rebuild!`/`lift!` (or `steady!`) uses the new values.
-The solver number type (`solver_type = :auto`) stays as resolved at build.
+The solver number type (`solver_type = :auto`) stays as resolved at build; if `op` would
+resolve it differently, a warning prints once.
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+- `op`: the new [`CellOperator`](@ref). A structural difference throws an `ArgumentError`
+  that names it.
+
+# Returns
+- `sv`.
 """
 function set_coefficients!(sv::FieldSolver, op::CellOperator)
     o = sv.op
@@ -714,7 +795,7 @@ The derivative of the solution `u` of the group's operator `A(θ) u = b(θ)` wit
 one numeric coefficient `θ` (`coef`: `:shift`, `:value`, `(:face, a)` (`a = 3`: the diagonal
 face of a hexagonal lattice), `(:dirichlet, a, k)` or
 `(:robin, a, k, :alpha | :beta | :g)`), by a tangent solve with the same solver (no Dual
-enters PCG or multigrid, P5 §3.4): `A u̇ = ∂b/∂θ − (∂A/∂θ) u` with homogeneous boundary
+enters PCG or multigrid): `A u̇ = ∂b/∂θ − (∂A/∂θ) u` with homogeneous boundary
 values. `u` is the primal solution in solver precision (`solver_solution`). The right-hand
 side is exact because `A` and `b` are affine in each coefficient slot:
 `r(θ + v, u) − r(θ, u)` with `v` the slots' derivative in `θ` (one slot, or a Robin face's
@@ -725,6 +806,19 @@ negative part is iterated as in `steady!`. The coefficients, the right-hand side
 working field and the solution array are restored afterwards, so a warm re-solve continues
 from the primal state; `u̇` is only returned (a host copy). `homogeneous = false` keeps the
 primal boundary values (the negative control of the tests).
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+- `u`: the primal solution in solver precision, an `AbstractVector`.
+- `coef`: the coefficient, as listed above. Any other value throws an `ArgumentError`.
+
+# Keywords
+- `homogeneous = true`: use homogeneous boundary values in the tangent solve.
+- `maxiter = 64`: the iteration budget of the host-checked solve, and the most outer passes
+  of a Robin defect correction.
+
+# Returns
+- `u̇`, a host vector.
 """
 function tangent!(
         sv::FieldSolver, u::AbstractVector, coef; homogeneous::Bool = true,
@@ -833,6 +927,14 @@ end
 
 The group's solution in the solver's own precision on the host (a sync): under deflation
 `pcg.x − mean(pcg.x) + c`, else the working field.
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+
+# Returns
+- A host `Vector` of the solver type `sv.T`.
+
+See also [`solution_key`](@ref), which names the state-type solution on the device.
 """
 function solver_solution(sv::FieldSolver)
     x = to_host(sv.exec, field(sv, working_key(sv)))
@@ -1269,6 +1371,12 @@ end
 Fill the finest level's coefficients from the operator and its input fields (mask, shift,
 faces) and rebuild the hierarchy (rule M). Run it after any of these changes. Device mode:
 no sync.
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+
+# Returns
+- `sv`.
 """
 rebuild!(sv::FieldSolver) = (run!(sv, _plan(rebuild_plan, sv, :rebuild)); sv)
 """
@@ -1277,6 +1385,12 @@ rebuild!(sv::FieldSolver) = (run!(sv, _plan(rebuild_plan, sv, :rebuild)); sv)
 The solve's right-hand side from `"in.f"`, the mask values and the face conditions; with a
 Robin face whose diagonal is negative, its defect term at the current iterate. Run it after
 a change of any of these. Device mode: no sync.
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+
+# Returns
+- `sv`.
 """
 lift!(sv::FieldSolver) = (run!(sv, _plan(s -> lift_plan(s), sv, :lift)); sv)
 function lift_plan(sv)
@@ -1287,11 +1401,21 @@ function lift_plan(sv)
 end
 
 """
-    solve!(sv; host = false, maxiters)
+    solve!(sv::FieldSolver; host = false, maxiters = sv.alg.maxiters)
 
 The inner solve from the current solution, at most `maxiters` iterations (default the
 algorithm's). Device mode enqueues the whole plan (no sync). Host mode stops at `done` and
 returns the iteration count.
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref), after [`rebuild!`](@ref) and [`lift!`](@ref).
+
+# Keywords
+- `host = false`: run in host mode (host-checked stop, with syncs).
+- `maxiters = sv.alg.maxiters`: the iteration budget.
+
+# Returns
+- The iteration count (an `Int`) in host mode; `nothing` in device mode.
 """
 function solve!(
         sv::FieldSolver; host::Bool = false,
@@ -1310,6 +1434,13 @@ Device scalars on the host (a sync):
 residual; `scale`: the rounding scale max(|b| + |A||x|) of the last check). `status` is
 `:done` (converged), `:floor` (stagnated at rounding level above the tolerance), `:diverged`
 (the residual grew) or `:budget`.
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+
+# Returns
+- The `NamedTuple` above. `done` is a `Bool`, `iter` an `Int`, `warn` a `Bool`, and the
+  norms and scales are `Float64`.
 """
 function scalars(sv::FieldSolver)
     s = to_host(sv.exec, sv.tables[tid(sv, "solve.scal")])
@@ -1325,6 +1456,12 @@ end
     iterations(sv)
 
 The iteration (or cycle) count of the last solve (a sync).
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+
+# Returns
+- The count, an `Int` (`scalars(sv).iter`).
 """
 iterations(sv::FieldSolver) = scalars(sv).iter
 
@@ -1332,7 +1469,14 @@ iterations(sv::FieldSolver) = scalars(sv).iter
     sentinel(sv)
 
 The residual sentinel, read at an existing sync: warns (once per call) when the last
-budgeted solve ended above its tolerance; returns whether it fired.
+budgeted solve ended above its tolerance; returns whether it fired. The warning does not
+print when `Exec.VERBOSE[]` is `false`.
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+
+# Returns
+- `true` if the sentinel fired, else `false`.
 """
 function sentinel(sv::FieldSolver)
     s = scalars(sv)
@@ -1363,7 +1507,18 @@ end
     steady!(sv; maxiter = 64)
 
 `init = :steady` (§6.4): rebuild, lift, solve from zero with the group's inner solver to
-`reltol = 1e-6`, host-checked. Returns the iteration count.
+its `reltol` (default `1e-6`), host-checked. With a Robin face whose
+diagonal is negative, a defect correction iterates lift and solve.
+
+# Arguments
+- `sv`: a [`FieldSolver`](@ref).
+
+# Keywords
+- `maxiter = 64`: the iteration budget of each inner solve (a stationary multigrid with
+  fixed `cycles` uses `cycles`), and the most outer passes of a defect correction.
+
+# Returns
+- The total inner iteration count, an `Int`.
 """
 function steady!(sv::FieldSolver; maxiter::Int = 64)
     rebuild!(sv)

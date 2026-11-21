@@ -6,6 +6,10 @@
 # emission.
 
 """
+    CompileOptions(; T = nothing, I = Int32, float64_ok = true, debug = false,
+                   index = :auto, lanes = :fixed, clock = 0, S = nothing,
+                   declared = false)
+
 Compile options. `T`: compute value type; `I`: site index type (switched to Int64
 automatically when an array has more than 2³¹ − 1 elements);
 `index`: `:auto | :linear | :cartesian`; `float64_ok = false` on Metal; `lanes`: what a
@@ -19,6 +23,21 @@ under `lanes = :state` (`nothing`: `T`); a group's `compute_type` wider than its
 compiles in `T` and loads and stores through `lanecast`. `declared`: the group declared its
 Float64 (`compute_type`, `lattice_storage`): a kernel that computes in or touches Float64 is
 registered in Exec's Float64 registry ([`Exec.register_float64!`](@ref)).
+
+# Fields
+- `T::Union{Type, Nothing} = nothing`: the compute value type.
+- `I::Type = Int32`: the site index type.
+- `float64_ok::Bool = true`: whether the backend runs Float64; `false` makes a Float64
+  compute type or lane a build error.
+- `debug::Bool = false`: the debug emission: no POWI expansion or hoisting, bounds-checked
+  indices, no `@inbounds`. `LatticeFields.Schedule.plan` does not fuse by default in this
+  mode. The internal `debug_options()` also sets `T = Float64` and `I = Int`.
+- `index::Symbol = :auto`: `:auto`, `:linear` or `:cartesian`.
+- `lanes::Symbol = :fixed`: `:fixed` or `:state` (see [`lanetype`](@ref)).
+- `clock::Int = 0`: the parameter slot of the clock's step index, or 0.
+- `S::Union{Type, Nothing} = nothing`: the value type of the state lanes under
+  `lanes = :state`.
+- `declared::Bool = false`: whether the group declared its Float64.
 """
 Base.@kwdef struct CompileOptions
     T::Union{Type, Nothing} = nothing

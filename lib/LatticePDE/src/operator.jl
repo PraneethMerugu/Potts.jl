@@ -11,8 +11,11 @@
 
 The operator of a group, not built yet: the lowered system that `build_operator` extracts
 the `OperatorSpec` from at the group's first implicit use (once: the result is kept).
-`OPERATOR_BUILDS` counts the builds of this session (a test reads it: an explicit group
-builds none; it starts at 0, the precompile workload's build not counted).
+[`OPERATOR_BUILDS`](@ref LatticePDE.OPERATOR_BUILDS) counts the builds of this session.
+
+# Fields
+- `cf`, `sys`, `disc`: the lowered field system, its `PDESystem` and its discretization.
+- `built`: the built `OperatorSpec`, or `nothing` before the first build.
 """
 mutable struct DeferredOperator
     cf::Any
@@ -22,8 +25,12 @@ mutable struct DeferredOperator
 end
 DeferredOperator(cf, sys, disc) = DeferredOperator(cf, sys, disc, nothing)
 """
+    OPERATOR_BUILDS
+
 Atomic session counter (`Threads.Atomic{Int}`) incremented each time a
-[`DeferredOperator`](@ref) builds its `OperatorSpec`.
+[`DeferredOperator`](@ref LatticePDE.DeferredOperator) builds its `OperatorSpec`. It starts
+at 0 in each session: the precompile workload's build is not counted. An explicit group
+builds none.
 """
 const OPERATOR_BUILDS = Threads.Atomic{Int}(0)
 const _OPERATOR_LOCK = ReentrantLock()

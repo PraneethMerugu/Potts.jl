@@ -289,17 +289,25 @@ end
 """
     field_jacobian_sparsity(prob) -> SparseMatrixCSC{Bool, Int}
 
-The sparsity pattern of the Jacobian `∂f/∂u` of the right side of `prob` (an `ODEProblem`
-`discretize` returned), read off its IR: entry `(i, j)` is stored when
-the rate of state entry `i` reads state entry `j` at some value of the state and parameters.
-It holds every load of the rate program at its site (the stencil's offsets; a face's ghost
-value, which reads the site on the face; a periodic wrap; a coarse field's parent and a
-restriction's children; a hexagonal lattice's axial neighbors) and the aux fields computed
-from the state in between (an aux chain is folded through). A select decided by the box (a
-face's inside test) keeps the arm the site takes; one decided by data (a mask, `max`) keeps
-both. A masked site keeps its row, so a mask that moves with an input write stays covered.
-A rate that reads a reduction of the state (a sum over the lattice) would make the rows
-dense: such a system is refused, with the route `jvp`.
+The sparsity pattern of the Jacobian `∂f/∂u` of the right side of `prob`, read off its IR.
+
+Entry `(i, j)` is stored when the rate of state entry `i` reads state entry `j` at some
+value of the state and parameters. It holds every load of the rate program at its site (the
+stencil's offsets; a face's ghost value, which reads the site on the face; a periodic wrap;
+a coarse field's parent and a restriction's children; a hexagonal lattice's axial neighbors)
+and the aux fields computed from the state in between (an aux chain is folded through). A
+select decided by the box (a face's inside test) keeps the arm the site takes; one decided
+by data (a mask, `max`) keeps both. A masked site keeps its row, so a mask that moves with
+an input write stays covered. A rate that reads a reduction of the state (a sum over the
+lattice) would make the rows dense: such a system is refused, with the route `jvp`.
+
+# Arguments
+- `prob`: an `ODEProblem` that `discretize` returned.
+
+# Returns
+- The pattern as a `SparseMatrixCSC{Bool, Int}`, one row and one column per state entry.
+
+See also [`column_colors`](@ref), [`LatticeJacobian`](@ref).
 """
 field_jacobian_sparsity(prob) = _sparsity(lattice_metadata(prob)::LatticeMetadata)
 function _sparsity(m::LatticeMetadata)
@@ -354,13 +362,36 @@ end
 """
     column_colors(S[, coords]) -> Vector{Int}
 
-A distance-2 coloring of the columns of `S`: two columns that share a row get different
-colors, so one Dual evaluation with one partial per color gives every entry of the Jacobian.
-With the lattice coordinates of the columns (`coords`, one column per entry of the state,
-`N` rows) a stencil's lattice coloring `(a ⋅ x) mod m` is tried first (5 colors for a
-5-point stencil, 7 for a 3D 7-point one, 9 for a 9-point one, when the box allows it: a
-periodic axis needs `m` to divide its size); otherwise, or when it takes more colors, the
-greedy coloring in column order (7 for a 5-point stencil).
+A distance-2 coloring of the columns of `S`.
+
+Two columns that share a row get different colors, so one Dual evaluation with one partial
+per color gives every entry of the Jacobian. With the lattice coordinates of the columns
+(`coords`, one column per entry of the state, `N` rows) a stencil's lattice coloring
+`(a ⋅ x) mod m` is tried first (5 colors for a 5-point stencil, 7 for a 3D 7-point one, 9
+for a 9-point one, when the box allows it: a periodic axis needs `m` to divide its size);
+otherwise, or when it takes more colors, the greedy coloring in column order (7 for a
+5-point stencil).
+
+# Arguments
+- `S::SparseMatrixCSC`: the sparsity pattern.
+- `coords = nothing`: the lattice coordinates of the columns, `N` rows by one column per
+  state entry.
+
+# Returns
+- The color of each column, as a `Vector{Int}` (colors from 1).
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> S = LatticeFields.Problems.SparseArrays.sparse(Bool[1 1 0; 0 1 1; 0 0 1]);
+
+julia> LatticeFields.Problems.column_colors(S)
+3-element Vector{Int64}:
+ 1
+ 2
+ 1
+```
 """
 function column_colors(S::SparseArrays.SparseMatrixCSC, coords = nothing)
     St = SparseArrays.sparse(transpose(S))
@@ -427,11 +458,26 @@ end
 """
     LatticeJacobian(meta, pattern, colors)
 
-`jac = true`: `J(Jm, u, p, t)` writes the Jacobian of the right side into `Jm` (the
-problem's sparse `jac_prototype`, or a dense matrix), by colored forward-mode Duals of the
-right side: one evaluation per chunk of at most `chunk` colors (12 by default), each partial
-seeded on the columns of one color, and the entries of `pattern` read from them. Needs
-ForwardDiff (its extension); the arrays are host arrays.
+The Jacobian of `jac = true`: `J(Jm, u, p, t)` writes the Jacobian of the right side into
+`Jm` (the problem's sparse `jac_prototype`, or a dense matrix).
+
+It uses colored forward-mode Duals of the right side: one evaluation per chunk of at most
+`chunk` colors, each partial seeded on the columns of one color, and the entries of
+`pattern` read from them. Needs ForwardDiff (its extension); the arrays are host arrays.
+
+# Arguments
+- `meta`: the [`LatticeMetadata`](@ref) of the problem.
+- `pattern::SparseMatrixCSC{Bool, Int}`: the sparsity pattern
+  ([`field_jacobian_sparsity`](@ref)).
+- `colors::Vector{Int}`: the column colors ([`column_colors`](@ref)).
+
+# Keywords
+- `chunk = min(maximum(colors), 12)`: the most colors per evaluation.
+
+# Fields
+- `meta`, `pattern`, `colors`, `chunk`: as given.
+- `cache::Dict{Type, Any}`: the Dual workspaces by type.
+- `lock::ReentrantLock`: guards the cache.
 """
 struct LatticeJacobian{M}
     meta::M
@@ -452,10 +498,18 @@ end
 """
     LatticeJVP(meta)
 
-The Jacobian-vector product of the right side: `jvp(Jv, v, u, p, t)`
-sets `Jv = (∂f/∂u)(u, p, t) v` by one evaluation of the right side on Duals with one partial
-(`u + ε v`), on the problem's backend. Set on every `ODEProblem` `discretize` returns; it
-needs ForwardDiff (its extension, which OrdinaryDiffEq's implicit solvers load).
+The Jacobian-vector product of the right side.
+
+`jvp(Jv, v, u, p, t)` sets `Jv = (∂f/∂u)(u, p, t) v` by one evaluation of the right side on
+Duals with one partial (`u + ε v`), on the problem's backend. Set on every `ODEProblem`
+`discretize` returns; it needs ForwardDiff (its extension, which OrdinaryDiffEq's implicit
+solvers load).
+
+# Fields
+- `meta`: the [`LatticeMetadata`](@ref) of the problem.
+- `cache::Dict{Type, Any}`: the Dual workspaces by type.
+- `lock::ReentrantLock`: guards the cache.
+- `calls::Base.RefValue{Int}`: the products taken (shared by copies).
 """
 struct LatticeJVP{M}
     meta::M
@@ -472,12 +526,38 @@ end
 
 """
     colored_jacobian!(J, jac::LatticeJacobian, u, p, t) -> J
-    lattice_jvp!(Jv, jvp::LatticeJVP, v, u, p, t) -> Jv
 
-The colored Dual Jacobian and the Jacobian-vector product (methods in the ForwardDiff
-extension).
+Write the colored Dual Jacobian of the right side at `(u, p, t)` into `J`.
+
+The method is in the ForwardDiff extension. Without ForwardDiff loaded it throws an
+`ArgumentError`.
+
+# Arguments
+- `J`: the matrix to write (sparse with the problem's pattern, or dense).
+- `jac::LatticeJacobian`: the Jacobian object of the problem.
+- `u`, `p`, `t`: the state, parameters and time.
+
+# Returns
+- `J`.
 """
 function colored_jacobian! end
+"""
+    lattice_jvp!(Jv, jvp::LatticeJVP, v, u, p, t) -> Jv
+
+Write the Jacobian-vector product `(∂f/∂u)(u, p, t) v` into `Jv`.
+
+The method is in the ForwardDiff extension. Without ForwardDiff loaded it throws an
+`ArgumentError`.
+
+# Arguments
+- `Jv`: the output vector.
+- `jvp::LatticeJVP`: the product object of the problem.
+- `v`: the direction.
+- `u`, `p`, `t`: the state, parameters and time.
+
+# Returns
+- `Jv`.
+"""
 function lattice_jvp! end
 function colored_jacobian!(J, j, u, p, t)
     throw(
@@ -494,10 +574,18 @@ end
 """
     JacobianOperator(jvp, u, p, t)
 
-The matrix-free Jacobian of a problem on a device: a
-`SciMLOperators.FunctionOperator` whose product is [`LatticeJVP`](@ref), the `jac_prototype`
-of an `ODEProblem` on a device, so an implicit OrdinaryDiffEq solver forms `W = J − M/γ` as
-an operator and solves it with a Krylov method (precondition it with `LatticeMultigrid()`).
+The matrix-free Jacobian of a problem on a device.
+
+It is the `jac_prototype` of an `ODEProblem` on a device, so an implicit OrdinaryDiffEq
+solver forms `W = J − M/γ` as an operator and solves it with a Krylov method (precondition
+it with `LatticeMultigrid()`).
+
+# Arguments
+- `jvp::LatticeJVP`: the product of the problem.
+- `u`, `p`, `t`: the state, parameters and time it is built at.
+
+# Returns
+- A `SciMLOperators.FunctionOperator` whose product is [`LatticeJVP`](@ref).
 """
 function JacobianOperator(jvp::LatticeJVP, u, p, t)
     return SciMLOperators.FunctionOperator(

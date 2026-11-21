@@ -4,7 +4,20 @@
 # (`∂c = rhs`, or the next state of a map) that SciML's solvers call, built at its first
 # call.
 
-"""The explicit Euler update `c + dt · r` of the owned stepper (`dt = G.rt[2]`)."""
+"""
+    euler_update(kb, c, r)
+
+The explicit Euler update `c + dt · r` of the owned stepper, built in the kernel builder
+`kb`. `dt` is the launch's step length, the runtime slot `G.rt[2]`.
+
+# Arguments
+- `kb`: the kernel builder.
+- `c`: the field's value.
+- `r`: its rate.
+
+# Returns
+- The IR expression of `c + dt · r`.
+"""
 euler_update(kb, c, r) = c + Ex(kb, runtime!(kb, RT_DT)) * r
 
 # symbol table keys: a `Symbol` or string names a field or parameter; any other symbol is
@@ -654,6 +667,11 @@ value.
 
 With no bound, `ExplicitEuler` requires a user substep count. Until the IR tangent and
 interval evaluator replace it, this is the stability analysis of the explicit steppers.
+
+Made by [`stability_bound`](@ref). The fields hold the per-row terms, faces and grids, the
+terms it cannot see (`unbounded`, `terms`), the expanded switches (`expanded`), the inputs
+an index reads, and the declared intervals; they are read through [`bound_parts`](@ref) and
+the `LatticeFields.Problems` stability hooks.
 """
 struct StabilityBound
     # per row, 1/h_a² of its grid (a `Coarse` field's: `k h`)
@@ -1180,6 +1198,13 @@ combinations `[(table, index, value), …]` with a value that is not finite, ind
 advection, the reaction terms of the row's own field, the terms that read other fields; they
 sum to `ρ`), or `nothing` with no row. `b(p) == ρ` when `b.unbounded` and `coupled` are
 empty.
+
+# Arguments
+- `b::StabilityBound`: the bound.
+- `p`: the raw parameters.
+
+# Returns
+- The named tuple `(; ρ, seen, coupled, negative, nonfinite, worst)`.
 """
 function bound_parts(b::StabilityBound, p)
     ρ = seen = 0.0
@@ -1535,7 +1560,14 @@ end
 """
     stability_bound(cf::CompiledField, sys) -> StabilityBound
 
-The [`StabilityBound`](@ref) of the rate fields of `cf`; call it with a parameter vector.
+The [`StabilityBound`](@ref) of the rate fields of `cf`.
+
+# Arguments
+- `cf::CompiledField`: the lowered field system.
+- `sys`: its `PDESystem`.
+
+# Returns
+- The bound. Call it with a parameter vector: `b(p)` is `ρ`.
 """
 function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     ks = sort!(collect(keys(cf.linearity)))
@@ -2631,8 +2663,8 @@ with: at `init` of a field algorithm, and at the first call of the right side wi
 values for an OrdinaryDiffEq solver (`remake`, `setp` on an integrator), so `solve` or
 `step!` throws and never runs them.
 
-A system mixes no rate equations (`D(c) ~ …`) and maps (`Shift(t, 1)(m) ~ …`) in this
-version: one problem steps one kind (split stepping is planned).
+A system mixes no rate equations (`D(c) ~ …`) and maps (`Shift(t, 1)(m) ~ …`): one problem
+steps one kind.
 """
 function discretize(
         sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (), u0 = nothing,
@@ -2693,9 +2725,18 @@ end
 
 Whether `sys` has maps (`Shift(t, 1)(m) ~ rhs`); a system with rate equations and maps both
 is refused, naming the fields of each, with the front end's route (`route`; LatticePDE's:
-two systems). One problem steps one kind in this version, whichever front end builds it and
-however its fields are grouped: a map steps one unit of time, which would step the rates
-with no bound, and separate groups would be split stepping (planned).
+two systems). One problem steps one kind, whichever front end builds it and however its
+fields are grouped: a map steps one unit of time, which would step the rates with no bound.
+
+# Arguments
+- `sys::PDESystem`: the system.
+
+# Keywords
+- `route = "discretize them as two systems"`: the front end's route in the refusal.
+
+# Returns
+- `true` for a system of maps, `false` for one with no maps. A system with both throws an
+  `ArgumentError`.
 """
 function check_one_kind(sys::PDESystem; route = "discretize them as two systems")
     lhs(eq) = unwrap(eq.lhs)

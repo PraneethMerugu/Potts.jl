@@ -23,6 +23,24 @@ module LatticeFields
 True for fatal runtime exceptions (`InterruptException`, `StackOverflowError`,
 `OutOfMemoryError`) that must always be rethrown rather than swallowed by a broad
 probe or diagnostic catch.
+
+# Arguments
+- `e`: a caught exception.
+
+# Returns
+- `true` if `e` is an `InterruptException`, a `StackOverflowError` or an
+  `OutOfMemoryError`, else `false`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> LatticeFields.isfatal(InterruptException())
+true
+
+julia> LatticeFields.isfatal(ErrorException("x"))
+false
+```
 """
 isfatal(e) = e isa Union{InterruptException, StackOverflowError, OutOfMemoryError}
 

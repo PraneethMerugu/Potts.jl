@@ -18,6 +18,19 @@ inputs of [`FieldSolver`](@ref) other than the right-hand side `"in.f"`): the `A
 LinearSolve algorithms (`KrylovJL_CG`, `KrylovJL_GMRES`) solve. It has a size, an element
 type (`T`, the state type), `mul!` and `*` (one stencil kernel on `exec`, identity on masked
 sites).
+
+# Arguments
+- `exec`: the executor, a KernelAbstractions backend.
+- `op`: the operator, a [`CellOperator`](@ref).
+
+# Keywords
+- `T = Float32`: the element type (the state type).
+- `solver_type = :auto`: the solver's number type, as in [`FieldSolver`](@ref).
+- `inputs = ()`: `key => A` pairs that bind the operator's input fields to arrays.
+
+# Returns
+- A `BoundOperator`, an `AbstractSciMLOperator{T}` of size `(n, n)` with
+  `n = prod(op.dims)`.
 """
 struct BoundOperator{T, N, E, I} <: SciMLOperators.AbstractSciMLOperator{T}
     exec::E
@@ -558,6 +571,22 @@ keywords); the owned steppers give 8 and 1e-6. A solve that stops at `maxiters` 
 `ReturnCode.MaxIters`, one that stops otherwise without converging
 `ReturnCode.ConvergenceFailure`. `maxiters` is an integer ≥ 1 and `reltol` finite and > 0;
 any other value is an `ArgumentError` naming the keyword.
+
+# Keywords
+- `precs = LatticeMultigrid()`: the preconditioner, a LinearSolve `precs` function. The
+  fused path needs a symmetric cycle `(ν, ν)` and one cycle per iteration.
+- `maxiters = nothing`: the most CG iterations per solve, an integer ≥ 1.
+- `reltol = nothing`: the relative residual a solve stops at, finite and > 0.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> LatticePCG(; maxiters = 4)
+LatticePCG(; maxiters = 4)
+```
+
+See also [`LatticeMultigrid`](@ref), [`LatticeGMRES`](@ref), [`BoundOperator`](@ref).
 """
 struct LatticePCG{P} <: LinearSolve.AbstractKrylovSubspaceMethod
     precs::P
@@ -606,6 +635,20 @@ function: each field's own operator solved from zero by `linsolve` (a `LatticePC
 `LatticeMultigrid(…)`) on the field's multigrid hierarchy. Applies to coupled steady groups
 and to the operators of a problem `LatticePDE.discretize` returned (`W` and
 `LatticeOperator`).
+
+# Arguments
+- `linsolve = LatticePCG(; maxiters = 2)`: the per-field solver, a `LatticePCG` or a
+  `LatticeMultigrid`. Any other value throws an `ArgumentError`.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> LatticeBlockSolve(LatticePCG(; maxiters = 4))
+LatticeBlockSolve(LatticePCG(; maxiters = 4))
+```
+
+See also [`LatticeGMRES`](@ref).
 """
 struct LatticeBlockSolve{L}
     linsolve::L
@@ -665,8 +708,24 @@ are block partials summed in a fixed order (no atomics, no BLAS), so a run is bi
 repeatable, and the CPU and a GPU give the same bits. Krylov.jl keeps its small
 least-squares problem on the host, so on a GPU each dot product waits for its value (about
 `j + 1` waits at iteration `j` of a cycle; the one exception to the field solvers' rule of
-no GPU wait in a step, user ruling 2026-11-01). Any other value is an `ArgumentError` naming
+no GPU wait in a step). Any other value is an `ArgumentError` naming
 the keyword.
+
+# Keywords
+- `gmres_restart = 20`: the Krylov basis size, an integer from 2 to 64.
+- `maxiters = nothing`: the most iterations per solve, an integer ≥ 1.
+- `reltol = nothing`: the relative stop tolerance, finite and > 0.
+- `precs = LatticeBlockSolve()`: the preconditioner, a LinearSolve `precs` function.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> LatticeGMRES(; gmres_restart = 30)
+LatticeGMRES(; gmres_restart = 30)
+```
+
+See also [`LatticeBlockSolve`](@ref), [`LatticePCG`](@ref).
 """
 struct LatticeGMRES{P} <: LinearSolve.AbstractKrylovSubspaceMethod
     gmres_restart::Int

@@ -43,6 +43,23 @@ kernel's value type), and `rt = (t, dt)`. `bs(rt)` enqueues them in order (no sy
 allocation on the host executor). `fuse(spec, cur)` may return `(lane, wrap)` for a launch:
 its arrays gain the lane `lane` and its body is `wrap(body)` (the clamp fused into the mask
 launch on a device, group.jl); `nothing` leaves the launch as planned.
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `p`: the program.
+- `sp`: a step plan (`StepPlan`).
+- `st`: the [`FieldStore`](@ref) of `p`.
+- `Praw`: the raw parameters.
+
+# Keywords
+- `cur = st.cur`: the current slot of each field.
+- `c = nothing`: a value of the compute element type, or `nothing`.
+- `fuse = nothing`: the launch fusion hook described above.
+
+# Returns
+- A `BoundStep`; `bs(rt)` returns `nothing`.
+
+See also [`compile!`](@ref), [`run_step!`](@ref).
 """
 struct BoundStep{L <: Tuple, W}
     launches::L
@@ -85,6 +102,13 @@ end
     compile!(backend, bs::BoundStep)
 
 Compile every launch of `bs` before the first enqueue (host tasks, `Exec.compile_all!`).
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `bs`: a [`BoundStep`](@ref).
+
+# Returns
+- `nothing`.
 """
 function compile!(backend, bs::BoundStep)
     return Exec.compile_all!(backend, [x.launch for x in bs.launches])
@@ -94,6 +118,13 @@ end
     swap!(st, sp)
 
 The host slot swaps after a step of `sp` (no copy, no wait).
+
+# Arguments
+- `st`: a [`FieldStore`](@ref).
+- `sp`: the step plan whose two-buffer fields swap.
+
+# Returns
+- `st`.
 """
 function swap!(st::FieldStore, sp::StepPlan)
     for f in sp.swaps
@@ -107,6 +138,20 @@ end
 
 Bind, run and swap one step (cold: binds on every call; tests and one-off steps). The
 warm path prebuilds [`BoundStep`](@ref)s.
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `p`: the program.
+- `sp`: a step plan.
+- `st`: the [`FieldStore`](@ref) of `p`.
+- `Praw`: the raw parameters.
+
+# Keywords
+- `rt = (0, 0)`: the tuple `(t, dt)`, converted to `Float64`.
+- `c = nothing`: a value of the compute element type, or `nothing`.
+
+# Returns
+- `st`, after the swap.
 """
 function run_step!(
         backend, p::Program, sp::StepPlan, st::FieldStore, Praw; rt = (0, 0),

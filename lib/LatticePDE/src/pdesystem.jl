@@ -34,9 +34,21 @@ sys = pdesystem([Differential(t)(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + src(
 it (`lattice_domain(t, (x, y), dims)`). Other keywords (`initial_conditions`, …) go to
 `PDESystem`.
 
-A variable is refused when [`pdesystem_refusal`](@ref) gives a reason for one of its
-metadata values (a front end's tag on quantities that a PDESystem cannot read, such as a
-model's cell quantities).
+A variable is refused with an `ArgumentError` when [`pdesystem_refusal`](@ref) gives a
+reason for one of its metadata values (a front end's tag on quantities that a PDESystem
+cannot read, such as a model's cell quantities).
+
+# Arguments
+- `eqs`: the equations.
+- `bcs = []`: the boundary conditions.
+
+# Keywords
+- `name`: the system's name.
+- `domain = []`: the system's domain.
+- other keywords go to `PDESystem`.
+
+# Returns
+- The `PDESystem`.
 """
 function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
     eqs isa AbstractVector || (eqs = [eqs])
@@ -136,9 +148,16 @@ end
 """
     pdesystem_refusal(value, x) -> String or nothing
 
-Why [`pdesystem`](@ref) refuses the variable `x`, which carries the metadata value `value`,
-or `nothing` (the default: accepted). A front end that tags its own quantities defines a
-method for the type of its tag, so that a quantity a PDESystem cannot read (a CPM's cell
-quantities) is named with the route.
+Why [`pdesystem`](@ref) refuses the variable `x`, which carries the metadata value `value`.
+
+A front end that tags its own quantities defines a method for the type of its tag, so that
+a quantity a PDESystem cannot read (a CPM's cell quantities) is named with the route.
+
+# Arguments
+- `value`: a metadata value of `x`.
+- `x`: the variable.
+
+# Returns
+- The reason, or `nothing` (the default: accepted).
 """
 pdesystem_refusal(value, x) = nothing

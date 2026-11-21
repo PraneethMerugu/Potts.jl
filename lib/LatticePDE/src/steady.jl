@@ -72,7 +72,14 @@ is a state field with no other equation that the row reads, preferably under a s
 operator: a row with one such field takes it, and the others follow (each field once);
 fields that two rows could take in the same way go in the order of the dependent variables.
 A steady field with no initial value starts at 0 (the steady solve's cold start). A row that
-reads no free field is refused, naming the fields that have no equation.
+reads no free field is refused with an `ArgumentError`, naming the fields that have no
+equation.
+
+# Arguments
+- `sys::PDESystem`: the system.
+
+# Returns
+- `(sys, steady)`: the rewritten system and the keys of the steady fields.
 """
 function steady_rows(sys::PDESystem)
     any(eq -> _iszero(eq.lhs), get_eqs(sys)) || return sys, String[]
@@ -166,8 +173,25 @@ The field each steady row is solved for, used across `discretize` and PDE groups
 dependent variables; `ops[q]` are the free fields row `q` reads under a spatial operator and
 `reads[q]` every free field it reads. A row's candidates are its `ops`, else its `reads`; a
 row with one live candidate takes it first, then the first row in turn takes its first live
-one (each field once). `picks[q]` is the field of row `q`; `bad` is a row left with no
-candidate (0: none), which the front end refuses in its words.
+one (each field once).
+
+# Arguments
+- `ops::AbstractVector`: `ops[q]` are the free fields row `q` reads under a spatial
+  operator.
+- `reads::AbstractVector`: `reads[q]` is every free field row `q` reads.
+- `n::Integer`: the number of free fields.
+
+# Returns
+- `(picks, bad)`: `picks[q]` is the field of row `q`; `bad` is a row left with no
+  candidate (0: none), which the front end refuses in its words.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> LatticePDE.steady_choice([[2], Int[]], [[1, 2], [1, 2]], 2)
+([2, 1], 0)
+```
 """
 function steady_choice(ops::AbstractVector, reads::AbstractVector, n::Integer)
     cand = [sort!(unique(isempty(o) ? r : o)) for (o, r) in zip(ops, reads)]
@@ -197,6 +221,13 @@ positive coefficient of `laplacian(c)`, of `K` in `DivKGrad(K, c)`) or, with no 
 coefficients are judged at 1 for every parameter, coordinate and other field; a sign that
 this does not settle is left as written (then the steady refusals judge the row at its
 values).
+
+# Arguments
+- `rhs`: the right side of the steady row.
+- `c`: the field it determines.
+
+# Returns
+- `1` or `-1`.
 """
 function steady_sign(rhs, c)
     z = _STEADY_Z
@@ -263,6 +294,14 @@ The lowering's form of `sys` on an `N`-axis grid: a system whose variables are t
 (no time) gains the time `t` over `(0, 0)` in every read (a time-free system),
 and its steady rows become rates (`steady_rows`). A time-free system has only steady
 rows and aux fields (`K ~ rhs`).
+
+# Arguments
+- `sys::PDESystem`: the system.
+- `N::Int`: the number of axes of the grid.
+
+# Returns
+- `(sys, steady, timefree)`: the rewritten system, the keys of its steady fields, and
+  whether it has no time.
 """
 function steady_form(sys::PDESystem, N::Int)
     # (a system with a rate or a map has a time: its first variable, however many axes)

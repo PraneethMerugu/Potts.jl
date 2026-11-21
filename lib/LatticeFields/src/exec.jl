@@ -6,10 +6,8 @@ device wrapper for every device kernel. A kernel is a body `body(i, args...)` ru
 `i in 1:n`.
 
 - **Host executor** ([`host_launch!`](@ref)): a plain loop, or a threaded chunked loop for
-  large `n`. The KernelAbstractions CPU backend never runs production work: on KA 0.10 it is
-  PoCL (5 µs per launch, SPIR-V semantics, invisible to JET and AllocCheck).
-- **Device wrapper** (`_kernel!`): `unsafe_indices = true` with an `if i <= n` guard. KA 0.9
-  refuses `return` inside a kernel; KA 0.10 accepts both.
+  large `n`. The KernelAbstractions CPU backend never runs production work.
+- **Device wrapper** (`_kernel!`): `unsafe_indices = true` with an `if i <= n` guard.
 - **Launches**: [`launch!`](@ref) for a dynamic launch from a runtime `n`;
   [`Launch`](@ref) for a prebuilt, type-stable launch (static ndrange for bodies that run at
   one size); [`Plan`](@ref) for a zero-allocation walk over a tuple of launches.
@@ -38,6 +36,22 @@ public HOST_GRAIN, COMPILE_ONLY, VERBOSE, compiling, ishost, supports, default_f
 
 Whether kernels on `backend` run on the host executor (host memory, native Julia): true for
 the KernelAbstractions CPU backend, false for every device backend.
+
+# Arguments
+- `backend`: a KernelAbstractions backend, for example `CPU()` or `ROCBackend()`.
+
+# Returns
+- `true` for `KernelAbstractions.CPU`, `false` for any other argument.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Exec.KernelAbstractions: CPU
+
+julia> LatticeFields.Exec.ishost(CPU())
+true
+```
+
+See also [`supports`](@ref), [`default_float`](@ref).
 """
 ishost(::KernelAbstractions.CPU) = true
 ishost(backend) = false
@@ -50,6 +64,24 @@ executor runs every type. A device runs `Float32`, and `Float64` where the hardw
 (`KernelAbstractions.supports_float64`: true on ROCm and CUDA, false on Metal). Callers ask
 only when a choice depends on the hardware (a Float64 solver group, an explicit Float64
 problem); the type device code gets by default is [`default_float`](@ref).
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `T`: the number type to ask about.
+
+# Returns
+- `true` if `backend` is the host, or `T <: Float32`, or `T <: Float64` and the backend
+  supports Float64; `false` otherwise.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Exec.KernelAbstractions: CPU
+
+julia> LatticeFields.Exec.supports(CPU(), Float64)
+true
+```
+
+See also [`ishost`](@ref), [`default_float`](@ref).
 """
 function supports(backend, ::Type{T}) where {T}
     return ishost(backend) || T <: Float32 ||
@@ -64,6 +96,20 @@ on the host executor, `Float32` on every device: default device code stays `Floa
 runs unchanged on backends without doubles (Metal) and gives the same results on every
 device (the device scan checks production Float32 paths for doubles). This is not a query of
 the hardware; ask [`supports`](@ref) for that.
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+
+# Returns
+- `Float64` if [`ishost`](@ref)`(backend)`, else `Float32`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Exec.KernelAbstractions: CPU
+
+julia> LatticeFields.Exec.default_float(CPU())
+Float64
+```
 """
 default_float(backend) = ishost(backend) ? Float64 : Float32
 
@@ -76,6 +122,13 @@ group's `compute_type` or `solver_type` of Float64, or a field's
 the parts of its signature text: a kernel signature that holds every part is skipped by the
 no-`double` scan of the device test suites, which still flags every other kernel.
 [`float64_registered`](@ref) asks.
+
+# Arguments
+- `parts`: substrings of the kernel signature text. The special part
+  [`FLOAT64_ARRAY`](@ref) matches a Float64 device array of any dimension.
+
+# Returns
+- `nothing`. The entry is added to [`FLOAT64_KERNELS`](@ref) under a lock.
 """
 function register_float64!(parts::String...)
     lock(_FLOAT64_LOCK) do
@@ -83,18 +136,30 @@ function register_float64!(parts::String...)
     end
     return nothing
 end
-"""The registry of [`register_float64!`](@ref): one vector of signature parts per entry."""
+"""
+    FLOAT64_KERNELS::Set{Vector{String}}
+
+The registry of [`register_float64!`](@ref): one vector of signature parts per entry.
+"""
 const FLOAT64_KERNELS = Set{Vector{String}}()
 const _FLOAT64_LOCK = ReentrantLock()
 """
     float64_registered(signature::AbstractString) -> Bool
 
 Whether a kernel signature text holds every part of a [`register_float64!`](@ref) entry.
+
+# Arguments
+- `signature`: the printed signature of a compiled kernel.
+
+# Returns
+- `true` if some entry of [`FLOAT64_KERNELS`](@ref) has all its parts in `signature`.
 """
 function float64_registered(sig::AbstractString)
     return lock(() -> any(e -> all(q -> _holds(sig, q), e), FLOAT64_KERNELS), _FLOAT64_LOCK)
 end
 """
+    FLOAT64_ARRAY::String
+
 The part of a [`register_float64!`](@ref) entry that stands for a Float64 device array in
 the signature, whatever its dimension: Julia prints a 1D or 2D device array by its alias
 (`ROCDeviceVector{Float64, 1}`, `ROCDeviceMatrix{Float64, 1}`), a 3D one as
@@ -113,9 +178,11 @@ end
 # Host executor
 
 """
+    HOST_GRAIN::Int
+
 Minimum number of work items per host thread. A launch of at most `HOST_GRAIN` items, or
-any launch with one thread, is a plain loop (threaded launches of about 1000 items were 6×
-slower than the loop).
+any launch with one thread, is a plain loop (a threaded launch of few items is slower than
+the loop).
 """
 const HOST_GRAIN = 8192
 
@@ -128,7 +195,32 @@ with one thread, else `ceil(n / chunk)` chunks of
 (`@batch`: no task is created, so a warm launch allocates nothing; nested under busy
 workers, e.g. inside `EnsembleThreads`, the chunks run serially). Under `@batch`, Polyester
 passes top-level `Array`s in `args` as `PtrArray`s, so a body compiles for both array types.
-Returns `nothing`.
+
+# Arguments
+- `body`: a callable `body(i, args...)`.
+- `n`: the number of work items.
+- `args`: the tuple of extra arguments passed to every call.
+
+# Returns
+- `nothing`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> v = zeros(4);
+
+julia> LatticeFields.Exec.host_launch!((i, v) -> (v[i] = i; nothing), 4, (v,))
+
+julia> v
+4-element Vector{Float64}:
+ 1.0
+ 2.0
+ 3.0
+ 4.0
+```
+
+See also [`launch!`](@ref), [`HOST_GRAIN`](@ref).
 """
 function host_launch!(body::B, n::Integer, args::A) where {B, A}
     nt = Threads.nthreads()
@@ -184,7 +276,18 @@ end
 Run `body(i, args...)` for `i in 1:n` on `backend`, without synchronizing: the host
 executor on the CPU, else the device wrapper with a dynamic ndrange and the backend's
 workgroup size (one compile per body and argument types, whatever `n`). Nothing runs for
-`n ≤ 0`. Returns `nothing`.
+`n ≤ 0`. In compile mode ([`compiling`](@ref)) a device launch compiles the kernel instead.
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `body`: a callable `body(i, args...)`.
+- `n`: the number of work items.
+- `args`: the tuple of extra arguments passed to every call.
+
+# Returns
+- `nothing`.
+
+See also [`host_launch!`](@ref), [`Launch`](@ref), [`compile!`](@ref).
 """
 function launch!(backend, body::B, n::Integer, args::A) where {B, A}
     if ishost(backend)
@@ -205,15 +308,24 @@ of [`launch!`](@ref), of a prebuilt [`Launch`](@ref) and of a solver's workgroup
 compiles its kernel instead (a launch that runs no work item), so a host task can walk a
 runtime's launch sequence to compile it ahead of the first step (the implicit
 launches in the pending compile task). The host executor ignores it.
+
+# Returns
+- The value of [`COMPILE_ONLY`](@ref) in the current task.
 """
 compiling() = COMPILE_ONLY[]
 """
+    COMPILE_ONLY::Base.ScopedValues.ScopedValue{Bool}
+
 Compile mode, task-scoped (`Base.ScopedValues.with(Exec.COMPILE_ONLY => true) do … end`).
+The default is `false`. [`compiling`](@ref) reads it.
 """
 const COMPILE_ONLY = Base.ScopedValues.ScopedValue(false)
 """
+    VERBOSE::Base.ScopedValues.ScopedValue{Bool}
+
 Whether a run's warnings print, task-scoped: `false` inside an owned run given
-`verbose = false` (SciML's `verbose` keyword); every warning of a run checks it.
+`verbose = false` (SciML's `verbose` keyword); every warning of a run checks it. The
+default is `true`.
 """
 const VERBOSE = Base.ScopedValues.ScopedValue(true)
 
@@ -223,8 +335,18 @@ const VERBOSE = Base.ScopedValues.ScopedValue(true)
 Compile the kernel that [`launch!`](@ref)`(backend, body, n, args)` runs, by a launch of one
 work item with `n = 0` (it passes no guard, so nothing is written). The kernel type does not
 depend on the ndrange of a dynamic launch, so the later launch reuses this compile. A
-launch over an empty ndrange is not used: KA 0.10 returns before compiling it. Nothing on
-the host executor. Returns `nothing`; does not synchronize.
+launch over an empty ndrange is not used, since it may return before compiling. Nothing on
+the host executor. Does not synchronize.
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `body`: the kernel body, as given to [`launch!`](@ref).
+- `args`: the tuple of extra arguments, as given to [`launch!`](@ref).
+
+# Returns
+- `nothing`.
+
+See also [`compile_all!`](@ref), [`compiling`](@ref).
 """
 function compile!(backend, body::B, args::A) where {B, A}
     ishost(backend) && return nothing
@@ -244,14 +366,46 @@ struct HostExec end
 A prebuilt launch of `body(i, args...)` for `i in 1:n`, built once at plan time and called
 with no arguments: `l()` enqueues it (does not synchronize). On a device it holds the kernel
 object of the generic wrapper with a static workgroup size `WG` and, with `static = true`,
-a static ndrange (`n` rounded up to a multiple of `WG`). On KA 0.9 a static ndrange saves
-1.6–1.8 µs and about 900 B per launch (pass 3), but each distinct ndrange is its own kernel
-type, so its own compile (`static` has no default: the caller decides): use it for bodies
-that run at one size, and `static = false` for bodies launched at several sizes. On the host
+a static ndrange (`n` rounded up to a multiple of `WG`). A static ndrange avoids a
+per-launch cost, but each distinct ndrange is its own kernel type, so its own compile
+(`static` has no default: the caller decides): use it for bodies that run at one size, and
+`static = false` for bodies launched at several sizes. On the host
 the launch is [`host_launch!`](@ref).
 
 Type parameters: `K` the kernel object (or the host executor), `WG` the workgroup size (0 on
 the host), `NP` the launch tuple `(body, args, n)`.
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `body`: a callable `body(i, args...)`.
+- `args`: the tuple of extra arguments.
+- `n`: the number of work items; `n < 0` throws an `ArgumentError`.
+
+# Keywords
+- `static::Bool`: required. `true` puts the ndrange in the kernel type.
+- `workgroupsize = 256`: the device workgroup size; a value below 1 throws an
+  `ArgumentError`. Ignored on the host.
+
+# Returns
+- A `Launch`; call it with no arguments to enqueue it.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Exec.KernelAbstractions: CPU
+
+julia> v = zeros(3);
+
+julia> l = LatticeFields.Exec.Launch(CPU(), (i, v) -> (v[i] = 2i; nothing), (v,), 3;
+                                     static = false);
+
+julia> l(); v
+3-element Vector{Float64}:
+ 2.0
+ 4.0
+ 6.0
+```
+
+See also [`Plan`](@ref), [`compile!`](@ref), [`launch!`](@ref).
 """
 struct Launch{K, WG, NP <: Tuple{Any, Tuple, Union{Int, Tuple}}}
     kernel::K
@@ -297,6 +451,22 @@ A 1-tuple without `cartesian = true` is the linear launch of `n = ndrange[1]`
 the launch is Cartesian: `body(x, args...)` for `x` over the ndrange (padded up to a
 multiple of the workgroup per axis on a device; the body guards every axis), a plain
 column-major loop over `CartesianIndices(ndrange)` on the host.
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `body`: the kernel body.
+- `args`: the tuple of extra arguments.
+- `ndrange`: the tuple of axis lengths; a negative axis throws an `ArgumentError`.
+
+# Keywords
+- `static::Bool`: required. A Cartesian launch on a device requires `static = true`; else
+  it throws an `ArgumentError`.
+- `workgroupsize`: an integer or a tuple with one entry per axis. The default is `256` for
+  a 1-tuple and `(64, 1, …)` otherwise; an integer `w` means `(w, 1, …)`.
+- `cartesian::Bool = length(ndrange) > 1`: whether the launch is Cartesian.
+
+# Returns
+- A `Launch`.
 """
 function Launch(
         backend, body::B, args::A, ndrange::NTuple{N, Integer};
@@ -401,6 +571,12 @@ end
 
 Compile `l`'s kernel by a launch with `n = 0`: over one workgroup for a dynamic ndrange,
 over the full static ndrange otherwise (it is part of the kernel type). Nothing on the host.
+
+# Arguments
+- `l`: a prebuilt [`Launch`](@ref).
+
+# Returns
+- `nothing`.
 """
 compile!(l::Launch{HostExec}) = nothing
 compile!(l::CartesianLaunch{HostExec}) = nothing
@@ -421,9 +597,17 @@ end
 Compile a kernel set in parallel on the host: one task per job (`Threads.@spawn`), each a
 [`Launch`](@ref) or a zero-argument function that compiles (e.g. `() -> compile!(backend,
 body, args)`), and each task synchronizes `backend` before it ends (device streams are
-task-local). Waits for every task; rethrows the first failure. Compilation is the cost
-(about 0.2 s per kernel on ROCm); with 4 threads a 17-kernel set compiles about 1.5 s
-faster than in series (pass 3). Returns `nothing`.
+task-local). Waits for every task; rethrows the first failure. Compilation is the cost, so
+a set compiles faster than in series. Nothing on the host executor.
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `jobs`: an iterable of [`Launch`](@ref)es or zero-argument functions.
+
+# Returns
+- `nothing`. Throws the exception of the first failed task.
+
+See also [`compile!`](@ref).
 """
 function compile_all!(backend, jobs)
     ishost(backend) && return nothing
@@ -458,7 +642,29 @@ A fixed sequence of [`Launch`](@ref)es (or any zero-argument callables), run in 
 `plan()`. The walk is a RuntimeGeneratedFunction emitted once per plan length,
 `t -> (t[1](); t[2](); …; nothing)`: one call per launch, unrolled and type-stable at any
 length. A recursive or `foreach` walk over a tuple of more than 32 launches is not: it
-allocates 10–13 KB per launch (pass 3), and `return_types` does not show it.
+allocates at every launch, and `return_types` does not show it.
+
+# Arguments
+- `launches`: a tuple of [`Launch`](@ref)es or zero-argument callables.
+
+# Returns
+- A `Plan`. `plan()` returns `nothing`, and `length(plan)` is the number of launches.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> calls = Int[];
+
+julia> p = LatticeFields.Exec.Plan((() -> push!(calls, 1), () -> push!(calls, 2)));
+
+julia> p(); calls
+2-element Vector{Int64}:
+ 1
+ 2
+```
+
+See also [`walker`](@ref).
 """
 struct Plan{L <: Tuple, W}
     launches::L
@@ -477,6 +683,12 @@ const _WALKERS_LOCK = ReentrantLock()
     walker(n)
 
 The RuntimeGeneratedFunction `t -> (t[1](); …; t[n](); nothing)` (cached by `n`).
+
+# Arguments
+- `n`: the number of calls; `n < 0` throws an `ArgumentError`.
+
+# Returns
+- The cached RuntimeGeneratedFunction for `n`.
 """
 function walker(n::Integer)
     n >= 0 || throw(ArgumentError("walker: n = $n < 0"))

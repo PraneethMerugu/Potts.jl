@@ -118,12 +118,26 @@ below a finest axis of `n0` cells: 2^ℓ, the last cell takes the rest.
 end
 
 """
+    RuleWeights(; inside = 1.0, plane = 1.0, inherited = 1.0, box = 0.5,
+                majority = false, diagonal = 1.0)
+
 Rule-M weights of the hierarchy build: `inside` for a mask face inside a coarse
 cell, `plane` for a mask face on a plane between two active coarse cells, `inherited` for
 absorption folded on a finer level, `box` for box face-Dirichlet absorption; `majority`
 selects the Majority fold (real child count) instead of Any; `diagonal` weighs the diagonal
 fine faces of a hexagonal lattice in the coarse faces (`build_hex!`). Values, not types: the
 negative controls of the tests pass other weights.
+
+# Fields
+- `inside::Float64 = 1.0`: the weight of a mask face inside a coarse cell.
+- `plane::Float64 = 1.0`: the weight of a mask face on a plane between two active coarse
+  cells.
+- `inherited::Float64 = 1.0`: the weight of absorption folded on a finer level.
+- `box::Float64 = 0.5`: the weight of box face-Dirichlet absorption.
+- `majority::Bool = false`: use the Majority fold instead of Any.
+- `diagonal::Float64 = 1.0`: the weight of the diagonal fine faces of a hexagonal lattice.
+
+The default, `RuleWeights()`, is rule M (`RULE_M`), which [`FieldSolver`](@ref) uses.
 """
 Base.@kwdef struct RuleWeights
     inside::Float64 = 1.0

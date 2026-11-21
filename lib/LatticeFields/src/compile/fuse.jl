@@ -25,6 +25,16 @@ The result is node for node the program a front end fuses symbolically
 (`symbolic_discretize(…; update = rule)`): the builder interns and orders every node
 structurally, and kernels are renumbered canonically (`finish`), so `fingerprint_text` of
 the two is the same.
+
+# Arguments
+- `rate`: the rate program, before the semantic passes.
+- `rule`: a function `rule(kb, c, r) -> Ex`, or `nothing`.
+
+# Returns
+- The stepped `Program`, or `rate` itself if `rule === nothing` or no `rate:c` kernel has
+  a scratch field.
+
+See also [`fuse_residual`](@ref).
 """
 function fuse_update(p::Program{N}, rule) where {N}
     rule === nothing && return p
@@ -112,6 +122,18 @@ kernels and the rules pass through, renumbered (as `fuse_update`).
 `widen16 = true` (the solve's residual): the residual of a field stored in
 Float16 is held in the state's value type (a float lane, not fixed), the type the solver
 reads, so the solve sees no Float16 rounding beyond the state's own.
+
+# Arguments
+- `rate`: the rate program, before the semantic passes.
+- `rule`: a function `rule(kb, c, r, cn) -> Ex`.
+
+# Keywords
+- `widen16 = false`: hold the residual of a Float16 field in the state's value type.
+
+# Returns
+- The residual `Program`.
+
+See also [`fuse_update`](@ref).
 """
 function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
     keys = [f.key for f in p.fields]

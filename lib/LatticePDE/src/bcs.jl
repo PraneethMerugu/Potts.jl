@@ -87,11 +87,21 @@ end
 """
     parse_bcs(bcs, fields, ivs, ends) -> Vector{BC}
 
-Classify every condition. `fields` maps a dependent variable's operation to whether it is an
-input; `ends[i]` is the `(low, high)` pair of `ivs[i]`. Refused, each with its message: an
+Classify every boundary condition of a system.
+
+Refused with an `ArgumentError`, each with its message: an
 off-face or interior face condition, a condition on an input, a mixed-field condition, a
 one-sided or cross-axis periodic pair, a normal derivative along another axis, a masked
 condition whose left side is not a field read, and a whole-array condition.
+
+# Arguments
+- `bcs`: the boundary conditions.
+- `fields`: maps a dependent variable's operation to whether it is an input.
+- `ivs`: the independent variables.
+- `ends`: `ends[i]` is the `(low, high)` pair of `ivs[i]`.
+
+# Returns
+- One classified condition per entry of `bcs`.
 """
 function parse_bcs(bcs, fields, ivs, ends)
     out = BC[]

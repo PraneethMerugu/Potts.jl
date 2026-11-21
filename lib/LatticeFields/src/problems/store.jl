@@ -9,7 +9,7 @@ Zero-filled arrays for every field of `p` on `backend` (KernelAbstractions alloc
 per buffer, `nsites × ncomp` elements of the field's storage lane; and an empty slot per
 table (set with [`settable!`](@ref)). `cur[f]` is the current slot of field `f` (1 or 2).
 
-`E` is the problem's element type (P5 role model): a float lane holds
+`E` is the problem's element type: a float lane holds
 [`lanetype`](@ref LatticeFields.Compile.lanetype)`(lane, value_type(E), :state, fixed)`
 wrapped like `E` (a field with a declared storage, `fixed`, holds its own lane type) (a Dual
 of it when `E` is a Dual): the state lanes hold the problem's value type (BigFloat under
@@ -28,6 +28,24 @@ the algorithm's (history, `c__prev`); the steps use the first two.
 State fields with different storage (a declared `lattice_storage` beside the problem's type)
 are not packed: each has its own arrays, as in a coupled `PottsProblem`; `st.flat` is
 empty and `st.slots` still places each in the flat state vector (`mixed_state`).
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+- `p`: the program (`LatticeFields.IR.Program`).
+
+# Keywords
+- `flat = String[]`: the keys of the state fields to pack, in order. The packed fields must
+  share one buffer count, else an `ArgumentError` is thrown.
+- `E = nothing`: the problem's element type, or `nothing`.
+- `nbuf = nothing`: the buffer count the algorithm declares for the state fields.
+- `TE = nothing`: the element type of the problem's table values, or `nothing`.
+
+# Fields
+- `backend`, `bufs` (the buffers per field), `cur` (the current slot per field), `tables`,
+  `flat` (the packed state arrays per slot) and `slots` (each field's range in the flat
+  state vector).
+
+See also [`array`](@ref), [`current`](@ref), [`settable!`](@ref).
 """
 struct FieldStore{B}
     backend::B
@@ -206,6 +224,14 @@ Base.setindex!(m::MixedState, v, ::Colon) = setindex!(m, v, eachindex(m))
     state_layout(p, ids) -> Vector{UnitRange{Int}}
 
 Ranges of the fields `ids` (in order) in a flat state vector; empty ranges for the others.
+
+# Arguments
+- `p`: the program.
+- `ids`: the field ids, in state order.
+
+# Returns
+- One range per field of `p`: `nsites × ncomp` entries for the fields in `ids`, `1:0` for
+  the others.
 """
 function state_layout(p::Program, ids)
     slots = fill(1:0, length(p.fields))
@@ -225,6 +251,15 @@ _zeros(backend, ::Type{E}, n) where {E} = fill!(KA.allocate(backend, E, n), zero
 
 The array bound to `(id, role)` (contract item 2): `:cur`/`:next` select the current or the
 other slot of a two-buffer field (the only slot of a one-buffer field); `:table` a table.
+
+# Arguments
+- `st`: a [`FieldStore`](@ref).
+- `id`: the field id, or the table id for `role = :table`.
+- `role`: `:cur`, `:next` or `:table`.
+- `cur = st.cur[id]`: the current slot to resolve `:cur` and `:next` against.
+
+# Returns
+- The array itself (no copy).
 """
 function array(st::FieldStore, id::Integer, role::Symbol, cur::Integer = st.cur[id])
     role == :table && return st.tables[id]
@@ -237,6 +272,14 @@ end
     current(st, p, key) -> array
 
 The current array of field `key`.
+
+# Arguments
+- `st`: a [`FieldStore`](@ref).
+- `p`: the program of `st`.
+- `key`: the field key.
+
+# Returns
+- The array of the current slot (no copy).
 """
 current(st::FieldStore, p::Program, key::AbstractString) = array(st, fieldid(p, key), :cur)
 
@@ -244,6 +287,18 @@ current(st::FieldStore, p::Program, key::AbstractString) = array(st, fieldid(p, 
     settable!(st, p, key, values)
 
 Upload `values` into table `key` (in the table's element type in this store).
+
+A new array of `length(values)` entries replaces the table's array. A key that is not a
+table of `p` throws an `ArgumentError`.
+
+# Arguments
+- `st`: a [`FieldStore`](@ref).
+- `p`: the program of `st`.
+- `key`: the table key.
+- `values`: the entries, any collection convertible to the table's element type.
+
+# Returns
+- `st`.
 """
 function settable!(st::FieldStore, p::Program, key::AbstractString, values)
     i = findfirst(t -> t.key == key, p.tables)
@@ -260,6 +315,14 @@ end
 
 The array tuple of a launch (contract item 2) with the current slots `cur` (a vector by
 field id).
+
+# Arguments
+- `st`: a [`FieldStore`](@ref).
+- `spec`: a launch description of a step plan (`LaunchSpec`).
+- `cur = st.cur`: the current slot of each field.
+
+# Returns
+- A tuple with one tuple of arrays per argument lane of the launch.
 """
 function launch_arrays(st::FieldStore, spec::LaunchSpec, cur = st.cur)
     return Tuple(

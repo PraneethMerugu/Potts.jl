@@ -9,6 +9,18 @@
     FieldSlot(range, dims)
 
 Where a field lives in the flat state: `range`, holding the grid `dims` (column-major).
+
+# Fields
+- `range::UnitRange{Int}`: the field's entries in the flat state vector.
+- `dims::NTuple{N, Int}`: the grid size; `prod(dims) == length(range)` for a scalar field.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> LatticeFields.Problems.FieldSlot(1:6, (3, 2)).dims
+(3, 2)
+```
 """
 struct FieldSlot{N}
     range::UnitRange{Int}
@@ -17,41 +29,59 @@ end
 indices(s::FieldSlot) = reshape(s.range, s.dims)
 
 """
-    LatticeIndex(; key = identity, variables, parameters, independent_variables, defaults,
-                 inputs = [], inputnames = [], boolinputs = [], inputbounds = [],
-                     derived = [], observed = [],
-                 tables = [], tableshapes = [], aux = [])
+    LatticeIndex(; key = identity, variables = [], parameters = [],
+                 independent_variables = [], defaults = Dict(), inputs = [],
+                 inputnames = [], boolinputs = [], inputbounds = [], derived = [],
+                 observed = [], tables = [], tableshapes = [], parambounds = [],
+                 derive = nothing, aux = [], coordinates = [], maskevents = [],
+                 maskunlocated = false)
 
 The symbol table of a field problem (the `sys` of its `ODEFunction`, and the symbolic
-container of `FieldProblem`, `FieldSolution` and `FieldIntegrator`). `variables` is a vector
-of `symbols => FieldSlot` (one or more spellings per field; the first is the canonical one),
-`parameters` of `symbols => index` into the raw parameter vector; `independent_variables`
-the time symbols. `inputs` maps `symbols => key`, the input fields of the program (set
-with the problem's `inputs` keyword, `remake(prob; inputs)` or `integ[sym] = values`), and
-`inputnames` maps an input key to the name messages print (its user-facing name), and
-`boolinputs` lists the keys of inputs declared `Bool` (they take only Bool or 0/1);
-`inputbounds` maps an input key to its declared bounds `(lo, hi)` (its values must lie in
-them: a bound such as `lo ≥ 1` tells the stability bound that a table index is never 0);
-`derived` maps the symbols of quantities that are not parameters of the problem (a computed
-parameter, folded into the equations) to the sentence that says why; `observed` maps such
-symbols to how they read, `(p, t) -> value` from the raw parameters (a function, or an
-`Expr` compiled here), so `getp(sol, k2)`, `sol.ps[k2]` and `integ.ps[k2]` read them while
-`remake` and `setp` refuse them (their `parameter_index` throws); `tables` maps the symbols
-of array parameters to their table keys, or an entry's symbol to `(key, i)`
-(`remake(prob::FieldProblem; p =
-[Dk => values])` gives new values; `integ.ps[Dk]`, `getp(prob, Dk)` read them);
-`tableshapes` maps a table key to its declared size when it is a matrix (a table is stored
-flat, column-major; a read of the whole table has this shape); `aux` maps
-`symbols => key`, the aux fields of the program (`K ~ rhs`): not part of the state, they are
-evaluated from it and read by `sol[K]` and `integ[K]` ([`aux_key`](@ref); on the ODE path
-they are observed, `rhs(u(t), t)`, through the evaluator `ode_problem` sets); `coordinates`
-maps `symbols => centers`, each spatial coordinate to its site centers (a range: `sol[x]`,
-and `sol(t, x, y)` interpolates between them); `maskevents` holds the switch functions of
-the moving masks, `(p, t) -> lhs - rhs` from the raw parameters (an `Expr` is compiled
-here), whose roots an OrdinaryDiffEq solve locates, and `maskunlocated` says that a mask
-predicate reads the time in a switch with no such function ([`MaskSync`](@ref)). Any other
-symbol given as a parameter is an error naming the parameters. Every symbol is looked up as
-`key(sym)`.
+container of `FieldProblem`, `FieldSolution` and `FieldIntegrator`). Every symbol is looked
+up as `key(sym)`. Any other symbol given as a parameter is an error naming the parameters.
+
+An input's names never shadow another input, a variable or a parameter: a shared name
+throws an `ArgumentError`.
+
+# Keywords
+- `key = identity`: the function that normalizes a symbol before every lookup.
+- `variables`: `symbols => FieldSlot` pairs, one or more spellings per field; the first is
+  the canonical one.
+- `parameters`: `symbols => index` pairs into the raw parameter vector.
+- `independent_variables`: the time symbols.
+- `defaults`: the default values by symbol.
+- `inputs`: `symbols => key` pairs, the input fields of the program (set with the problem's
+  `inputs` keyword, `remake(prob; inputs)` or `integ[sym] = values`).
+- `inputnames`: input key `=>` the name messages print (its user-facing name).
+- `boolinputs`: the keys of inputs declared `Bool` (they take only Bool or 0/1).
+- `inputbounds`: input key `=>` its declared bounds `(lo, hi)`. Its values must lie in
+  them: a bound such as `lo ≥ 1` tells the stability bound that a table index is never 0.
+- `derived`: the symbols of quantities that are not parameters of the problem (a computed
+  parameter, folded into the equations) `=>` the sentence that says why.
+- `observed`: such symbols `=>` how they read, `(p, t) -> value` from the raw parameters (a
+  function, or an `Expr` compiled here). `getp(sol, k2)`, `sol.ps[k2]` and `integ.ps[k2]`
+  read them, while `remake` and `setp` refuse them (their `parameter_index` throws).
+- `tables`: the symbols of array parameters `=>` their table keys, or an entry's symbol
+  `=>` `(key, i)`. `remake(prob::FieldProblem; p = [Dk => values])` gives new values;
+  `integ.ps[Dk]` and `getp(prob, Dk)` read them.
+- `tableshapes`: a table key `=>` its declared size when it is a matrix (a table is stored
+  flat, column-major; a read of the whole table has this shape).
+- `parambounds`: parameter slot `=>` its declared bounds, checked at every write.
+- `derive = nothing`: `nothing`, or `(Derivation, sources, slots)`: the computed slots
+  ([`Derivation`](@ref)).
+- `aux`: `symbols => key` pairs, the aux fields of the program (`K ~ rhs`). They are not
+  part of the state: they are evaluated from it and read by `sol[K]` and `integ[K]`
+  ([`aux_key`](@ref)). On the ODE path they are observed, `rhs(u(t), t)`, through the
+  evaluator `ode_problem` sets.
+- `coordinates`: `symbols => centers` pairs, each spatial coordinate to its site centers (a
+  range: `sol[x]`, and `sol(t, x, y)` interpolates between them).
+- `maskevents`: the switch functions of the moving masks, `(p, t) -> lhs - rhs` from the
+  raw parameters (an `Expr` is compiled here), whose roots an OrdinaryDiffEq solve locates.
+- `maskunlocated = false`: a mask predicate reads the time in a switch with no such function
+  ([`MaskSync`](@ref)).
+
+# Returns
+- A `LatticeIndex`.
 """
 struct LatticeIndex{F}
     key::F
@@ -212,9 +242,18 @@ end
 Base.propertynames(::LatticeIndex) = fieldnames(LatticeIndex)
 
 """
-    aux_key(ix, sym) -> String or nothing
+    aux_key(ix, sym) -> Union{String, Nothing}
 
 The aux field key of `sym` (a symbol of `ix`, or the key itself), else `nothing`.
+
+# Arguments
+- `ix`: the symbol table, a [`LatticeIndex`](@ref). Any other value gives `nothing`.
+- `sym`: a symbol of `ix`, or an aux key as a string.
+
+# Returns
+- The aux key as a `String`, or `nothing` if `sym` names no aux field.
+
+See also [`input_key`](@ref), [`table_key`](@ref).
 """
 function aux_key(ix::LatticeIndex, sym::AbstractString)
     return sym in values(ix.aux) ? String(sym) : get(ix.aux, ix.key(sym), nothing)
@@ -229,16 +268,38 @@ end
 aux_key(ix, sym) = nothing
 
 """
-    input_key(ix, sym) -> String or nothing
+    input_key(ix, sym) -> Union{String, Nothing}
 
 The input field key of `sym` (a symbol of `ix`, or the key itself), else `nothing`.
+
+# Arguments
+- `ix::LatticeIndex`: the symbol table.
+- `sym`: a symbol of `ix`, or an input key as a string.
+
+# Returns
+- The input key as a `String`, or `nothing` if `sym` names no input field.
+
+See also [`aux_key`](@ref), [`input_name`](@ref).
 """
 function input_key(ix::LatticeIndex, sym::AbstractString)
     return sym in values(ix.inputs) ? String(sym) : get(ix.inputs, ix.key(sym), nothing)
 end
 input_key(ix::LatticeIndex, sym) = get(ix.inputs, ix.key(sym), nothing)
 
-"""The name of parameter slot `i` in `ix` (its canonical symbol), or `"#i"`."""
+"""
+    parameter_name(ix, i) -> String
+
+The name of parameter slot `i` in `ix` (its canonical symbol), or `"#i"`.
+
+A computed parameter's slot gives the computed parameter's name.
+
+# Arguments
+- `ix::LatticeIndex`: the symbol table.
+- `i::Integer`: the slot in the raw parameter vector.
+
+# Returns
+- The name as a `String`.
+"""
 function parameter_name(ix::LatticeIndex, i::Integer)
     for s in ix.paramsyms
         get(ix.params, ix.key(s), 0) == i && return string(s)
@@ -247,7 +308,19 @@ function parameter_name(ix::LatticeIndex, i::Integer)
     k === nothing || return string(k)
     return "#$i"
 end
-# the computed parameter that slot `i` holds, or `nothing`
+"""
+    computed_slot(ix, i) -> Union{Symbol, Nothing}
+
+The computed parameter that slot `i` holds, or `nothing`.
+
+# Arguments
+- `ix::LatticeIndex`: the symbol table.
+- `i::Integer`: the slot in the raw parameter vector.
+
+# Returns
+- The computed parameter's name, or `nothing` if `i` holds a base parameter or `ix` has
+  no `derive`.
+"""
 function computed_slot(ix::LatticeIndex, i::Integer)
     ix.derive === nothing && return nothing
     d, _, slots = ix.derive
@@ -385,9 +458,18 @@ function check_parameter_keys(ix::LatticeIndex, keys)
 end
 
 """
-    table_key(ix, sym) -> String or nothing
+    table_key(ix, sym) -> Union{String, Nothing}
 
 The table key of the array parameter `sym`, else `nothing`.
+
+# Arguments
+- `ix::LatticeIndex`: the symbol table.
+- `sym`: a symbol of `ix`, a table or one of its entries.
+
+# Returns
+- The table key as a `String`, or `nothing` if `sym` names no table.
+
+See also [`table_entry`](@ref).
 """
 function table_key(ix::LatticeIndex, sym)
     (sym isa Tuple || sym isa Integer) && return nothing
@@ -395,10 +477,19 @@ function table_key(ix::LatticeIndex, sym)
     return t === nothing ? nothing : first(t)
 end
 """
-    table_entry(ix, sym) -> Int or nothing
+    table_entry(ix, sym) -> Union{Int, Nothing}
 
-The entry of the table that `sym` names: `i` for `Dk[i]`, 0 for the whole table `Dk`;
-`nothing` if `sym` names no table. (`table_key` gives the table.)
+The entry of the table that `sym` names: `i` for `Dk[i]`, 0 for the whole table `Dk`.
+
+# Arguments
+- `ix::LatticeIndex`: the symbol table.
+- `sym`: a symbol of `ix`.
+
+# Returns
+- The entry index as an `Int` (0 for the whole table), or `nothing` if `sym` names no
+  table.
+
+See also [`table_key`](@ref).
 """
 function table_entry(ix::LatticeIndex, sym)
     if sym isa Tuple || sym isa Integer

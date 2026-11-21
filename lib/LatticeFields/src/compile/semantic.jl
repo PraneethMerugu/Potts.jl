@@ -358,7 +358,24 @@ end
 const SEMANTIC_PASSES = (legality, fold, boundary, fold)
 
 """
+    semantic(p::Program; passes = SEMANTIC_PASSES) -> Program
+
 Run passes 0–2 (each result verified). `passes` may be replaced for fault injection.
+
+The default passes are legality, fold, boundary resolution and fold again. The input and
+the result of each pass are verified, and the last result is checked for legality once
+more. After boundary resolution no `RESOLVE` access remains on a non-periodic axis.
+
+# Arguments
+- `p`: a field program (`LatticeFields.IR.Program`).
+
+# Keywords
+- `passes = SEMANTIC_PASSES`: the passes to run, in order.
+
+# Returns
+- The program in semantic normal form.
+
+See also [`fingerprint_text`](@ref).
 """
 function semantic(p::Program; passes = SEMANTIC_PASSES)
     verify(p)

@@ -5,7 +5,13 @@
 # `du` resolved at the call; the other arrays (aux, inputs, tables) live in a store.
 
 """
+    StateView(range, du)
+
 A launch argument that is a slice of the solver's `u` (`du = false`) or `du`.
+
+# Fields
+- `range::UnitRange{Int}`: the slice of the flat state.
+- `du::Bool`: `true` for a slice of `du`, `false` for one of `u`.
 """
 struct StateView
     range::UnitRange{Int}
@@ -15,9 +21,16 @@ _resolve(a, u, du) = a
 _resolve(m::StateView, u, du) = view(m.du ? du : u, m.range)
 
 """
-One rate launch of the right side: the prebuilt launch (template arrays), its argument
-template with [`StateView`](@ref) markers, the parameter derivation, the parameter count and
-the compute element `c` (its type is the right side's element type).
+    RHSLaunch(launch, S0, derive, np, c)
+
+One rate launch of the right side.
+
+# Fields
+- `launch`: the prebuilt launch (template arrays).
+- `S0`: its argument template with [`StateView`](@ref) markers.
+- `derive`: the parameter derivation.
+- `np::Val`: the parameter count.
+- `c`: the compute element; its type is the right side's element type.
 """
 struct RHSLaunch{L, S, D, NP, C}
     launch::L
@@ -61,14 +74,23 @@ const MAX_VARIANTS = 8
 """
     LatticeMetadata
 
-The discretization metadata of a problem `discretize` returns: the owned
-problem built at `discretize` (its group, plans and checks, at the values given there), the
-family (`:ode` or `:map`), and the right side of SciML's solvers, built at its first call
-(`builds` counts the builds: an owned solve builds none). It is the `problem_type` of an
+The discretization metadata of a problem `discretize` returns.
+
+It is the `problem_type` of an
 `ODEProblem` and is held by the problem's function ([`LatticeFunction`](@ref)) in every
 family. A `remake` keeps it, so the plans stay warm. SciML's `hasTime` parameter is
 `Val(true)` when the system has a time (an `ODEProblem` of rates, a `DiscreteProblem` of
 maps) and `Val(false)` for a system without one (a `LinearProblem` or `NonlinearProblem`).
+
+# Fields
+- `problem::FieldProblem`: the owned problem built at `discretize` (its group, plans and
+  checks, at the values given there).
+- `family::Symbol`: `:ode` or `:map`.
+- `rhs::Base.RefValue{Any}`: the right side of SciML's solvers, built at its first call.
+- `builds::Base.RefValue{Int}`: the count of builds (an owned solve builds none).
+- `lock::ReentrantLock`: guards the build.
+- `sem::Base.RefValue{Any}`: the semantic program of the right side (built once).
+- `plans`: its init and step plans per value type.
 """
 struct LatticeMetadata{P <: FieldProblem, H} <: SciMLBase.AbstractDiscretizationMetadata{H}
     problem::P
@@ -112,11 +134,22 @@ SciMLBase.wrap_sol(sol, ::LatticeMetadata) = sol
     steady_start!(u, prob, p, t) -> u
 
 The default start of a problem with steady rows `0 ~ rhs` on an OrdinaryDiffEq solver (its
-`DefaultInit`): the steady fields of `u` are solved at `t` from the other fields of
-`u`, by the owned `QuasiSteady` solve of those rows on the lattice (sparse: the operator of
-the rows, `LatticePCG` to `reltol = 1e-10`), so the solver starts on the algebraic
-constraint. The other fields are kept. `initializealg = BrownFullBasicInit()` or
-`CheckInit()` given to `solve` takes the place of this.
+`DefaultInit`).
+
+The steady fields of `u` are solved at `t` from the other fields of `u`, by the owned
+`QuasiSteady` solve of those rows on the lattice (sparse: the operator of the rows,
+`LatticePCG` to `reltol = 1e-10`), so the solver starts on the algebraic constraint. The
+other fields are kept. `initializealg = BrownFullBasicInit()` or `CheckInit()` given to
+`solve` takes the place of this.
+
+# Arguments
+- `u`: the state, written in place.
+- `prob`: the problem.
+- `p`: the parameters.
+- `t`: the start time.
+
+# Returns
+- `u`.
 """
 function steady_start!(u, prob, p, t)
     m = lattice_metadata(prob)
@@ -154,10 +187,15 @@ end
 """
     LatticeFunction(meta)
 
-The function of a problem `discretize` returns: `f(du, u, p, t)` is the right side of the
-rates (an `ODEFunction`) or the next state of a map (a `DiscreteFunction`), built from
-`meta` ([`LatticeMetadata`](@ref)) at its first call, so a problem that only field
-algorithms step never builds it. A call with a `Float64` time allocates nothing once built.
+The function of a problem `discretize` returns.
+
+`f(du, u, p, t)` is the right side of the rates (an `ODEFunction`) or the next state of a
+map (a `DiscreteFunction`), built from `meta` at its first call, so a problem that only
+field algorithms step never builds it. A call with a `Float64` time allocates nothing once
+built.
+
+# Fields
+- `meta`: the [`LatticeMetadata`](@ref).
 """
 struct LatticeFunction{M}
     meta::M
@@ -194,9 +232,15 @@ function _task_copy(f)
 end
 
 """
-    lattice_metadata(prob) -> LatticeMetadata or nothing
+    lattice_metadata(prob) -> Union{LatticeMetadata, Nothing}
 
 The metadata of a problem `discretize` returned (in any family), else `nothing`.
+
+# Arguments
+- `prob`: a SciML problem.
+
+# Returns
+- Its [`LatticeMetadata`](@ref), or `nothing`.
 """
 function lattice_metadata(prob)
     if prob isa SciMLBase.LinearProblem
@@ -212,10 +256,15 @@ _lmeta(f::SciMLBase.AbstractSciMLFunction) = _lmeta(f.f)
 _lmeta(f) = nothing
 
 """
-    rhs_build(prob) -> LatticeRHS
+    rhs_build(prob) -> Union{LatticeRHS, Nothing}
 
-The right side SciML's solvers call for `prob` (a problem `discretize` returned), built now
-if it was not yet; `nothing` for a problem with no field groups.
+The right side SciML's solvers call for `prob`, built now if it was not yet.
+
+# Arguments
+- `prob`: a problem `discretize` returned.
+
+# Returns
+- The [`LatticeRHS`](@ref), or `nothing` for a problem with no field groups.
 """
 function rhs_build(prob)
     m = lattice_metadata(prob)
@@ -291,7 +340,8 @@ function _check_backend(backend, u, what)
 end
 
 """
-    lattice_problem(fp::FieldProblem) -> SciML problem
+    lattice_problem(fp::FieldProblem; jac = false, sparse = false, jvp = true)
+        -> SciML problem
 
 The SciML problem of the owned problem `fp`: an `ODEProblem` for rates (with
 a `mass_matrix` when it has steady rows), a `DiscreteProblem` for maps, and for a system
@@ -316,6 +366,16 @@ system's `NonlinearFunction`'s) Jacobian fields:
 
 A map's problem has no Jacobian; a linear system with no time keeps its operator (its
 matrix is `lattice_matrix(prob.A)`).
+
+# Arguments
+- `fp::FieldProblem`: the owned problem.
+
+# Keywords
+- `jvp::Bool = true`, `sparse::Bool = false`, `jac::Bool = false`: the Jacobian keywords,
+  as above.
+
+# Returns
+- The SciML problem.
 """
 function lattice_problem(
         fp::FieldProblem; jac::Bool = false, sparse::Bool = false,
@@ -437,6 +497,9 @@ read) and, when the problem has masks, writes the masked values at the sites tha
 masked (as for a mask that reads the time); such a mask needs a bounded step (`dtmax`) or
 `tstops`, as an unlocated switch of [`MaskSync`](@ref) does. A problem with no input
 function skips it (its condition is false).
+
+# Fields
+- `masks::Vector{String}`: the inputs the masks read (their sets move with them).
 """
 struct InputRefresh
     # the inputs the masks read (their sets move with them)
@@ -500,9 +563,16 @@ end
 
 Write `f(integ.t)` of every input function of the integrator's parameters (`integ.p.fns`,
 a [`LatticeParameters`](@ref)) into `p.inputs`, in place, with the checks of an input write
-(one value per site, the input's type and bounds): the values `integ.ps[q]` reads. The right
-side does not read them (it evaluates the functions at each call). Allocates only what the
-functions return.
+(one value per site, the input's type and bounds): the values `integ.ps[q]` reads.
+
+The right side does not read them (it evaluates the functions at each call). It allocates
+only what the functions return.
+
+# Arguments
+- `integ`: an OrdinaryDiffEq integrator of a lattice problem.
+
+# Returns
+- `true`.
 """
 function refresh_inputs!(integ)
     p = integ.p::LatticeParameters
@@ -579,6 +649,9 @@ each boundary it sets `p.tick = k`, so the solver lands on every boundary and re
 `step_index(t)` as the owned steppers do (the right side has one value per period). A new
 step index is a discrete event: every masked site takes its value again (a value that reads
 `step_index(t)` jumps; its rate `∂v/∂t` cannot carry the jump).
+
+# Fields
+- `τ::Float64`: the clock's period.
 """
 struct ClockTick
     τ::Float64
@@ -608,12 +681,13 @@ function _callback(c::ClockTick)
 end
 
 """
-    MaskSync(moving)
+    MaskSync(moving, unlocated = false)
 
-The built-in callback of the masks on an OrdinaryDiffEq solve. A
-masked site's rate is its value's time derivative (`∂v/∂t`, 0 for a value that does not read
-the time), so the solver carries the value at its own order; the callback writes values only
-where the mask *set* changes, which no rate can carry:
+The built-in callback of the masks on an OrdinaryDiffEq solve.
+
+A masked site's rate is its value's time derivative (`∂v/∂t`, 0 for a value that does not
+read the time), so the solver carries the value at its own order; the callback writes values
+only where the mask *set* changes, which no rate can carry:
 - at `init`, every masked site (the first save is rewritten), for a state that was not built
   by `discretize` or `remake` (they hold the masked values already);
 - when the mask kernels read the time or the clock (`moving`), after each accepted step, the
@@ -640,6 +714,10 @@ the step (`dtmax`) or gives `tstops`; with them the switch is first order in tim
 false at exactly 0.3.) A user callback that writes `integ.p` directly (not through `setp` or
 `integ.ps`) and changes a value that a mask reads must call [`sync_masks!`](@ref)`(integ)`
 itself: such a write is not seen by the masks until then.
+
+# Fields
+- `moving::Bool`: the mask kernels read the time or the clock.
+- `unlocated::Bool`: a moving predicate has a switch with no located event.
 """
 struct MaskSync
     moving::Bool
@@ -732,10 +810,19 @@ end
 """
     mask_sync!(integ; all = false, t = integ.t) -> Bool
 
-Run the masks of an OrdinaryDiffEq integrator's right side at time `t` (its own by default),
-its step index and inputs, and write the masked values into `integ.u` at the sites that
-became masked since the last write (`all = true`: at every masked site; the work of
-[`MaskSync`](@ref)): whether a value changed.
+Run the masks of an OrdinaryDiffEq integrator's right side at time `t`, its step index and
+inputs, and write the masked values into `integ.u` at the sites that became masked since
+the last write (the work of [`MaskSync`](@ref)).
+
+# Arguments
+- `integ`: an OrdinaryDiffEq integrator of a lattice problem.
+
+# Keywords
+- `all::Bool = false`: `true` writes at every masked site.
+- `t = integ.t`: the time the masks run at.
+
+# Returns
+- `true` if a value changed.
 """
 function mask_sync!(integ; all::Bool = false, t = integ.t)
     m = lattice_metadata(integ.sol.prob)
@@ -761,6 +848,12 @@ A discrete event on an OrdinaryDiffEq integrator of a lattice problem with masks
 masked site takes its value again at the integrator's time, step index, parameters, tables
 and inputs (`mask_sync!(integ; all = true)`), and the solver restarts its derivative when a
 value changed. A no-op on a problem with no masks.
+
+# Arguments
+- `integ`: an OrdinaryDiffEq integrator of a lattice problem.
+
+# Returns
+- Whether a masked value changed (`false` on a problem with no masks).
 """
 function sync_masks!(integ)
     m = lattice_metadata(integ.sol.prob)
@@ -884,11 +977,22 @@ end
 """
     LatticeOperator(f, p, u)
 
-The operator `A x = r(x) - r(0)` of the right side `r` (a [`LatticeFunction`](@ref)) at the
-parameters `p`, a `SciMLOperators.AbstractSciMLOperator`: for a system whose rows are linear
-it is the system's matrix, and `A u = -r(0)` is its steady state (the `LinearProblem` of a
-system with no time). `A.r0` holds `r(0)`. It applies the compiled right side (no matrix is
-stored).
+The operator `A x = r(x) - r(0)` of the right side `r` at the parameters `p`, a
+`SciMLOperators.AbstractSciMLOperator`.
+
+For a system whose rows are linear it is the system's matrix, and `A u = -r(0)` is its
+steady state (the `LinearProblem` of a system with no time). It applies the compiled right
+side (no matrix is stored).
+
+# Arguments
+- `f::LatticeFunction`: the right side.
+- `p`: the parameters.
+- `u::AbstractVector`: a state that gives the size, element type and backend.
+
+# Fields
+- `f`, `p`: as given.
+- `r0`: `r(0)`.
+- `zero`: a zero state.
 """
 struct LatticeOperator{T, F, P, V} <: SciMLOperators.AbstractSciMLOperator{T}
     f::F
@@ -938,10 +1042,17 @@ end
 """
     lattice_matrix(A::LatticeOperator) -> AbstractMatrix
 
-The matrix of `A`, column by column (`n` applications of the right side, an `n × n` array on
-its backend): the route to a factorization,
-`solve(LinearProblem(lattice_matrix(lp.A), lp.b),
-LUFactorization())`, for a small system. A Krylov method applies `A` itself.
+The matrix of `A`, column by column (`n` applications of the right side).
+
+It is the route to a factorization for a small system:
+`solve(LinearProblem(lattice_matrix(lp.A), lp.b), LUFactorization())`. A Krylov method
+applies `A` itself.
+
+# Arguments
+- `A::LatticeOperator`: the operator.
+
+# Returns
+- The `n × n` matrix on the operator's backend.
 """
 function lattice_matrix(A::LatticeOperator)
     n = size(A, 1)
@@ -978,7 +1089,7 @@ SciMLOperators.isconvertible(::LatticeOperator) = false
 The `update_Ab` of a time-free `LinearProblem`: a parameter write on the problem
 (`lp.ps[k] = v`, `setp`) takes effect in place, so `r(0)` (in `A`) and `b = -r(0)` are
 computed again from the written parameters (the operator applies the right side at them
-already).
+already). It has no fields.
 """
 struct UpdateLatticeAb end
 function (::UpdateLatticeAb)(A::LatticeOperator, b, p)
@@ -997,9 +1108,15 @@ end
 """
     field_problem(prob) -> FieldProblem
 
-The owned problem that field algorithms step for `prob` (a problem `discretize` returned):
-the metadata's group at `prob`'s state (on the host), time span and parameters. A
-`FieldProblem` is its own.
+The owned problem that field algorithms step for `prob`.
+
+It is the metadata's group at `prob`'s state (on the host), time span and parameters.
+
+# Arguments
+- `prob`: a problem `discretize` returned, or a `FieldProblem` (returned as it is).
+
+# Returns
+- The [`FieldProblem`](@ref).
 """
 field_problem(fp::FieldProblem) = fp
 function field_problem(prob)
@@ -1029,7 +1146,10 @@ end
 """
     LatticeRHS
 
-The in-place right side `f(du, u, p, t)` of a field program's ODE form. Each call checks the
+The in-place right side `f(du, u, p, t)` of a field program's ODE form
+([`ode_problem`](@ref) builds it).
+
+Each call checks the
 parameter-dependent Robin faces (no allocation), then enqueues the rate launches; it does
 not synchronize (device work is stream-ordered with the solver's own array operations).
 
@@ -1058,6 +1178,19 @@ copy is dropped only when the next copy is built, so a build keeps the stores of
 copy per task that called it (about `nthreads()` under `EnsembleThreads`) until then. The
 owner's calls take no lock; a task's later calls of its copy take no lock either, and
 neither allocates.
+
+# Fields
+- `launches::Tuple`: the rate launches ([`RHSLaunch`](@ref)).
+- `faces::Vector{FaceCheck}`: the parameter-dependent Robin face checks.
+- `store::FieldStore`: the build's store.
+- `init`: the init plan.
+- `variants::Dict{Type, Any}`: the builds for other element types (bounded, least recently
+  used dropped).
+- `owner`, `copies`, `lock`: the task that runs this build, the builds of other tasks, and
+  the lock that guards them.
+
+The other fields hold the parameters that the init kernels and the face checks last ran
+with.
 """
 struct LatticeRHS{L <: Tuple, W, E, X, I}
     launches::L
@@ -1265,8 +1398,17 @@ end
     )
 end
 
-# the tables of the right side under a SciML function (an ODEFunction, or one wrapping it),
-# or `nothing` (then the computed slots are not derived for a bound check)
+"""
+    rhs_tables(f)
+
+The tables of the right side under a SciML function (an `ODEFunction`, or one wrapping it).
+
+# Arguments
+- `f`: a [`LatticeRHS`](@ref), or a function that holds one in its `f` property.
+
+# Returns
+- The tables, or `nothing` (then the computed slots are not derived for a bound check).
+"""
 rhs_tables(f::LatticeRHS) = f.ctx.tables
 rhs_tables(f) = hasproperty(f, :f) ? rhs_tables(getproperty(f, :f)) : nothing
 _derives(f::LatticeRHS) = _hasderive(f.ctx.index)
@@ -1610,22 +1752,42 @@ function (a::ODEAux)(u, p, t, key)
 end
 
 """
-    ode_problem(program, u0, tspan, p; state, rates, init = String[], index, tables = [],
-                inputs = [], stability = p -> NaN, backend = CPU(),
-                    options = CompileOptions())
+    ode_problem(program, u0, tspan, p; state, rates, init = String[],
+                index = LatticeIndex(), tables = [], inputs = [], stability = p -> NaN,
+                backend = CPU(), options = CompileOptions(), steady = false)
 
-The `ODEProblem` of a field program in ODE form. `state` are the state field keys (flat
-order), `rates[k]` the scratch field holding the rate of state field `k`; `init` kernels run
-once (on the problem's store) before the problem is returned. `u0` is the flat host initial
-state, `p` the raw parameter vector, both kept in their element types (P5 role model: the
-eltype of `u0`, promoted with Dual `p`, decides the bodies' value type; an explicit
-`options.T` that differs is refused). The `ODEFunction` carries `sys = index`, so solutions
-and integrators index fields by symbol. `inputs` are `symbol => values` for every input
-field (an unset one, or a parameter that is NaN, is an error here: an ODE problem has no
-`init`). `stability` is the front end's stability bound, whose [`check_parameters`](@ref)
-runs here and at every call of the right side with new parameter values (`remake`, `setp`):
-a refused value is an error from `solve` or `step!`, never a run. With `steady = true` (a
-system with no time) it is the `SteadyStateProblem` of the right side.
+The `ODEProblem` of a field program in ODE form.
+
+`u0` and `p` are kept in their element types: the eltype of `u0`, promoted with Dual `p`,
+decides the bodies' value type, and an explicit `options.T` that differs is refused. The
+`ODEFunction` carries `sys = index`, so solutions and integrators index fields by symbol.
+
+# Arguments
+- `program::Program`: the field program.
+- `u0`: the flat host initial state.
+- `tspan`: the time span.
+- `p`: the raw parameter vector.
+
+# Keywords
+- `state`: the state field keys (flat order).
+- `rates`: `rates[k]` is the scratch field holding the rate of state field `k`.
+- `init = String[]`: kernels that run once (on the problem's store) before the problem is
+  returned.
+- `index = LatticeIndex()`: the symbol table.
+- `tables = []`: the tables, `key => values`.
+- `inputs = []`: `symbol => values` for every input field. An unset one, or a parameter that
+  is NaN, is an error here: an ODE problem has no `init`.
+- `stability = p -> NaN`: the front end's stability bound, whose
+  [`check_parameters`](@ref) runs here and at every call of the right side with new
+  parameter values (`remake`, `setp`): a refused value is an error from `solve` or `step!`,
+  never a run.
+- `backend = CPU()`: the KernelAbstractions backend.
+- `options = CompileOptions()`: the compile options.
+- `steady::Bool = false`: `true` (a system with no time) gives the `SteadyStateProblem` of
+  the right side.
+
+# Returns
+- The `ODEProblem` (or `SteadyStateProblem`).
 """
 function ode_problem(
         prog::Program, u0, tspan, p; state, rates, init = String[],
@@ -1690,8 +1852,21 @@ end
 # expression such as `2k`), so `remake(o; p = [2k => 1.0])` would run with the old values;
 # it is refused here.
 
-# `T` with the type parameter of its field `field` bounded by `S` (a parameter found by
-# name, not by position)
+"""
+    typewith(T::UnionAll, field, S) -> UnionAll
+
+`T` with the type parameter of its field `field` bounded by `S`.
+
+The parameter is found by the field's name, not by its position.
+
+# Arguments
+- `T::UnionAll`: the type, such as `SciMLBase.LinearProblem`.
+- `field::Symbol`: the field whose type parameter is bounded.
+- `S`: the bound.
+
+# Returns
+- The bounded `UnionAll`.
+"""
 function typewith(T::UnionAll, field::Symbol, S)
     U = T
     while U isa UnionAll
@@ -1706,16 +1881,35 @@ function typewith(T::UnionAll, field::Symbol, S)
     end
     return body
 end
+"""
+    LatticeODEFunction
+
+The `ODEFunction` type whose function is a [`LatticeRHS`](@ref) or a
+[`LatticeFunction`](@ref). It is a type alias, not a constructor.
+"""
 const LatticeODEFunction = SciMLBase.ODEFunction{
     <:Any, <:Any, <:Union{LatticeRHS, LatticeFunction},
 }
 # (the problem type bounded: SciMLBase's `remake` of a dynamical or second-order problem
 # stays its own)
+"""
+    LatticeODEProblem
+
+The `ODEProblem` type whose function is a [`LatticeODEFunction`](@ref) and whose problem
+type is SciML's standard one or a [`LatticeMetadata`](@ref). It is a type alias, not a
+constructor.
+"""
 const LatticeODEProblem = SciMLBase.ODEProblem{
     <:Any, <:Any, <:Any, <:Any, <:LatticeODEFunction, <:Any,
     <:Union{SciMLBase.StandardODEProblem, LatticeMetadata},
 }
 const LatticeDiscreteFunction = SciMLBase.DiscreteFunction{<:Any, <:Any, <:LatticeFunction}
+"""
+    LatticeDiscreteProblem
+
+The `DiscreteProblem` type whose function is a `DiscreteFunction` of a
+[`LatticeFunction`](@ref): the problem of a map. It is a type alias, not a constructor.
+"""
 const LatticeDiscreteProblem = typewith(
     SciMLBase.DiscreteProblem, :f,
     LatticeDiscreteFunction
@@ -1733,13 +1927,27 @@ const LatticeSciMLProblem = Union{
     LatticeDiscreteProblem,
 }
 
-# The parameters of a remake of a lattice problem: `p` a `LatticeParameters`, a vector
-# of every scalar parameter, or a map whose keys name scalar parameters, whole tables (`Dk
-# => values`) and inputs (`kind => K`); `inputs` more input pairs. Every key names a
-# parameter (a typo, an expression or a computed parameter is refused), each write is
-# checked (a declared bound, finite table values, one input value per site) and the computed
-# slots follow. A plain value is written into the parameter type, a Dual promotes it.
-# `missing`: the problem's own object.
+"""
+    remake_params(prob, p, inputs = ())
+
+The parameters of a remake of a lattice problem.
+
+Every key names a parameter (a typo, an expression or a computed parameter is refused),
+each write is checked (a declared bound, finite table values, one input value per site) and
+the computed slots follow. A plain value is written into the parameter type, a Dual
+promotes it.
+
+# Arguments
+- `prob`: the problem.
+- `p`: a [`LatticeParameters`](@ref), a vector of every scalar parameter, or a map whose
+  keys name scalar parameters, whole tables (`Dk => values`) and inputs (`kind => K`).
+  `missing` is the problem's own object.
+- `inputs = ()`: more input pairs.
+
+# Returns
+- The new parameters, `missing` when `p` is `missing` and no input is given, or `p` as it
+  is when the problem's parameters are not a `LatticeParameters`.
+"""
 function remake_params(prob, p, inputs = ())
     lp = prob.p
     lp isa LatticeParameters || return p
@@ -1886,8 +2094,22 @@ function _params_from_map(lp::LatticeParameters, ix, p, t0 = nothing)
     end
     return q
 end
-# `u0` of a remake: a flat state, or `field => values` pairs (a number or one value per
-# site) over the problem's state, on its backend; a Dual value promotes the state
+"""
+    remake_u0(prob, u0)
+
+The `u0` of a remake of a lattice problem.
+
+A state on another backend than the problem's is refused, naming both. A Dual value
+promotes the state.
+
+# Arguments
+- `prob`: the problem.
+- `u0`: a flat state, or `field => values` pairs (a number or one value per site) over the
+  problem's state.
+
+# Returns
+- The flat state on the problem's backend (a flat state given is returned as it is).
+"""
 function remake_u0(prob, u0)
     # a state on another backend than the problem's is refused, naming both
     u0 isa AbstractArray && !(u0 isa AbstractArray{<:Pair}) &&
@@ -2015,7 +2237,22 @@ function SciMLBase.remake(
     )
 end
 
-# `setp` of a symbol that is no parameter names it (SII: "invalid index: nothing")
+"""
+    check_setp(sys, sym)
+
+Check that `setp` of `sym` on `sys` names a parameter.
+
+A symbol that is no parameter throws an `ArgumentError` that names it (where
+SymbolicIndexingInterface says "invalid index: nothing"). On a `FieldProblem`, a table or
+an input is refused with the route `remake`.
+
+# Arguments
+- `sys`: a problem, an integrator, or a `FieldProblem`/`FieldIntegrator`.
+- `sym`: the symbol.
+
+# Returns
+- `nothing`.
+"""
 function check_setp(sys, sym)
     # (a resolved index: SII's setter of an array symbol calls `setp` again with its index)
     sym isa Union{TableSlot, InputSlot, Integer} && return nothing
@@ -2110,10 +2347,16 @@ function CommonSolve.init(
     throw(_ode_refusal(alg))
 end
 
-# The problems `discretize` returns: one problem, many algorithms. A field algorithm
-# (or no algorithm: the default of the group's kind) steps the owned problem built from the
-# metadata and the problem's state, time span and parameters; any other algorithm is
-# SciML's.
+"""
+    LatticeProblem
+
+The problems `discretize` returns with a time: a [`LatticeODEProblem`](@ref) or a
+[`LatticeDiscreteProblem`](@ref).
+
+One problem takes many algorithms. A field algorithm (or no algorithm: the default of the
+group's kind) steps the owned problem built from the metadata and the problem's state, time
+span and parameters; any other algorithm is SciML's. It is a type alias, not a constructor.
+"""
 const LatticeProblem = Union{LatticeODEProblem, LatticeDiscreteProblem}
 function _owned_or_refuse(prob, alg)
     lattice_metadata(prob) === nothing && throw(_ode_refusal(alg))
@@ -2250,11 +2493,24 @@ end
 
 # A system with no time: its `LinearProblem` or `NonlinearProblem`; a field algorithm
 # (or none: `QuasiSteady()`) solves the owned problem once
+"""
+    LatticeLinearProblem
+
+The `LinearProblem` type whose `A` is a [`LatticeOperator`](@ref): a system with no time
+whose rows are linear. It is a type alias, not a constructor.
+"""
 const LatticeLinearProblem = typewith(SciMLBase.LinearProblem, :A, LatticeOperator)
 const LatticeResidualProblem = typewith(
     SciMLBase.NonlinearProblem, :f,
     typewith(SciMLBase.NonlinearFunction, :f, LatticeFunction)
 )
+"""
+    LatticeTimeFreeProblem
+
+The problems of a system with no time: a [`LatticeLinearProblem`](@ref), or a
+`NonlinearProblem` of a [`LatticeFunction`](@ref). A field algorithm (or none:
+`QuasiSteady()`) solves the owned problem once. It is a type alias, not a constructor.
+"""
 const LatticeTimeFreeProblem = Union{LatticeLinearProblem, LatticeResidualProblem}
 function CommonSolve.solve(
         prob::LatticeTimeFreeProblem,

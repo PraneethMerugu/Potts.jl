@@ -12,8 +12,20 @@
     MGPreconditioner
 
 What [`LatticeMultigrid`](@ref) returns as the left preconditioner: the owned implicit
-runtime of a lattice problem bound at a state, time and shift; `ldiv!(y, P, r)` applies its
-V-cycles.
+runtime of a lattice problem bound at a state, time and shift.
+
+`ldiv!(y, P, r)` applies its V-cycles. It is built by the `precs` hook, not by a user.
+
+# Fields
+- `integ`: the owned integrator of the runtime (`BackwardEuler`; steady rows
+  `QuasiSteady`).
+- `rows::Vector{Any}`: per implicit row, the row, its state range and whether it is steady.
+- `backend`: the backend.
+- `p`: the parameters it was built at.
+- `stamp::Int`: their write count when built.
+- `values::Vector{Float64}`: their primal values when built.
+- `γ::Float64`: the shift's step `γ` (`Inf`: no shift).
+- `applies::Int`: the count of `ldiv!` calls.
 """
 mutable struct MGPreconditioner{I, B}
     # the owned integrator of the runtime (`BackwardEuler`, steady rows `QuasiSteady`)

@@ -25,6 +25,27 @@ An OrdinaryDiffEq integrator holds the problem's own `LatticeParameters` (SciML 
 by default), so `integ.ps[k] = v` on it writes `prob.p` too: `remake(prob)` (or
 `copy(prob.p)`) gives a problem whose parameters a run does not change. An owned integrator
 holds a copy.
+
+# Fields
+- `values::AbstractVector`: the scalar parameters in raw order.
+- `tables::AbstractVector`: the kind tables, `key => values`.
+- `inputs::AbstractVector`: the input arrays, `key => values` or `key => nothing`.
+- `tick::Base.RefValue{Int}`: the clock's step index.
+- `stamp::Base.RefValue{Int}`: the count of table and input writes.
+- `fns::Vector{Pair{String, Any}}`: the inputs given as functions of the time.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> p = LatticeFields.Problems.LatticeParameters([1.0, 2.0], ["D" => [0.5, 0.25]])
+LatticeParameters([1.0, 2.0]; tables `D`)
+
+julia> copy(p) == p
+true
+```
+
+See also [`TableSlot`](@ref), [`InputSlot`](@ref).
 """
 mutable struct LatticeParameters{
         V <: AbstractVector, TB <: AbstractVector, IN <: AbstractVector,
@@ -85,7 +106,22 @@ function Base.hash(p::LatticeParameters, h::UInt)
         )
     )
 end
-# the same tables and inputs with other scalar values (SciMLStructures' `replace`, a remake)
+"""
+    with_values(p::LatticeParameters, v) -> LatticeParameters
+
+The same tables and inputs as `p` with the scalar values `v` (SciMLStructures' `replace`,
+a remake).
+
+The tables and inputs are copied; the tick, the write count and the input functions carry
+over.
+
+# Arguments
+- `p::LatticeParameters`: the parameters to copy.
+- `v::AbstractVector`: the new scalar values, in raw order.
+
+# Returns
+- A new `LatticeParameters`.
+"""
 function with_values(p::LatticeParameters, v::AbstractVector)
     return LatticeParameters(
         v, eltype(p.tables)[k => copy(x) for (k, x) in p.tables],
@@ -107,6 +143,11 @@ end
 The parameter index of a table (`entry = 0`) or of one entry of it, in a
 [`LatticeParameters`](@ref). `shape` is the declared size of a matrix table, which is stored
 flat (column-major): a read of the whole table has that shape.
+
+# Fields
+- `key::String`: the table key.
+- `entry::Int`: the entry (1-based), or 0 for the whole table.
+- `shape::Tuple{Vararg{Int}}`: the declared matrix size, or `()` for a flat table.
 """
 struct TableSlot
     key::String
@@ -133,8 +174,12 @@ end
 """
     InputSlot(key, index)
 
-The parameter index of an input field in a [`LatticeParameters`](@ref); `index` (the
+The parameter index of an input field in a [`LatticeParameters`](@ref). `index` (the
 [`LatticeIndex`](@ref)) gives its name, type and bounds for the checks of a write.
+
+# Fields
+- `key::String`: the input key.
+- `index`: the symbol table of the problem.
 """
 struct InputSlot{X}
     key::String

@@ -47,6 +47,18 @@ built-in callbacks and the stability bound of the field system.
 On a device the report reads the groups' status words first (one copy per group, as
 `field_stats` does) and the inputs that the bound reads. It allocates on the host and may
 synchronize, so call it outside a timed loop; it changes nothing in the run.
+
+# Arguments
+- `io::IO = stdout`: the stream to print to.
+- `x`: a lattice problem, an owned or SciML integrator, or a solution.
+- `prob`, `alg`: a lattice problem and a field algorithm.
+
+# Keywords
+- `dt = nothing`: the window of `field_report(prob, alg)`; `nothing` is the clock's
+  period.
+
+# Returns
+- `nothing`.
 """
 function field_report end
 field_report(x) = field_report(stdout, x)
@@ -87,15 +99,28 @@ _clause(name, xs) = isempty(xs) ? "" : string(name, ": ", join(xs, ", "))
     substep_cause(spec, alg, dt, pp; fields = spec.state,
         stability = spec.stability) -> (; n, cause, text)
 
-The substep count of the group `spec` (its fields `fields`) stepped by `alg` over a window
-`dt` at the raw parameters `pp` (with the tables and the bound's inputs), and why: `cause`
-is `:bound` (the bound set it: `⌈dt ρ / 1.8⌉`, or an implicit rule), `:user` (the user
-minimum `substeps = m`), `:both` (the two agree), `:least` (an implicit group's least count,
-1, or 2 for Crank–Nicolson on data that jump), `:map`, `:steady` (one `QuasiSteady` solve
-per window), `:aux` (aux fields only) or `:refused` (`init` refuses the group: an explicit
-group with no count whose bound is not finite). `text` words it with the numbers. The same
-rules as [`substeps`](@ref), read through [`seen_bound`](@ref), the stability bound and the
-implicit rules; it warns nothing and refuses nothing.
+The substep count of the group `spec` stepped by `alg` over a window `dt`, and why.
+
+The same rules as [`substeps`](@ref), read through [`seen_bound`](@ref), the stability
+bound and the implicit rules; it warns nothing and refuses nothing.
+
+# Arguments
+- `spec::GroupSpec`: the group.
+- `alg`: its field algorithm.
+- `dt::Real`: the window.
+- `pp`: the raw parameters, with the tables and the bound's inputs.
+
+# Keywords
+- `fields = spec.state`: the group's fields.
+- `stability = spec.stability`: the stability bound.
+
+# Returns
+- `(; n, cause, text)`: the count `n`; `cause` is `:bound` (the bound set it:
+  `⌈dt ρ / 1.8⌉`, or an implicit rule), `:user` (the user minimum `substeps = m`), `:both`
+  (the two agree), `:least` (an implicit group's least count, 1, or 2 for Crank–Nicolson on
+  data that jump), `:map`, `:steady` (one `QuasiSteady` solve per window), `:aux` (aux
+  fields only) or `:refused` (`init` refuses the group: an explicit group with no count
+  whose bound is not finite); `text` words it with the numbers.
 """
 function substep_cause(
         spec::GroupSpec, alg, dt::Real, pp; fields = spec.state, stability = spec.stability
@@ -293,12 +318,19 @@ end
 """
     implicit_facts(rt::GroupRuntime) -> Union{Nothing, ImplicitFacts}
 
-The resolved implicit facts of a bound group (an implicit algorithm's cache), or `nothing`
-for an explicit group: its fields, its solvers (`linsolve` as resolved, the coupled solve's
-Krylov solver), their multigrid levels and `solver_type`, the Newton count and what set it,
+The resolved implicit facts of a bound group (an implicit algorithm's cache).
+
+The facts are its fields, its solvers (`linsolve` as resolved, the coupled solve's Krylov
+solver), their multigrid levels and `solver_type`, the Newton count and what set it,
 whether the operator `J̃` is exact and the terms it leaves out with their bound `ρ_in`.
 `LatticeStats` keeps them per group when a solution is built (`sol.stats.implicit`);
 [`field_report`](@ref) words them.
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+
+# Returns
+- An [`ImplicitFacts`](@ref), or `nothing` for an explicit group.
 """
 function implicit_facts(rt::GroupRuntime)
     return if rt.alg isa AbstractImplicitFieldAlgorithm
@@ -515,6 +547,21 @@ reads them; `spec` the group's [`GroupSpec`](@ref), `dt` the window the policy c
 resolved implicit facts, its run counters and its fusion decisions. `E` is the state's
 element type (by default the runtime's compute zero's type, else its first field's
 buffer's). Each front end calls it per group.
+
+# Arguments
+- `io::IO`: the stream to print to.
+- `rt::GroupRuntime`: the bound group.
+- `pp`: the raw parameters, with the tables and the bound's inputs.
+
+# Keywords
+- `title = "group"`: the block's title.
+- `dt = rt.dt`: the window the policy counts.
+- `spec::GroupSpec`: the group's spec (required).
+- `stability = rt.stability`: the stability bound.
+- `E`: the state's element type.
+
+# Returns
+- `nothing`.
 """
 function group_report(
         io::IO, rt::GroupRuntime, pp; title = "group", dt::Real = rt.dt, spec::GroupSpec,
@@ -643,8 +690,27 @@ finished run) in [`field_report`](@ref): its policy under `alg` over the window 
 raw parameters `pp` (with the tables and the bound's inputs), counted over the first window
 from `t0` when the bound reads the time; `n` is the count the run used (`nothing`: the
 policy's). For an implicit algorithm, the facts resolved when the group was bound (`facts`,
-an [`ImplicitFacts`](@ref)), or else `linsolve` and the Newton count as given. `fields` are
-the group's state keys and `E` the state's element type. Each front end calls it per group.
+an [`ImplicitFacts`](@ref)), or else `linsolve` and the Newton count as given. Each front
+end calls it per group.
+
+# Arguments
+- `io::IO`: the stream to print to.
+- `g::FieldGroup`: the group.
+- `alg`: its field algorithm.
+- `pp`: the raw parameters, with the tables and the bound's inputs.
+
+# Keywords
+- `title = "group"`: the block's title.
+- `dt`: the window (required).
+- `n = nothing`: the count the run used; `nothing` is the policy's.
+- `facts = nothing`: the implicit facts resolved when the group was bound.
+- `fields = g.spec.state`: the group's state keys.
+- `stability = g.spec.stability`: the stability bound.
+- `E = Float64`: the state's element type.
+- `t0 = nothing`: the start of the first window, when the bound reads the time.
+
+# Returns
+- `nothing`.
 """
 function group_report(
         io::IO, g::FieldGroup, alg, pp; title = "group", dt::Real, n = nothing,
@@ -666,11 +732,23 @@ end
 """
     coupling_report(io, stability, keys, algs, pp, dt)
 
-The coupling lines of [`field_report`](@ref) for field groups with state keys `keys` (one
-vector per group) stepped by `algs` over the window `dt`: for each group in a loop of the
-group read graph, the coupling rule's `κ = dt · rate` ([`lagged_coupling`](@ref),
-[`check_coupling`](@ref)) of the whole system's bound `stability` at its raw parameters
-`pp`. Nothing for one group.
+The coupling lines of [`field_report`](@ref) for field groups stepped by `algs` over the
+window `dt`.
+
+For each group in a loop of the group read graph, it prints the coupling rule's
+`κ = dt · rate` ([`lagged_coupling`](@ref), [`check_coupling`](@ref)) of the whole system's
+bound at its raw parameters. It prints nothing for one group.
+
+# Arguments
+- `io::IO`: the stream to print to.
+- `stability`: the whole system's stability bound.
+- `keys::Vector{Vector{String}}`: the state keys, one vector per group.
+- `algs`: the groups' algorithms.
+- `pp`: the raw parameters.
+- `dt::Real`: the window.
+
+# Returns
+- `nothing`. The lines go to `io`.
 """
 function coupling_report(
         io::IO, stability, keys::Vector{Vector{String}}, algs, pp, dt::Real
@@ -806,9 +884,18 @@ const _NO_ALG =
 """
     field_report(io, prob)
 
-The field system of a problem, its stability bound at the problem's parameters and, for a
-SciML problem, its function's Jacobian keywords, mass matrix and built-in callbacks. A
-problem holds no algorithm: `field_report(prob, alg)` prints the group policy under `alg`.
+Print the field system of a problem and its stability bound at the problem's parameters.
+
+For a SciML problem it also prints its function's Jacobian keywords, mass matrix and
+built-in callbacks. A problem holds no algorithm: `field_report(prob, alg)` prints the group
+policy under `alg`.
+
+# Arguments
+- `io::IO`: the stream to print to.
+- `prob`: a `FieldProblem` or a SciML problem `discretize` returned.
+
+# Returns
+- `nothing`.
 """
 function field_report(io::IO, fp::FieldProblem)
     println(io, "Field report: problem (owned FieldProblem)")
@@ -849,6 +936,17 @@ Newton count as given (an `:auto` or automatic one is resolved when a group is b
 the coupling rule's κ. The policy's refusals hold (a window that does not divide the clock,
 an algorithm of the wrong family); an explicit group that `init` would refuse says so. No
 warning is given.
+
+# Arguments
+- `io::IO`: the stream to print to.
+- `prob`: a lattice problem.
+- `alg::AbstractFieldAlgorithm`: the field algorithm.
+
+# Keywords
+- `dt = nothing`: the window; `nothing` is the clock's period.
+
+# Returns
+- `nothing`.
 """
 function field_report(
         io::IO, prob::SciMLBase.AbstractSciMLProblem,

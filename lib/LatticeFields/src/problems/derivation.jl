@@ -2,9 +2,11 @@
 # base values to the computed values, shared by both coupled and standalone routes.
 
 """
-    Derivation
+    Derivation(f, base, computed)
 
-The computed parameters of a model or system as one compiled function. `d(vals)` maps the
+The computed parameters of a model or system as one compiled function.
+
+`d(vals)` maps the
 base values `vals` (a tuple in the order of `d.base`: numbers and tables) to the computed
 values (a tuple in the order of `d.computed`: a number, or an array for a kind table with
 expression entries). `LatticePDE.derivation` builds it; a front end calls it after every
@@ -12,6 +14,23 @@ write of base values. Its rules: Base and registered functions, integer division
 `ifelse`, and a kind-table read by kind number (the medium is 0), in the number type of the
 values given. An evaluation that fails is an `ArgumentError` that names the computed
 parameter.
+
+# Fields
+- `f`: the compiled function, base tuple to computed tuple.
+- `base::Vector{Symbol}`: the names of the base values, in order.
+- `computed::Vector{Symbol}`: the names of the computed values, in order.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> d = LatticeFields.Problems.Derivation(v -> (2 * v[1],), [:a], [:b]);
+
+julia> d((3.0,))
+(6.0,)
+```
+
+See also [`derive_at`](@ref), [`derive!`](@ref).
 """
 struct Derivation{F}
     f::F
@@ -25,8 +44,26 @@ Base.isempty(d::Derivation) = isempty(d.computed)
     derive_at(name, t, ks...)
 
 Entry `ks` of kind table `t` in a derivation, by kind numbers (the medium is 0, then the
-kinds in order): `t[ks .+ 1...]`. `name` is the computed parameter that reads it, for the
-message.
+kinds in order): `t[ks .+ 1...]`.
+
+A table whose dimension is not `length(ks)`, a kind that is not an integer, or a kind
+outside the table throws an `ArgumentError`.
+
+# Arguments
+- `name`: the computed parameter that reads the table, for the message.
+- `t::AbstractArray`: the kind table.
+- `ks...`: the kind numbers, one per table dimension.
+
+# Returns
+- The entry `t[ks .+ 1...]`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields
+
+julia> LatticeFields.Problems.derive_at(:J, [1.0 2.0; 3.0 4.0], 0, 1)
+2.0
+```
 """
 function derive_at(name, t, ks...)
     t isa AbstractArray && ndims(t) == length(ks) || throw(
@@ -49,7 +86,19 @@ function derive_at(name, t, ks...)
     return t[i...]
 end
 
-# an evaluation of computed parameter `name` (its default written `text`) that failed
+"""
+    derive_fail(name, text, e)
+
+Throw the error of a failed evaluation of computed parameter `name`.
+
+# Arguments
+- `name`: the computed parameter.
+- `text`: its default, as written.
+- `e`: the error that the evaluation threw. An `ArgumentError` gives its message.
+
+# Returns
+- Nothing: it always throws an `ArgumentError` that names `name` and `text`.
+"""
 function derive_fail(name, text, e)
     throw(
         ArgumentError(
@@ -65,9 +114,25 @@ function derive_fail(name, text, e)
     )
 end
 
-# the computed slots of a problem's parameter vector `p`, from its base slots and tables (B:
-# the index's `derive`, `(d, sources, slots)`; a source is a slot number or a table key, a
-# slot 0 a computed parameter that no slot holds)
+"""
+    derive!(p, tables, ix) -> p
+
+Write the computed slots of the parameter vector `p` from its base slots and tables.
+
+The index's `derive` is `(d, sources, slots)`: a source is a slot number or a table key,
+and a slot 0 is a computed parameter that no slot holds. An index with no `derive`, or an
+`ix` that is not a [`LatticeIndex`](@ref), leaves `p` as it is.
+
+# Arguments
+- `p::AbstractVector`: the raw parameter vector, written in place.
+- `tables`: the kind tables, `key => values`.
+- `ix`: the symbol table of the problem.
+
+# Returns
+- `p`.
+
+See also [`Derivation`](@ref).
+"""
 function derive!(p, tables, ix)
     ix isa LatticeIndex || return p
     ix.derive === nothing && return p

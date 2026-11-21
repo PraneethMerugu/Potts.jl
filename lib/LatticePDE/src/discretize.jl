@@ -3,7 +3,12 @@
 # interface do not fit a lattice IR); the analysis here is ours: operation-normalized keys,
 # the BC parser, the linearity table, map and offset-read classification, and the lowering.
 
-"""`FiniteVolume()`: the cell-centered finite-volume method (face-flux form, §5.2)."""
+"""
+    FiniteVolume()
+
+The cell-centered finite-volume method, in face-flux form. It is the default method of a
+field in a [`LatticeDiscretization`](@ref).
+"""
 struct FiniteVolume end
 
 """
@@ -24,7 +29,7 @@ fields differ is an error, as is a `domain` with such an axis.
 `methods` maps a field (`c`, `c(t, x, y)` or `u`; keys are normalized by operation) to its
 method; a field without an entry is `FiniteVolume()`.
 
-`T` is the state type (P5 role model: the only number-type keyword): `Float16`, `Float32`,
+`T` is the state type (the only number-type keyword): `Float16`, `Float32`,
 `Float64`, or `BigFloat` on the host (stored in F64 lanes that hold BigFloat). `nothing`
 (the default) means Float64 on the host and Float32 on a device. Any other type is refused.
 After `discretize`, the eltype of `u0` (and Dual parameters) decide; see `remake`.
@@ -58,6 +63,24 @@ of `τ`; a given `dt` must divide `τ`) and the step index `k` that an equation 
 [`step_index(t)`](@ref): `k = 0` over the first period from the start of the time span,
 then `1`, `2`, …, kept as an integer by the stepper (never computed from a float time).
 Without a clock, `ExplicitEuler` needs `dt`, and `step_index` is refused.
+
+# Arguments
+- `grid::Grid`: the site counts, `Grid(dims)`.
+
+# Keywords
+- `methods = Dict()`: the method of each field.
+- `T = nothing`: the state type.
+- `backend = nothing`: the backend; `nothing` is the host.
+- `domain = nothing`: the `Bool` input that marks an irregular domain.
+- `clock = nothing`: the clock's period `τ`.
+
+An unknown keyword throws an `ArgumentError`.
+
+# Fields
+- `grid::Grid`, `methods`, `T`, `backend`, `domain::Union{Nothing, String}` (the key of
+  the domain input), `clock::Union{Nothing, Float64}`: as given.
+
+See also [`FiniteVolume`](@ref), [`Coarse`](@ref), [`lattice_domain`](@ref).
 """
 struct LatticeDiscretization{N, M, B} <: AbstractDiscretization
     grid::Grid{N}
@@ -121,6 +144,18 @@ discretization derives the spacing back from the domain (`extent / dims`). A mod
 lattice uses the same rule: axis `d` spans `[0, dims[d] * spacing[d]]`. `tspan` is the time
 interval, which is the default time span of `discretize`. The form without `t` is the domain
 of a system with no time (a steady system).
+
+# Arguments
+- `t`: the time variable.
+- `(x, y)`: the space variables, one per axis.
+- `dims`: the site counts per axis.
+
+# Keywords
+- `spacing = 1`: the spacing, one number or one per axis.
+- `tspan = (0.0, 1.0)`: the time interval.
+
+# Returns
+- A vector of `VarDomainPairing`s, the time first when given.
 """
 function lattice_domain(t, xs, dims; spacing = 1, tspan = (0.0, 1.0))
     return [_time_interval(t, tspan); lattice_domain(xs, dims; spacing)]
@@ -172,14 +207,26 @@ function _time_interval(t, tspan)
 end
 
 """
-The lowered field system. `program` is the LatticeFields `Program` (before the semantic
-passes); `keys[op]` are the field keys of each dependent variable (one per component);
-`params[i]` is the parameter of slot `i` with its value `defaults[i]` (`lattice_spacing`
-parameters take the grid spacing; `NaN` when there is no default); `tables` the array
-parameters with their values; `initial` the initial-condition right sides by field key;
-`linearity` the class of every rate term by field key. The defaults and the table values
-keep the number type they are declared in (a `big"1"/3` default stays BigFloat; the vector
-is the promotion of Float64 with every value's type), as a problem's parameters do.
+    CompiledField
+
+The lowered field system, made by `symbolic_discretize`.
+
+The defaults and the table values keep the number type they are declared in (a `big"1"/3`
+default stays BigFloat; the vector is the promotion of Float64 with every value's type), as
+a problem's parameters do.
+
+# Fields
+- `program::Program`: the LatticeFields program, before the semantic passes.
+- `keys::Dict`: `keys[op]` are the field keys of each dependent variable (one per
+  component).
+- `params::Vector`: `params[i]` is the parameter of slot `i`.
+- `defaults::Vector`: `defaults[i]` is its value. `lattice_spacing` parameters take the
+  grid spacing; `NaN` when there is no default.
+- `tables::Vector`: the array parameters with their values.
+- `initial::Dict{String, Any}`: the initial-condition right sides, by field key.
+- `linearity::Dict`: the class of every rate term, by field key.
+- other fields: the Robin coefficients that vary by site or in time, and the blending
+  coarse fields.
 """
 struct CompiledField{N}
     program::Program{N}
@@ -217,6 +264,20 @@ A lowered term's text as the user wrote it: a velocity vector `[ux, uy]` (not it
 array literal), `Advect(Upwind1())` (not `LatticePDE.Advect{LatticePDE.Upwind1}(…)`) and
 `laplacian(K)` (not `LatticePDE.laplacian(K)`). For a front end that prints lowered terms in
 its messages (Potts); LatticePDE's own messages print through it too.
+
+# Arguments
+- `text::AbstractString`: the lowered term's text.
+
+# Returns
+- The text as the user wrote it.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> LatticePDE.as_written("LatticePDE.laplacian(K)")
+"laplacian(K)"
+```
 """
 function as_written(s::AbstractString)
     s = replace(

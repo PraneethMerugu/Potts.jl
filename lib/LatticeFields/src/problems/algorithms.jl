@@ -4,10 +4,16 @@
 # (`nbuffers`) and its cache (`alg_cache`, `reset_cache!`, `step_retcode!`).
 
 """
-Field stepping algorithms: SciML ODE algorithms (`<: SciMLBase.AbstractODEAlgorithm`) that
-step the problem `LatticePDE.discretize` returns (an `ODEProblem` of rates, a
-`DiscreteProblem` of maps) with the owned steppers, as `solve(prob, BackwardEuler(); dt)`;
-the same problem takes an OrdinaryDiffEq solver, `solve(prob, Rodas5P())`.
+    AbstractFieldAlgorithm <: SciMLBase.AbstractODEAlgorithm
+
+The supertype of the field stepping algorithms.
+
+They step the problem `LatticePDE.discretize` returns (an `ODEProblem` of rates, a
+`DiscreteProblem` of maps) with the owned steppers, as `solve(prob, BackwardEuler(); dt)`.
+The same problem takes an OrdinaryDiffEq solver, `solve(prob, Rodas5P())`.
+
+See also [`AbstractImplicitFieldAlgorithm`](@ref), [`ExplicitEuler`](@ref),
+[`ExplicitMap`](@ref), [`FieldGroups`](@ref).
 """
 abstract type AbstractFieldAlgorithm <: SciMLBase.AbstractODEAlgorithm end
 
@@ -16,26 +22,43 @@ abstract type AbstractFieldAlgorithm <: SciMLBase.AbstractODEAlgorithm end
         compute_type = :auto)
 
 Forward Euler: each window `dt` (the `dt` keyword of `solve`) runs `n` substeps of `dt / n`.
-One type for both coupled and standalone routes (`Potts` and `LatticePDE` export this
-binding). `substeps = nothing` takes the automatic count `n = ⌈dt ρ(p) / 1.8⌉` from the
-problem's stability bound `ρ` at the current parameters (§6.2); an unknown bound (a rate
-term it cannot see, a parameter without a value, or rows that read each other in a loop and
-are not diagonally dominant) is refused. A count `substeps = n ≥ 1` is a minimum: the count
-is the larger of `n` and the bound over the terms the bound sees; when no term is seen, `n`
-is used. `lower_bound` clips each substep's result at `max(v, lower_bound)`.
-`init = :steady` starts at the group's steady state (see [`BackwardEuler`](@ref)).
-`compute_type`: the number type the group's kernels compute in, `:auto` (the problem's value
-type), `Float32` or `Float64` (see [`BackwardEuler`](@ref)).
+
+The method is explicit and first order. It is stable only for substeps small against the
+problem's stability bound `ρ`, so the automatic count follows `ρ`. One type for both
+coupled and standalone routes (`Potts` and `LatticePDE` export this binding).
 
 - On the problem `LatticePDE.discretize` returns, `solve(prob, ExplicitEuler(); dt)` sets
   the window, and `dt` is required unless the discretization declares a clock (nothing else
-  sets the window: `saveat` does not); `lower_bound` clips as above, fused into the step by
+  sets the window: `saveat` does not); `lower_bound` clips as below, fused into the step by
   the update pass ([`update_rule`](@ref)).
 - As a `PottsProblem` `field_solver`, the window is the MCS (`mcs_duration`). As an
   `ode_solver`, `substeps = nothing` is one step per MCS.
 
-`substeps` is ≥ 1: `substeps = 0` is an `ArgumentError` (leave `substeps` out for the
-automatic count).
+# Keywords
+- `substeps = nothing`: `nothing` takes the automatic count `n = ⌈dt ρ(p) / 1.8⌉` from the
+  problem's stability bound `ρ` at the current parameters. An unknown bound (a rate term it
+  cannot see, a parameter without a value, or rows that read each other in a loop and are
+  not diagonally dominant) is refused. A count `substeps = n ≥ 1` is a minimum: the count
+  is the larger of `n` and the bound over the terms the bound sees; when no term is seen,
+  `n` is used. `substeps = 0` is an `ArgumentError`.
+- `lower_bound = nothing`: a finite number clips each substep's result at
+  `max(v, lower_bound)`; `nothing` clips nothing.
+- `init = nothing`: `:steady` starts at the group's steady state (see
+  [`BackwardEuler`](@ref)); `nothing` starts from the initial state.
+- `compute_type = :auto`: the number type the group's kernels compute in, `:auto` (the
+  problem's value type), `Float32` or `Float64` (see [`BackwardEuler`](@ref)).
+
+Any other keyword is an `ArgumentError` that names it.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Problems: ExplicitEuler
+
+julia> ExplicitEuler(; substeps = 4, lower_bound = 0).lower_bound
+0.0
+```
+
+See also [`BackwardEuler`](@ref), [`FieldGroups`](@ref).
 """
 struct ExplicitEuler <: AbstractFieldAlgorithm
     substeps::Union{Nothing, Int}
@@ -100,7 +123,22 @@ end
     compute_type(alg, V) -> Type
 
 The value type the kernels of a group stepped by `alg` compute in, for problem value type
-`V`: `V` under `compute_type = :auto`, else `compute_type`.
+`V`.
+
+# Arguments
+- `alg`: the field algorithm. One with no `compute_type` field counts as `:auto`.
+- `V::Type`: the problem's value type.
+
+# Returns
+- `V` under `compute_type = :auto`, else the algorithm's `compute_type`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Problems: BackwardEuler
+
+julia> LatticeFields.Problems.compute_type(BackwardEuler(; compute_type = Float64), Float32)
+Float64
+```
 """
 function compute_type(a, ::Type{V}) where {V}
     c = hasfield(typeof(a), :compute_type) ? getfield(a, :compute_type) : :auto
@@ -149,13 +187,30 @@ function _dt_text(kw)
         ""
     end
 end
-# the state buffers a step of the algorithm needs per field (`c`, `c__next`)
+"""
+    nbuffers(alg) -> Int
+
+The state buffers a step of algorithm `alg` needs per field (`c`, `c__next`).
+
+# Arguments
+- `alg`: the field algorithm.
+
+# Returns
+- The buffer count. Every algorithm here needs 2.
+"""
 nbuffers(::ExplicitEuler) = 2
 
 """
-The implicit field algorithms: each substep solves the Newton form
-`(I/(γh) − J̃) δ = G(u_k)` with a linear solver (`linsolve`), `G` the group's rate program as
-a residual and `J̃` the symmetric operator its front end extracts (`OperatorSpec`).
+    AbstractImplicitFieldAlgorithm <: AbstractFieldAlgorithm
+
+The supertype of the implicit field algorithms.
+
+Each substep solves the Newton form `(I/(γh) − J̃) δ = G(u_k)` with a linear solver
+(`linsolve`), `G` the group's rate program as a residual and `J̃` the symmetric operator its
+front end extracts ([`OperatorSpec`](@ref)).
+
+See also [`BackwardEuler`](@ref), [`CrankNicolson`](@ref), [`BDF2`](@ref),
+[`QuasiSteady`](@ref).
 """
 abstract type AbstractImplicitFieldAlgorithm <: AbstractFieldAlgorithm end
 # (equal keywords: equal algorithms; a `linsolve` that holds a preconditioner's cache
@@ -175,20 +230,22 @@ end
 
 Nonlinear solver specification for the owned implicit field algorithms
 ([`BackwardEuler`](@ref), [`CrankNicolson`](@ref), [`BDF2`](@ref), [`QuasiSteady`](@ref)).
-Matches OrdinaryDiffEq's `NLNewton` convergence and divergence rules on fixed-step,
-no-wait CPU and device execution:
 
-- `κ`: rate-scaled convergence threshold (`1 // 100` by default, finite positive real).
-- `max_iter`: maximum Newton iterations per step (`10` by default, integer ≥ 1). Unlike
+It matches OrdinaryDiffEq's `NLNewton` convergence and divergence rules on fixed-step,
+no-wait CPU and device execution.
+
+# Keywords
+- `κ = 1 // 100`: rate-scaled convergence threshold (a finite positive real).
+- `max_iter = 10`: maximum Newton iterations per step (an integer ≥ 1). Unlike
   automatic mode (`nlsolve = nothing`), even `max_iter = 1` is checked (`ndz < 1e-5`). The
   solver runs at most `max_iter` iterations and stops early once the group meets the
   stopping test.
-- `check_div`: when `true` (default), abort with `ReturnCode.ConvergenceFailure` if the
+- `check_div = true`: when `true`, abort with `ReturnCode.ConvergenceFailure` if the
   contraction rate diverges (`θ > 2`), stalls above the tolerance floor (`θ ≈ 1` with
   `ndz > 1`), or exhausts `max_iter` without converging; when `false`, disable divergence
   growth checks and accept a `max_iter` budget hit as converged (`ReturnCode.Success`, still
-  counted in `stats.newton_budget` once per group per substep — unlike automatic mode's
-  per-row count — and warned; non-finite corrections still stop). Pass
+  counted in `stats.newton_budget` once per group per substep, unlike automatic mode's
+  per-row count, and warned; non-finite corrections still stop). Pass
   `LatticeNewton(; max_iter = 1, check_div = false)` for an unchecked single sweep.
 
 At each iteration `iter`, the scaled update norm `ndz` is the single RMS norm over all
@@ -210,6 +267,14 @@ update).
 Unsupported `NLNewton` keywords (`fast_convergence_cutoff`, `new_W_dt_cutoff`,
 `always_new`, `relax`, `predictor`) throw `ArgumentError` explaining why they are not
 honored.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Problems: LatticeNewton
+
+julia> LatticeNewton(; max_iter = 4).max_iter
+4
+```
 """
 struct LatticeNewton{K}
     κ::K
@@ -286,57 +351,72 @@ end
 Backward Euler: each window `dt` runs `n` substeps of `h = dt / n`, each solving
 `(u − uⁿ)/h = r(u)` at the substep's end time `tⁿ⁺¹` (the rate, the face values and the
 inputs are read there) by Newton iterations on the form `(I/h − J̃) δ = G(u_k)`,
-`G(u_k) = (uⁿ − u_k)/h +
-r(u_k)`, `J̃` the group's operator (diffusion faces, linear local terms, face and mask
-conditions; a front end extracts it: `OperatorSpec`), each a linear solve with `linsolve`,
-and `u_{k+1} = u_k + δ`. An operator that reads the time is built at each substep's end
-time. One type for both coupled and standalone routes (Potts and LatticePDE export this
-binding). On a hexagonal lattice the operator has the lattice's six faces.
+`G(u_k) = (uⁿ − u_k)/h + r(u_k)`, `J̃` the group's operator (diffusion faces, linear local
+terms, face and mask conditions; a front end extracts it: `OperatorSpec`), each a linear
+solve with `linsolve`, and `u_{k+1} = u_k + δ`.
 
-- The window `dt` is the `dt` keyword of `solve`, as for [`ExplicitEuler`](@ref) (required
-  on a `FieldProblem` without a clock; in a `PottsProblem` the window is the MCS).
-- `substeps`: `nothing` is automatic: 1, raised only where the operator needs it (a positive
-  local derivative `g` the operator sees takes `n ≥ ⌈2 dt g⌉`, so the operator's shift stays
-  ≥ half its `1/h` part; the terms out of the operator, with their bound `ρ_in`, take
-  `n ≥ ⌈2 dt ρ_in⌉`, so their correction contracts by `≤ 1/2` per iteration); `n ≥ 1` is a
-  minimum.
-- `nlsolve`: [`LatticeNewton`](@ref) or `nothing`. `nothing` keeps the automatic count: 1
-  when the operator is exact (one solve is the Backward Euler step of a linear rate), 2 with
-  a switch `max(c − c_T, 0)` (a flip pass: the second iteration takes the switch state at
-  the first's result; it is no convergence test, so it counts no budget hit), more when a
-  term stays out of the operator (a defect correction, `OperatorSpec`: advection, a cycle
-  among the group's fields, a Robin face whose diagonal is negative, a second face
-  coefficient of a scaled row), enough for the bound of those terms, 4 when no bound sees
-  one. `LatticeNewton(; κ, max_iter, check_div)` runs at most `max_iter` iterations per
-  substep, stops early once the group meets the `NLNewton` rate-scaled criterion (weighted
-  by `abstol` and `reltol` from `solve`), and ends with `ReturnCode.ConvergenceFailure` at
-  the window end on a budget hit when `check_div = true` (or accepts as `ReturnCode.Success`
-  when `check_div = false`).
-- `lower_bound`: the clip `max(v, lower_bound)` after each substep (a positivity route;
-  Backward Euler keeps nonnegative data nonnegative on M-matrix rows, so it is rarely
+The method is implicit, first order and L-stable (of the converged step). An operator that
+reads the time is built at each substep's end time. One type for both coupled and standalone
+routes (Potts and LatticePDE export this binding). On a hexagonal lattice the operator has
+the lattice's six faces. The window `dt` is the `dt` keyword of `solve`, as for
+[`ExplicitEuler`](@ref) (required on a `FieldProblem` without a clock; in a `PottsProblem`
+the window is the MCS).
+
+# Keywords
+- `substeps = nothing`: `nothing` is automatic: 1, raised only where the operator needs it
+  (a positive local derivative `g` the operator sees takes `n ≥ ⌈2 dt g⌉`, so the operator's
+  shift stays ≥ half its `1/h` part; the terms out of the operator, with their bound `ρ_in`,
+  take `n ≥ ⌈2 dt ρ_in⌉`, so their correction contracts by `≤ 1/2` per iteration); `n ≥ 1`
+  is a minimum.
+- `nlsolve = nothing`: [`LatticeNewton`](@ref) or `nothing`. `nothing` keeps the automatic
+  count: 1 when the operator is exact (one solve is the Backward Euler step of a linear
+  rate), 2 with a switch `max(c − c_T, 0)` (a flip pass: the second iteration takes the
+  switch state at the first's result; it is no convergence test, so it counts no budget
+  hit), more when a term stays out of the operator (a defect correction, `OperatorSpec`:
+  advection, a cycle among the group's fields, a Robin face whose diagonal is negative, a
+  second face coefficient of a scaled row), enough for the bound of those terms, 4 when no
+  bound sees one. `LatticeNewton(; κ, max_iter, check_div)` runs at most `max_iter`
+  iterations per substep, stops early once the group meets the `NLNewton` rate-scaled
+  criterion (weighted by `abstol` and `reltol` from `solve`), and ends with
+  `ReturnCode.ConvergenceFailure` at the window end on a budget hit when `check_div = true`
+  (or accepts as `ReturnCode.Success` when `check_div = false`).
+- `lower_bound = nothing`: the clip `max(v, lower_bound)` after each substep (a positivity
+  route; Backward Euler keeps nonnegative data nonnegative on M-matrix rows, so it is rarely
   needed).
-- `linsolve`: the linear solver: `:auto` (`LatticePCG()` with one V(2,2) cycle,
+- `linsolve = :auto`: the linear solver: `:auto` (`LatticePCG()` with one V(2,2) cycle,
   `maxiters = 8`), `LatticePCG(…)`, `LatticeMultigrid(…)`, or any LinearSolve algorithm
   (such as `KLUFactorization()` on the host). `LatticeGMRES(…)` is `QuasiSteady`'s only (the
   coupled steady solve); a time stepper refuses it.
-- `solver_type`: the solver's number type, `:auto` (the state's), `Float32` or `Float64`.
-- `compute_type`: the number type the group's kernels (rate, residual, operator, update)
-  compute in, `:auto` (the problem's value type), `Float32` or `Float64`. A wider type than
-  the storage (`Float64` on a Float32 problem) loads each field value into it and rounds
-  once at each store; on a device with Float64 (ROCm, CUDA) its kernels are registered as
-  declared Float64, and a device without Float64 (Metal) refuses it when the group is bound
-  (`init`, in both routes; so do `solver_type = Float64` and a field declared
+- `solver_type = :auto`: the solver's number type, `:auto` (the state's), `Float32` or
+  `Float64`.
+- `compute_type = :auto`: the number type the group's kernels (rate, residual, operator,
+  update) compute in, `:auto` (the problem's value type), `Float32` or `Float64`. A wider
+  type than the storage (`Float64` on a Float32 problem) loads each field value into it and
+  rounds once at each store; on a device with Float64 (ROCm, CUDA) its kernels are
+  registered as declared Float64, and a device without Float64 (Metal) refuses it when the
+  group is bound (`init`, in both routes; so do `solver_type = Float64` and a field declared
   `lattice_storage = Float64`), naming the field and the routes.
-- `init = :steady`: before the first window (at `init`, and again at `reinit!`), solve the
-  group's steady state `0 = r(u)` once with [`QuasiSteady`](@ref), from the initial state at
-  the start time and with this algorithm's `linsolve` and `solver_type` (`:auto` takes
-  `LatticePCG` to `reltol = 1e-6` within 64 iterations), then step from it. The steady state
-  must exist and be unique, as for `QuasiSteady` (a growth or a field with no decay and no
-  fixed value is refused); a steady solve that fails ends the run with
-  `ReturnCode.ConvergenceFailure`. Every field algorithm takes it (`ExplicitEuler` too).
-  `nothing` starts from the initial state.
+- `init = nothing`: with `:steady`, before the first window (at `init`, and again at
+  `reinit!`), solve the group's steady state `0 = r(u)` once with [`QuasiSteady`](@ref),
+  from the initial state at the start time and with this algorithm's `linsolve` and
+  `solver_type` (`:auto` takes `LatticePCG` to `reltol = 1e-6` within 64 iterations), then
+  step from it. The steady state must exist and be unique, as for `QuasiSteady` (a growth or
+  a field with no decay and no fixed value is refused); a steady solve that fails ends the
+  run with `ReturnCode.ConvergenceFailure`. Every field algorithm takes it (`ExplicitEuler`
+  too). `nothing` starts from the initial state.
 
 Every value is checked here; a wrong one is an `ArgumentError` naming the keyword.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Problems: BackwardEuler
+
+julia> BackwardEuler(; substeps = 2).substeps
+2
+```
+
+See also [`CrankNicolson`](@ref), [`BDF2`](@ref), [`QuasiSteady`](@ref),
+[`LatticeNewton`](@ref).
 """
 struct BackwardEuler <: AbstractImplicitFieldAlgorithm
     substeps::Union{Nothing, Int}
@@ -463,7 +543,9 @@ nbuffers(::BackwardEuler) = 2
                     linsolve = :auto, solver_type = :auto, init = nothing,
                         compute_type = :auto)
 
-Crank–Nicolson (the trapezoidal rule, second order): each substep of `h = dt / n` solves
+Crank–Nicolson (the trapezoidal rule, second order, A-stable but not L-stable).
+
+Each substep of `h = dt / n` solves
 `(u − uⁿ)/h = (r(uⁿ) + r(u))/2`, `r(uⁿ)` at the substep's start time `tⁿ` and `r(u)` at its
 end time `tⁿ⁺¹`, by the Newton iterations of [`BackwardEuler`](@ref) with the shift `2/h`
 (the operator of a Backward Euler step of `h/2`). It is not L-stable: data that jump (a
@@ -478,9 +560,13 @@ Crank–Nicolson substeps (the window's error falls as `1/n²` with the count `n
 `substeps = 1` such a window is Backward Euler in two halves (first order, at twice Backward
 Euler's cost). Crank–Nicolson does not keep nonnegative data nonnegative (a stiff decay
 overshoots below 0): `lower_bound` clips each substep (for a consumption field,
-[`BackwardEuler`](@ref) needs no clip). The keywords are those of [`BackwardEuler`](@ref),
-with the same meanings and checks; the automatic counts use the shift `2/h`. One type for
-both routes.
+[`BackwardEuler`](@ref) needs no clip). One type for both routes.
+
+# Keywords
+The keywords are those of [`BackwardEuler`](@ref), with the same defaults, meanings and
+checks; the automatic counts use the shift `2/h`.
+
+See also [`BackwardEuler`](@ref), [`BDF2`](@ref).
 """
 struct CrankNicolson <: AbstractImplicitFieldAlgorithm
     substeps::Union{Nothing, Int}
@@ -519,21 +605,27 @@ nbuffers(::CrankNicolson) = 2
     BDF2(; substeps = nothing, nlsolve = nothing, lower_bound = nothing,
            linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto)
 
-The two-step backward differentiation formula (second order, L-stable): each substep of
-`h = dt / n` solves `(u − (4uⁿ − uⁿ⁻¹)/3)/(2h/3) = r(u)` at its end time `tⁿ⁺¹`, by the
-Newton iterations of [`BackwardEuler`](@ref) with the shift `3/(2h)`. It needs the state one
-substep back, `uⁿ⁻¹`, which the runtime keeps (not in the problem's state: never saved,
-never in a checkpoint). The first substep after a start (at `init`, after every
-[`reset!`](@ref): a state, input, table or parameter write, a restored checkpoint) has none:
-it is one Backward Euler substep (with the Backward Euler operator, then the BDF2 operator
-again: two extra rebuilds). The formula holds for a constant `h` only, so every change of
-`h` (a new automatic count after a parameter, input or table write; a new `substeps`)
-restarts it the same way. Moving data (a mask, the CPM's inputs) do not restart it. BDF2
-does not keep nonnegative data nonnegative (its right side `(4uⁿ − uⁿ⁻¹)/3` is negative
-where `uⁿ⁻¹ > 4uⁿ`): `lower_bound` clips each substep; for a consumption field,
-[`BackwardEuler`](@ref) needs no clip. The keywords are those of [`BackwardEuler`](@ref),
-with the same meanings and checks; the automatic counts are those of the Backward Euler
-start (shift `1/h`), so they hold for every substep. One type for both routes.
+The two-step backward differentiation formula (second order, L-stable).
+
+Each substep of `h = dt / n` solves `(u − (4uⁿ − uⁿ⁻¹)/3)/(2h/3) = r(u)` at its end time
+`tⁿ⁺¹`, by the Newton iterations of [`BackwardEuler`](@ref) with the shift `3/(2h)`. It
+needs the state one substep back, `uⁿ⁻¹`, which the runtime keeps (not in the problem's
+state: never saved, never in a checkpoint). The first substep after a start (at `init`,
+after every [`reset!`](@ref): a state, input, table or parameter write, a restored
+checkpoint) has none: it is one Backward Euler substep (with the Backward Euler operator,
+then the BDF2 operator again: two extra rebuilds). The formula holds for a constant `h`
+only, so every change of `h` (a new automatic count after a parameter, input or table write;
+a new `substeps`) restarts it the same way. Moving data (a mask, the CPM's inputs) do not
+restart it. BDF2 does not keep nonnegative data nonnegative (its right side `(4uⁿ − uⁿ⁻¹)/3`
+is negative where `uⁿ⁻¹ > 4uⁿ`): `lower_bound` clips each substep; for a consumption field,
+[`BackwardEuler`](@ref) needs no clip. One type for both routes.
+
+# Keywords
+The keywords are those of [`BackwardEuler`](@ref), with the same defaults, meanings and
+checks; the automatic counts are those of the Backward Euler start (shift `1/h`), so they
+hold for every substep.
+
+See also [`BackwardEuler`](@ref), [`CrankNicolson`](@ref).
 """
 struct BDF2 <: AbstractImplicitFieldAlgorithm
     substeps::Union{Nothing, Int}
@@ -568,24 +660,28 @@ nbuffers(::BDF2) = 2
     QuasiSteady(; nlsolve = nothing, linsolve = :auto, solver_type = :auto, init = nothing,
         compute_type = :auto)
 
-The steady state of a group in each window: `0 = r(u)`, solved once per
-window at the window's start time (A: at the σ of that MCS; B: at the integrator's inputs)
-by the Newton iterations of [`BackwardEuler`](@ref) with no time-step term, `−J̃ δ = r(u_k)`,
-from the field's current values (the previous window's solution: a warm start). A field
-stepped this way follows the inputs at once, as a steady field does.
+The steady state of a group in each window: `0 = r(u)`, solved once per window.
 
-- The window `dt`: as for [`BackwardEuler`](@ref).
-- `nlsolve`: [`LatticeNewton`](@ref) or `nothing`. `nothing` keeps the automatic count: 1
-  for a linear group whose operator is exact (one linear solve is the steady state), else 8
-  (a nonlinear or switched row, a term out of the operator), each checked on the device.
-  `LatticeNewton(; κ, max_iter, check_div)` runs at most `max_iter` iterations per window,
-  stops early on the `NLNewton` rate-scaled tolerance, and ends with
+The solve is at the window's start time (in a `PottsProblem`: at the σ of that MCS; on a
+field problem: at the integrator's inputs) by the Newton iterations of
+[`BackwardEuler`](@ref) with no time-step term, `−J̃ δ = r(u_k)`, from the field's current
+values (the previous window's solution: a warm start). A field stepped this way follows
+the inputs at once, as a steady field does. The window `dt`: as for
+[`BackwardEuler`](@ref).
+
+# Keywords
+- `nlsolve = nothing`: [`LatticeNewton`](@ref) or `nothing`. `nothing` keeps the automatic
+  count: 1 for a linear group whose operator is exact (one linear solve is the steady
+  state), else 8 (a nonlinear or switched row, a term out of the operator), each checked on
+  the device. `LatticeNewton(; κ, max_iter, check_div)` runs at most `max_iter` iterations
+  per window, stops early on the `NLNewton` rate-scaled tolerance, and ends with
   `ReturnCode.ConvergenceFailure` on a budget hit when `check_div = true` (or accepts when
   `check_div = false`).
-- `linsolve`, `solver_type`, `compute_type`: as for [`BackwardEuler`](@ref).
-- `init = :steady`: the initial state too is the steady state (one more solve before the
-  first window, as for [`BackwardEuler`](@ref)); without it the state at the start time is
-  the initial state, and the first window solves.
+- `linsolve = :auto`, `solver_type = :auto`, `compute_type = :auto`: as for
+  [`BackwardEuler`](@ref).
+- `init = nothing`: `:steady` makes the initial state the steady state too (one more solve
+  before the first window, as for [`BackwardEuler`](@ref)); with `nothing` the state at the
+  start time is the initial state, and the first window solves.
 
 Steady rows that read one another (a cycle in the group, a cross diffusion `Δ(b)` in a's
 row, or a term the operator does not see, such as `c²` in `0 ~ q − c²`) are solved together:
@@ -618,6 +714,8 @@ CPM's inputs or a mask cut off with neither (an island) is found on the device: 
 cannot reduce the residual there, and a budget hit with no real reduction ends the run with
 `ReturnCode.ConvergenceFailure`, naming the field, the window and the route (a decay or a
 fixed value in that region). One type for both routes.
+
+See also [`BackwardEuler`](@ref), [`LatticeGMRES`](@ref LatticeFields.Solvers.LatticeGMRES).
 """
 struct QuasiSteady <: AbstractImplicitFieldAlgorithm
     substeps::Nothing                   # (none: one solve per window)
@@ -678,8 +776,18 @@ nbuffers(::QuasiSteady) = 2
 """
     ExplicitMap(; compute_type = :auto)
 
-Discrete maps `Shift(t, 1)(c) ~ rhs` (§5.5): one application per unit of time.
-`compute_type`: as for [`BackwardEuler`](@ref).
+Discrete maps `Shift(t, 1)(c) ~ rhs`: one application per unit of time.
+
+# Keywords
+- `compute_type = :auto`: as for [`BackwardEuler`](@ref).
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Problems: ExplicitMap
+
+julia> LatticeFields.Problems.alg_family(ExplicitMap())
+:map
+```
 """
 struct ExplicitMap <: AbstractFieldAlgorithm
     compute_type::Any
@@ -760,11 +868,26 @@ end
 """
     update_key(alg)
 
-The update that algorithm `alg` fuses into a group's rate program, as a key: a group's fused
-program and plans are cached by it (and the value type), so two algorithms with one update
-share them (`ExplicitEuler()` and `ExplicitEuler(; substeps = 4)`:
+The update that algorithm `alg` fuses into a group's rate program, as a key.
+
+A group's fused program and plans are cached by it (and the value type), so two algorithms
+with one update share them (`ExplicitEuler()` and `ExplicitEuler(; substeps = 4)`:
 `:euler`). It names every part of the algorithm that changes the fused program: a clip
 `lower_bound` is part of it (`(:euler, 0.0)`).
+
+# Arguments
+- `alg`: the field algorithm.
+
+# Returns
+- The key: a `Symbol`, or a `Tuple` that adds the clip.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Problems: ExplicitEuler
+
+julia> LatticeFields.Problems.update_key(ExplicitEuler(; lower_bound = 0.0))
+(:euler, 0.0)
+```
 """
 update_key(a::ExplicitEuler) = a.lower_bound === nothing ? :euler : (:euler, a.lower_bound)
 update_key(::ExplicitMap) = :map
@@ -773,17 +896,36 @@ update_key(::ExplicitMap) = :map
 update_key(::AbstractImplicitFieldAlgorithm) = :euler
 
 """
-    update_rule(alg) -> rule or nothing
+    update_rule(alg) -> Union{EulerRule, Nothing}
 
 The update of algorithm `alg` for the update pass ([`fuse_update`](@ref
-LatticeFields.Compile.fuse_update)): `rule(kb, c, r)` gives the new value of a field from
-its current value `c` and its rate `r` (IR handles). `ExplicitEuler`: `c + dt · r` with
-`dt = G.rt[2]`, then `max(·, lower_bound)` with a clip; `ExplicitMap`: `nothing` (a map
-program stores its values itself).
+LatticeFields.Compile.fuse_update)).
+
+`rule(kb, c, r)` gives the new value of a field from its current value `c` and its rate `r`
+(IR handles).
+
+# Arguments
+- `alg`: the field algorithm.
+
+# Returns
+- `ExplicitEuler`: an [`EulerRule`](@ref), `c + dt · r` with `dt = G.rt[2]`, then
+  `max(·, lower_bound)` with a clip. An implicit algorithm: an `EulerRule` with no clip.
+- `ExplicitMap`: `nothing` (a map program stores its values itself).
 """
 update_rule(a::ExplicitEuler) = EulerRule(a.lower_bound)
 update_rule(::ExplicitMap) = nothing
 update_rule(::AbstractImplicitFieldAlgorithm) = EulerRule(nothing)
+"""
+    EulerRule(lower_bound)
+
+The Euler update of the update pass: `rule(kb, c, r)` gives `c + dt · r`, with `dt` the
+runtime slot `RT_DT`, then `max(·, lower_bound)` when `lower_bound` is a number.
+
+# Fields
+- `lower_bound::Union{Nothing, Float64}`: the clip, or `nothing` for none.
+
+See also [`update_rule`](@ref).
+"""
 struct EulerRule
     lower_bound::Union{Nothing, Float64}
 end
@@ -795,8 +937,15 @@ end
 """
     alg_family(alg) -> Symbol
 
-`:rate` for an algorithm that steps rates `D(c) ~ rhs`, `:map` for one that applies maps
-`Shift(t, 1)(c) ~ rhs`. A problem steps one family (split stepping is planned).
+The family of algorithm `alg`. A problem steps one family: rates and maps are never mixed in
+one problem.
+
+# Arguments
+- `alg`: the field algorithm.
+
+# Returns
+- `:rate` for an algorithm that steps rates `D(c) ~ rhs`, `:map` for one that applies maps
+  `Shift(t, 1)(c) ~ rhs`.
 """
 alg_family(::AbstractFieldAlgorithm) = :rate
 alg_family(::ExplicitMap) = :map
@@ -804,35 +953,61 @@ alg_family(::ExplicitMap) = :map
 """
     alg_cache(alg, group, store) -> cache
 
-The algorithm's own state for one group on `store` (`nothing` for `ExplicitEuler` and
-`ExplicitMap`): the workspaces and history of an implicit or multistep method. It lives in
-the group's [`GroupRuntime`](@ref); [`reset!`](@ref) drops its history (`reset_cache!`), and
-after each step [`advance!`](@ref) returns its `step_retcode!`.
+The algorithm's own state for one group on `store`: the workspaces and history of an
+implicit or multistep method.
+
+It lives in the group's [`GroupRuntime`](@ref); [`reset!`](@ref) drops its history
+(`reset_cache!`), and after each step [`advance!`](@ref) returns its `step_retcode!`.
+
+# Arguments
+- `alg`: the field algorithm.
+- `group`: the group the cache is for.
+- `store`: the [`FieldStore`](@ref) of the group.
+
+# Returns
+- The cache, or `nothing` for `ExplicitEuler` and `ExplicitMap`.
 """
 alg_cache(::AbstractFieldAlgorithm, group, store) = nothing
 
 """
     reset_cache!(cache)
 
-Drop the history of an algorithm's cache: the state was written (`integ[c] = values`,
-`reinit!`), or the parameters or inputs changed. The default does nothing: a cache with no
-history (`nothing`, or an algorithm's own workspace) needs no method.
+Drop the history of an algorithm's cache.
+
+It runs when the state was written (`integ[c] = values`, `reinit!`), or the parameters or
+inputs changed. The default does nothing: a cache with no history (`nothing`, or an
+algorithm's own workspace) needs no method.
+
+# Arguments
+- `cache`: the algorithm's cache ([`alg_cache`](@ref)).
+
+# Returns
+- `nothing`.
 """
 reset_cache!(cache) = nothing
 
 """
     step_retcode!(cache, rt) -> ReturnCode.T
 
-The return code of the step that runtime `rt` just took: `ReturnCode.Success` for an
-explicit algorithm (`nothing` cache); an implicit solver returns its failure code
-(`ConvergenceFailure`, …), and the driver stops with it.
+The return code of the step that runtime `rt` just took.
+
+# Arguments
+- `cache`: the algorithm's cache ([`alg_cache`](@ref)).
+- `rt`: the group's [`GroupRuntime`](@ref).
+
+# Returns
+- `ReturnCode.Success` for an explicit algorithm (`nothing` cache). An implicit solver
+  returns its failure code (`ConvergenceFailure`, …), and the driver stops with it.
 """
 step_retcode!(::Nothing, rt) = SciMLBase.ReturnCode.Success
 
 """
+    LinearSolver
+
 The linear solvers (`Solvers.LatticePCG`, `Solvers.LatticeMultigrid`,
-`Solvers.LatticeGMRES`): the `linsolve` of an implicit field solver, never a field algorithm
-themselves.
+`Solvers.LatticeGMRES`), as a `Union`.
+
+Each is the `linsolve` of an implicit field solver, never a field algorithm itself.
 """
 const LinearSolver = Union{
     Solvers.LatticePCG, Solvers.LatticeMultigrid, Solvers.LatticeGMRES,
@@ -841,9 +1016,17 @@ const LinearSolver = Union{
 """
     linear_solver_refusal(what, s, route) -> ArgumentError
 
-The refusal of a linear solver `s` given where a field algorithm goes (`what` names the
-place), with `route` the working spelling. Both coupled and standalone routes and `init` use
-it.
+The refusal of a linear solver `s` given where a field algorithm goes.
+
+Both coupled and standalone routes and `init` use it.
+
+# Arguments
+- `what`: the place, for the message.
+- `s`: the linear solver given.
+- `route`: the working spelling, for the message.
+
+# Returns
+- The `ArgumentError` (not thrown).
 """
 function linear_solver_refusal(
         what, s, route;
@@ -886,9 +1069,17 @@ another field counts as reading every other group. A term that reads only its ow
 (`-a^3`) does not. [`substep_counts`](@ref) gives each group's count.
 
 Every group steps the same window, the `dt` of `solve`. A rate algorithm and a map algorithm
-are never mixed (split stepping is planned). A field without a pair and with no `default` is
+are never mixed in one problem. A field without a pair and with no `default` is
 an error naming it.
 
+# Arguments
+- `field => alg`: a field symbol or state key, and the algorithm of that field. A
+  `FieldGroups` or a linear solver as `alg` is an `ArgumentError`.
+
+# Keywords
+- `default = nothing`: the algorithm of the fields without a pair.
+
+# Examples
 ```julia
 solve(prob, FieldGroups(o => ExplicitEuler(; substeps = 4); default = ExplicitEuler()); \
 dt = 0.1)
@@ -958,13 +1149,29 @@ end
 
 The one canonical text of a field algorithm (or of a solver part: `LatticePCG`,
 `LatticeMultigrid`, `VCycle`, `:auto`, a number), the text both coupled and standalone
-fingerprints hash: what the algorithm is, not the host object, so equal specifications built
-afresh print alike. `ExplicitEuler` prints `ExplicitEuler(substeps=…,lower_bound=…)`;
+fingerprints hash.
+
+It is what the algorithm is, not the host object, so equal specifications built afresh
+print alike. `ExplicitEuler` prints `ExplicitEuler(substeps=…,lower_bound=…)`;
 another algorithm prints every field, sorted by name, each by `canonical`; `:auto` prints as
 given (`:auto`, unresolved, so a CPU and a device problem print alike). `init = nothing` and
 `compute_type = :auto` (the defaults) are left out, so the texts recorded before them stay.
 A `FieldGroups` prints its pairs as given (a caller that resolves it per field, such as
 `PottsProblem`, prints the per-field map instead).
+
+# Arguments
+- `alg`: the field algorithm or solver part.
+
+# Returns
+- The canonical text as a `String`.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Problems: ExplicitEuler
+
+julia> LatticeFields.Problems.canonical(ExplicitEuler(; substeps = 2))
+"ExplicitEuler(substeps=2,lower_bound=nothing)"
+```
 """
 function canonical(s::ExplicitEuler)
     return string(

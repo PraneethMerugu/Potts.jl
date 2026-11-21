@@ -159,7 +159,19 @@ of the unknown fields of the system (every non-input field; an array field by it
 components, as their reads `u(t, x, y)[i]`, so that another component is another field),
 `inputs` those of the inputs and `aux` those of the algebraic (`K ~ expr`) fields; a term
 that reads an aux field is `Other`. A coefficient that reads an unknown makes the term
-`Other` (the conservative rule in the file header).
+`Other` (the conservative rule).
+
+# Arguments
+- `rhs`: the right side.
+- `c`: the field.
+- `fields`: the operations of the unknown fields.
+
+# Keywords
+- `inputs = ()`: the operations of the inputs.
+- `aux = ()`: the operations of the algebraic fields.
+
+# Returns
+- One `term => class` pair per additive term of `rhs`.
 """
 function linearity(rhs, c, fields; inputs = (), aux = ())
     op = c isa _Comp ? c : _ref(c)

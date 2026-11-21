@@ -664,8 +664,13 @@ end
     velocity_terms(v) -> Vector or nothing
 
 The terms of a velocity written as a vector, one per axis: a symbolic array literal
-(`Advect(Upwind1())([ux, uy], c)`) or a vector of numbers (`[0.3, 0.0]`, a constant); else
-`nothing` (an array field `u(t, x, y)`).
+(`Advect(Upwind1())([ux, uy], c)`) or a vector of numbers (`[0.3, 0.0]`, a constant).
+
+# Arguments
+- `v`: the velocity of an `Advect` term.
+
+# Returns
+- One term per axis, or `nothing` for any other velocity (an array field `u(t, x, y)`).
 """
 function velocity_terms(v)
     w = unwrap_const(unwrap(v))
@@ -745,6 +750,20 @@ allowlist across callers: any caller that converts its own terms (`Potts`) asks 
 call lowers consistently everywhere.
 The operators (`laplacian`, `DivKGrad`, `Advect`, `Differential`), the reads (`value_at`,
 `ismember`) and the field reads are terms of their own, not calls in this sense.
+
+# Arguments
+- `f`: a function.
+
+# Returns
+- `true` when the lowering takes a call of `f`.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> LatticePDE.lowers_call(exp), LatticePDE.lowers_call(x -> x)
+(true, false)
+```
 """
 function lowers_call(f)
     return f === identity || any(g -> g === f, _OPS) || any(r -> r[1] === f, _CMP) ||

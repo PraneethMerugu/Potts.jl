@@ -93,9 +93,19 @@ export remake, getp, getu, setp
 """
     laplacian(c)
 
-The lattice Laplacian of field `c` (zero flux at closed boundaries). In the finite-volume
-lowering it is `DivKGrad` with `K ≡ 1`. `Δ` is the same function, for equations written in
-mathematical notation (public, not exported).
+The lattice Laplacian of field `c`, with zero flux at closed boundaries.
+
+In the finite-volume lowering it is `DivKGrad` with `K ≡ 1`. `Δ` is the same function, for
+equations written in mathematical notation (public, not exported). The function is
+symbolic-only: a numeric call throws an `ArgumentError`.
+
+# Arguments
+- `c`: a symbolic field, such as `c(t, x, y)`.
+
+# Returns
+- The symbolic term `laplacian(c)`, lowered by `discretize`.
+
+See also [`DivKGrad`](@ref), [`Advect`](@ref).
 """
 function laplacian end
 function laplacian(x)
@@ -106,19 +116,33 @@ end
 """
     Δ
 
-The same function as [`laplacian`](@ref): `Δ(c) === laplacian(c)`.
+The same function as [`laplacian`](@ref): `Δ === laplacian`.
 """
 const Δ = laplacian
 
 const FACE_MEANS = (:harmonic, :arithmetic)
 
 """
-    DivKGrad(mean)
+    DivKGrad(mean::Symbol)
 
-`DivKGrad(mean)(K, c)` is the conservative diffusion term `∇⋅(K ∇c)`. `mean` sets the
-face value of `K`: `:harmonic` or `:arithmetic`. `K` and `c` are positional symbolic
-arguments; the face mean is an option of the operator, kept through `substitute` and
-`simplify` because it is part of the term's operation.
+The conservative diffusion operator: `DivKGrad(mean)(K, c)` is the term `∇⋅(K ∇c)`.
+
+`K` and `c` are positional symbolic arguments. The face mean is an option of the operator,
+kept through `substitute` and `simplify` because it is part of the term's operation. Any
+other `mean` throws an `ArgumentError`, and a numeric call of the operator throws too.
+
+# Fields
+- `mean::Symbol`: the face value of `K`, `:harmonic` or `:arithmetic`.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> DivKGrad(:harmonic).mean
+:harmonic
+```
+
+See also [`laplacian`](@ref).
 """
 struct DivKGrad
     mean::Symbol
@@ -138,16 +162,33 @@ function (op::DivKGrad)(K, c)
 end
 @register_symbolic (op::DivKGrad)(K, c)
 
-"""Discretization scheme of an [`Advect`](@ref) term."""
+"""
+    AbstractAdvectionScheme
+
+The supertype of the discretization schemes of an [`Advect`](@ref) term.
+
+See also [`Upwind1`](@ref).
+"""
 abstract type AbstractAdvectionScheme end
-"""`Upwind1()`: first-order upwind advection."""
+"""
+    Upwind1()
+
+First-order upwind advection, an [`AbstractAdvectionScheme`](@ref).
+"""
 struct Upwind1 <: AbstractAdvectionScheme end
 
 """
-    Advect(scheme)
+    Advect(scheme::AbstractAdvectionScheme)
 
-`Advect(scheme)(u, c)` is the advection term of field `c` by velocity `u` (a velocity
-component, or the velocity array). `scheme` is an [`AbstractAdvectionScheme`](@ref).
+The advection operator: `Advect(scheme)(u, c)` is the advection term of field `c` by
+velocity `u` (a velocity component, or the velocity array). A numeric call throws an
+`ArgumentError`.
+
+# Fields
+- `scheme::AbstractAdvectionScheme`: the discretization scheme, such as
+  [`Upwind1`](@ref)`()`.
+
+See also [`DivKGrad`](@ref), [`laplacian`](@ref).
 """
 struct Advect{S <: AbstractAdvectionScheme}
     scheme::S
@@ -169,8 +210,10 @@ end
     value_at(T, k)
     value_at(J, a, b)
 
-`value_at(T, k)`: entry `k` of the kind table `T` (`value_at(Dk, kindₛ)`), or the value of
-`c` at an explicit site or cell `s` (`value_at(c, target)`). Never index an array parameter
+Read entry `k` of the kind table `T`, or entry `(a, b)` of the pair table `J`.
+
+`value_at(T, k)` is entry `k` of `T` (`value_at(Dk, kindₛ)`), or the value of `c` at an
+explicit site or cell `s` (`value_at(c, target)`). Never index an array parameter
 with a symbolic input (`Dk[kindₛ]`): `mtkcompile(; inputs)` then keeps the input as an
 unknown.
 
@@ -194,6 +237,25 @@ With two or more integer inputs (for example the two kinds of a pair table read)
 ModelingToolkitBase `complete` (MTKBase 1.77): it requires the inputs in its own
 parameter order, which is hash order and so depends on the names and the machine. Give the
 inputs in the reverse order (`inputs = [b, a]`).
+
+# Arguments
+- `T`: a kind table (a vector), or a field for the site form.
+- `k`: the index, symbolic or a number.
+- `J`, `a`, `b`: a pair table (a matrix) and its two indices.
+
+# Returns
+- A symbolic read for symbolic arguments; the entry itself for numeric ones.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> value_at([0.5, 1.5], 0), value_at([0.5, 1.5], 2), value_at([0.5, 1.5], 9)
+(0.0, 1.5, 1.5)
+
+julia> value_at([1 2; 3 4], 2, 1)
+3
+```
 """
 function value_at(
         T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{
@@ -242,18 +304,49 @@ function ModelingToolkitBase.get_unit(::Union{typeof(value_at), typeof(laplacian
 end
 
 """
-`ismember(k, s)`: whether the integer `k` (a kind) is one of the tuple `s` of integer
-codes. The `∈` forms do not work in a symbolic expression: `kind ∈ Set(…)` evaluates to
+    ismember(k, s::Tuple) -> Bool
+
+Whether the integer `k` (a kind) is one of the tuple `s` of integer codes.
+
+The `∈` forms do not work in a symbolic expression: `kind ∈ Set(…)` evaluates to
 `false` before any term exists (a product with it vanishes), `kind ∈ (a, b)` builds an
 interval domain pairing and `kind ∈ [a, b]` builds an `in` term that LatticePDE refuses.
+
+# Arguments
+- `k`: a kind, symbolic or a number.
+- `s::Tuple`: the integer codes.
+
+# Returns
+- A symbolic `Bool` term for a symbolic `k`; a `Bool` for a number.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> ismember(2, (2, 3)), ismember(4, (2, 3))
+(true, false)
+```
 """
 ismember(k::Union{Integer, AbstractFloat}, s::Tuple) = Int(k) in s
 @register_symbolic ismember(k::Real, s::Tuple)::Bool
 
 """
-`masked(pred, v)`: the masked interior condition `c ~ masked(pred, v)`, written in the
-boundary conditions: `c` is held at `v` on the sites where `pred` holds. `pred` is a
-symbolic `Bool` term; arrays are written per component, `u[i] ~ masked(pred, v)`.
+    masked(pred, v)
+
+The masked interior condition `c ~ masked(pred, v)`, written in the boundary conditions:
+`c` is held at `v` on the sites where `pred` holds.
+
+Arrays are written per component, `u[i] ~ masked(pred, v)`. A call with a predicate that is
+not a symbolic term throws an `ArgumentError`.
+
+# Arguments
+- `pred`: a symbolic `Bool` term, such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`.
+- `v`: the held value.
+
+# Returns
+- The symbolic marker term, for the right side of a boundary condition.
+
+See also [`ismember`](@ref).
 """
 function masked(p, v)
     throw(
@@ -281,6 +374,13 @@ so `k` does not depend on `dt` or on the save times. A gate such as
 `ExplicitEuler(; substeps = n)`). Refused without a declared clock. An OrdinaryDiffEq solver
 lands on every boundary of the clock (a `tstop` at each, where the step index changes).
 
+# Arguments
+- `t`: the time variable.
+
+# Returns
+- The symbolic step index. A numeric call throws an `ArgumentError`.
+
+# Examples
 ```julia
 @parameters x y
 @variables c(..)
@@ -334,17 +434,37 @@ end
 # Metadata keys (`@variables c(..) [lattice_placement = …]`). MTK's own `tunable` is reused;
 # these are ours, so they carry the `lattice_` prefix.
 
-"""Metadata key `lattice_placement`: where a field's values live on the lattice."""
+"""
+    LatticePlacement
+
+Metadata key `lattice_placement`: where a field's values live on the lattice.
+
+See also [`get_lattice_placement`](@ref).
+"""
 struct LatticePlacement end
-"""Metadata key `lattice_storage`: how a field is stored."""
+"""
+    LatticeStorage
+
+Metadata key `lattice_storage`: how a field is stored.
+
+See also [`get_lattice_storage`](@ref).
+"""
 struct LatticeStorage end
-"""Metadata key `lattice_level`: the grid a field lives on, [`Coarse`](@ref)`(k)`."""
+"""
+    LatticeLevel
+
+Metadata key `lattice_level`: the grid a field lives on, [`Coarse`](@ref)`(k)`.
+
+See also [`get_lattice_level`](@ref).
+"""
 struct LatticeLevel end
 """
-    Coarse(k)
+    Coarse(k::Integer)
 
-The grid of a field coarsened by `k` on every axis, `[lattice_level = Coarse(k)]` (`k` a
-power of two; `Coarse(1)` is the lattice itself). Each node of the coarse grid is a block of
+The grid of a field coarsened by `k` on every axis, `[lattice_level = Coarse(k)]`.
+
+`k` is a power of two, else an `ArgumentError` is thrown; `Coarse(1)` is the lattice
+itself. Each node of the coarse grid is a block of
 `k` sites per axis, its value the field over that block, with the spacing `k h`. Every axis
 of the lattice must have a size that `k` divides (an axis of size 1 is never coarsened). The
 field's equation, its conditions and its solver run on the coarse grid; the fine reads in
@@ -388,6 +508,19 @@ blocks is the net flux through the faces of the box. A map's offset read of a co
 moves by a multiple of `k` sites (`k * dx`). With an irregular `domain`, a node is in it
 when most of its block is (the Majority fold), and its edge is the coarse field's zero-flux
 edge.
+
+# Fields
+- `k::Int`: the number of lattice sites per axis in each node.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> Coarse(4).k
+4
+```
+
+See also [`LatticeLevel`](@ref).
 """
 struct Coarse
     k::Int
@@ -407,12 +540,16 @@ Base.show(io::IO, c::Coarse) = print(io, "Coarse(", c.k, ")")
 # the level of a factor: k = 2^level
 level_of(c::Coarse) = trailing_zeros(c.k)
 """
+    LatticeSpacing
+
 Metadata key `lattice_spacing`: marks a parameter as the grid spacing along axis `a`
 (`@parameters dx [lattice_spacing = 1]`). The discretization supplies its value from the
 grid; the tag, not the name, marks it.
 """
 struct LatticeSpacing end
 """
+    LatticeInputName
+
 Metadata key `lattice_input_name`: the name a user gives an input field by
 (`kind__in(t, x, y)::Int32 [input = true, lattice_input_name = "kind"]`). `discretize(…;
 inputs = [:kind => K])` takes it as well as the variable, and messages print it; a front end
@@ -420,6 +557,8 @@ that generates its input variables (Potts' `kind__in`) sets it to the user's wor
 """
 struct LatticeInputName end
 """
+    LatticeCutField
+
 Metadata key `LatticeCutField` (`true`): an input that is the field of another group (such
 as the cut of `lower_group(…; fields)`) and that a spatial operator of the group reads. It
 carries that field's face conditions, so its ghost values are those of its own group; its
@@ -434,17 +573,64 @@ Symbolics.option_to_metadata_type(::Val{:lattice_spacing}) = LatticeSpacing
 Symbolics.option_to_metadata_type(::Val{:lattice_input_name}) = LatticeInputName
 
 _meta(x, key) = Symbolics.getmetadata(Symbolics.unwrap(x), key, nothing)
-"""`get_lattice_placement(x)`: the `lattice_placement` of `x`, or `nothing`."""
+"""
+    get_lattice_placement(x)
+
+The `lattice_placement` metadata of the symbolic variable `x`.
+
+# Arguments
+- `x`: a symbolic variable.
+
+# Returns
+- The placement, or `nothing` when `x` has none.
+"""
 get_lattice_placement(x) = _meta(x, LatticePlacement)
-"""`get_lattice_storage(x)`: the `lattice_storage` of `x`, or `nothing`."""
+"""
+    get_lattice_storage(x)
+
+The `lattice_storage` metadata of the symbolic variable `x`.
+
+# Arguments
+- `x`: a symbolic variable.
+
+# Returns
+- The storage, or `nothing` when `x` has none.
+"""
 get_lattice_storage(x) = _meta(x, LatticeStorage)
-"""`get_lattice_level(x)`: the `lattice_level` of `x`, or `nothing`."""
+"""
+    get_lattice_level(x)
+
+The `lattice_level` metadata of the symbolic variable `x`.
+
+# Arguments
+- `x`: a symbolic variable.
+
+# Returns
+- The level, a [`Coarse`](@ref), or `nothing` when `x` has none.
+"""
 get_lattice_level(x) = _meta(x, LatticeLevel)
-"""`get_lattice_spacing(x)`: the axis of the spacing parameter `x`, or `nothing`."""
+"""
+    get_lattice_spacing(x)
+
+The `lattice_spacing` metadata of the parameter `x`.
+
+# Arguments
+- `x`: a symbolic parameter.
+
+# Returns
+- The axis of the spacing parameter `x`, or `nothing` when `x` is not one.
+"""
 get_lattice_spacing(x) = _meta(x, LatticeSpacing)
 """
-`get_lattice_input_name(x)`: the `lattice_input_name` of the input `x` (or of its
-operation), or `nothing`.
+    get_lattice_input_name(x)
+
+The `lattice_input_name` metadata of the input `x`, or of its operation.
+
+# Arguments
+- `x`: a symbolic input, or its applied form.
+
+# Returns
+- The name as a `String`, or `nothing` when neither has one.
 """
 function get_lattice_input_name(x)
     n = _meta(x, LatticeInputName)
@@ -479,6 +665,14 @@ every operator's arguments:
 
 `kindₛ ∈ Set(…)` inside a larger expression cannot be seen: the product `α * false` is
 already `0`, so the term is gone from the equation before any scan runs.
+
+# Arguments
+- `pdesys::PDESystem`: the system, or its equations `eqs` and boundary conditions `bcs`.
+
+# Returns
+- A `Vector{String}`, one message per offending term, empty when the system is clean.
+
+See also [`check_vocabulary`](@ref).
 """
 vocabulary_issues(sys::PDESystem) = vocabulary_issues(get_eqs(sys), get_bcs(sys))
 function vocabulary_issues(eqs, bcs = Equation[])
@@ -495,8 +689,14 @@ end
     check_vocabulary(pdesys::PDESystem)
     check_vocabulary(eqs, bcs = Equation[])
 
-Throw an `ArgumentError` listing every [`vocabulary_issues`](@ref) entry; return `nothing`
-when there are none.
+Check the system against the LatticePDE surface.
+
+# Arguments
+- `pdesys::PDESystem`: the system, or its equations `eqs` and boundary conditions `bcs`.
+
+# Returns
+- `nothing` when there are no [`vocabulary_issues`](@ref). Else an `ArgumentError` listing
+  every entry is thrown.
 """
 function check_vocabulary(args...)
     issues = vocabulary_issues(args...)
