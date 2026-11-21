@@ -77,14 +77,44 @@ function _boundary_segments(frame::AbstractPottsRenderFrame{2})
 end
 
 """
-    pottsboundaries(frame; color=:black, linewidth=1)
+    pottsboundaries(frame; kwargs...) -> Makie.FigureAxisPlot
+    pottsboundaries!(ax, frame; kwargs...) -> PottsBoundaries
 
-Composable semantic boundary overlay for a two-dimensional frame.
+Draw the boundaries between sites of different owners in a 2D render frame.
 
-Every attribute is live: setting one after the plot is made (`plt.color = :red`)
-redraws it. The frame and attributes given at creation are checked at once and throw their
-own error; an invalid value set later throws when the plot next resolves, wrapped in
-Makie's `ResolveException`.
+Each boundary is the shared face of two neighboring sites whose owners differ, drawn as a
+line segment. Every attribute is live: setting one after the plot is made
+(`plt.color = :red`) redraws it. The frame and attributes given at creation are checked at
+once and throw their own error; an invalid value set later throws when the plot next
+resolves, wrapped in Makie's `ResolveException`.
+
+# Arguments
+
+  - `frame`: an `AbstractPottsRenderFrame{2}`, or an `Observable` of one. Throws
+    `MakiePotts.InvalidRenderFrameError` when [`render_frame_conformance`](@ref) finds an
+    issue.
+
+# Keywords
+
+  - `color`: the line color; the theme's `linecolor`, or `:black`.
+  - `linewidth`: the line width; the theme's `linewidth`, or `1.0`.
+  - `linestyle = nothing`, `visible = true`, `inspectable = false`: as in Makie's
+    `linesegments`.
+
+# Returns
+
+  - The non-mutating form returns Makie's `FigureAxisPlot`; `pottsboundaries!` returns the
+    [`PottsBoundaries`](@ref) plot.
+
+# Examples
+
+```julia
+using MakiePotts, CairoMakie
+fig, ax, plt = pottsplot(frame)
+pottsboundaries!(ax, frame; color = :white)
+```
+
+See also [`pottsplot`](@ref).
 """
 Makie.@recipe(PottsBoundaries, frame) do scene
     Makie.Attributes(
@@ -95,9 +125,37 @@ Makie.@recipe(PottsBoundaries, frame) do scene
         inspectable = false
     )
 end
-@doc "Makie recipe type for a composable finite-cell boundary overlay." PottsBoundaries
-@doc "Add a [`PottsBoundaries`](@ref) overlay to an existing Makie scene or \
-    axis." pottsboundaries!
+@doc """
+    PottsBoundaries
+
+The Makie plot type of [`pottsboundaries`](@ref).
+
+# Arguments
+
+  - `frame`: the render frame, read as `plt.frame`.
+
+See also [`pottsboundaries`](@ref).
+""" PottsBoundaries
+@doc """
+    pottsboundaries!(ax, frame; kwargs...) -> PottsBoundaries
+
+Add a [`pottsboundaries`](@ref) plot to an existing Makie axis or scene.
+
+# Arguments
+
+  - `ax`: the Makie axis or scene, or a figure position.
+  - `frame`: as for [`pottsboundaries`](@ref).
+
+# Keywords
+
+  - As for [`pottsboundaries`](@ref).
+
+# Returns
+
+  - [`PottsBoundaries`](@ref): the plot.
+
+See also [`pottsboundaries`](@ref).
+""" pottsboundaries!
 
 # The recipes compute their children's inputs with `map!` on the plot's compute graph, so a
 # change of any attribute (not only of the frame) reaches the children and the screen. The
@@ -128,14 +186,61 @@ function Makie.plot!(plot::PottsBoundaries)
 end
 
 """
-    pottsplot(frame; encoding=CellTypeEncoding(), kwargs...)
+    pottsplot(frame; kwargs...) -> Makie.FigureAxisPlot
+    pottsplot!(ax, frame; kwargs...) -> PottsPlot
 
-Native Makie recipe for validated two-dimensional Potts render frames.
+Draw a 2D render frame: one colored square per site, by the given encoding.
 
-Every attribute is live: setting one after the plot is made (`plt.medium_color = :red`)
-redraws it. The frame and attributes given at creation are checked at once and throw their
-own error; an invalid value set later throws when the plot next resolves, wrapped in
-Makie's `ResolveException`.
+`plot(frame)` for a 2D frame is the same. The axis defaults to a `Makie.Axis` with
+`DataAspect()`, and the plot covers the physical extent of the frame geometry. Every
+attribute is live: setting one after the plot is made (`plt.medium_color = :red`) redraws
+it. The frame and attributes given at creation are checked at once and throw their own
+error; an invalid value set later throws when the plot next resolves, wrapped in Makie's
+`ResolveException`.
+
+# Arguments
+
+  - `frame`: an `AbstractPottsRenderFrame{2}`, or an `Observable` of one. Throws
+    `MakiePotts.InvalidRenderFrameError` when [`render_frame_conformance`](@ref) finds an
+    issue. A 3D state is drawn through an [`OrthogonalSlice`](@ref).
+
+# Keywords
+
+  - `encoding = CellTypeEncoding()`: [`CellTypeEncoding`](@ref),
+    [`CellIdentityEncoding`](@ref) or [`ChannelEncoding`](@ref).
+  - `category_palette = automatic`: the cell colors of a categorical encoding.
+    `automatic` gives each category a fixed color from its key. A palette must have a
+    color for each cell category; an `ArgumentError` is thrown otherwise (palettes are
+    never cycled).
+  - `colormap`: the colormap of a continuous encoding; the theme's `colormap`, or
+    `:viridis`.
+  - `colorrange = automatic`: `automatic` covers all categories of a categorical encoding
+    and the finite values of a continuous one.
+  - `medium_color = :gray18`: the medium color of a categorical encoding, and of a
+    cell-channel encoding.
+  - `obstacle_color = :gray45`: the color of obstacle sites.
+  - `boundaries = false`: draw [`pottsboundaries`](@ref) over the frame, with
+    `boundary_color` and `boundary_width` (the theme's line color and width by default).
+  - `inspector_label = automatic`: the `DataInspector` text; `automatic` uses
+    [`inspection_label`](@ref).
+  - `colorscale = identity`, `nan_color = :transparent`, `lowclip = automatic`,
+    `highclip = automatic`, `interpolate = false`, `alpha = 1.0`, `visible = true`,
+    `inspectable = true`: as in Makie's `heatmap`.
+
+# Returns
+
+  - The non-mutating form returns Makie's `FigureAxisPlot`; `pottsplot!` returns the
+    [`PottsPlot`](@ref) plot.
+
+# Examples
+
+```julia
+using MakiePotts, CairoMakie
+fig, ax, plt = pottsplot(renderframe(sol); encoding = CellIdentityEncoding())
+plt.medium_color = :white
+```
+
+See also [`renderframe`](@ref), [`potts_legend`](@ref), [`potts_theme`](@ref).
 """
 Makie.@recipe(PottsPlot, frame) do scene
     Makie.Attributes(
@@ -159,8 +264,37 @@ Makie.@recipe(PottsPlot, frame) do scene
         inspector_label = Makie.automatic
     )
 end
-@doc "Makie recipe type for a two-dimensional frame or orthogonal slice." PottsPlot
-@doc "Add a [`PottsPlot`](@ref) to an existing Makie scene or axis." pottsplot!
+@doc """
+    PottsPlot
+
+The Makie plot type of [`pottsplot`](@ref). `plot(frame)` uses it for a 2D frame.
+
+# Arguments
+
+  - `frame`: the render frame, read as `plt.frame`.
+
+See also [`pottsplot`](@ref).
+""" PottsPlot
+@doc """
+    pottsplot!(ax, frame; kwargs...) -> PottsPlot
+
+Add a [`pottsplot`](@ref) plot to an existing Makie axis or scene.
+
+# Arguments
+
+  - `ax`: the Makie axis or scene, or a figure position.
+  - `frame`: as for [`pottsplot`](@ref).
+
+# Keywords
+
+  - As for [`pottsplot`](@ref).
+
+# Returns
+
+  - [`PottsPlot`](@ref): the plot.
+
+See also [`pottsplot`](@ref).
+""" pottsplot!
 
 function Makie.plot!(plot::PottsPlot)
     _check_first_inputs(plot)
@@ -258,7 +392,34 @@ function Makie.extract_colormap(plot::PottsPlot)
     return Makie.extract_colormap(plot.plots[1])
 end
 
-"""A compact theme fragment suitable for `with_theme` or `set_theme!`."""
+"""
+    potts_theme(; medium_color = :gray18, obstacle_color = :gray45, boundary_color = :black,
+        boundary_width = 1.0, kwargs...) -> Makie.Theme
+
+Return a Makie theme that sets the [`pottsplot`](@ref) colors, for `with_theme` or
+`set_theme!`.
+
+# Keywords
+
+  - `medium_color`, `obstacle_color`, `boundary_color`, `boundary_width`: the
+    [`PottsPlot`](@ref) attributes of the same names.
+  - `kwargs...`: other theme attributes, passed to `Makie.Theme`.
+
+# Returns
+
+  - `Makie.Theme`: the theme.
+
+# Examples
+
+```julia
+using MakiePotts, CairoMakie
+with_theme(potts_theme(; medium_color = :white)) do
+    pottsplot(frame)
+end
+```
+
+See also [`pottsplot`](@ref).
+"""
 function potts_theme(;
         medium_color = :gray18, obstacle_color = :gray45,
         boundary_color = :black, boundary_width = 1.0, kwargs...
@@ -282,9 +443,37 @@ function _legend_elements(encoded, palette, medium_color)
 end
 
 """
-    potts_legend(position, plot; title=nothing, kwargs...)
+    potts_legend(position, plot; title = nothing, kwargs...) -> Makie.Legend
 
-Construct a native Makie `Legend` for a categorical `PottsPlot`.
+Return a Makie legend of the categories of a categorical [`PottsPlot`](@ref).
+
+The entries are the medium and each category of the plot's encoding, in the plot's
+colors, and an `"Obstacle"` entry when the frame has an obstacle site.
+
+# Arguments
+
+  - `position`: the figure position, for example `fig[1, 2]`.
+  - `plot::PottsPlot`: the plot. Throws an `ArgumentError` for a continuous encoding;
+    use `Colorbar(position, plot)` for it.
+
+# Keywords
+
+  - `title = nothing`: the legend title; `nothing` uses [`encoding_label`](@ref).
+  - `kwargs...`: passed to `Makie.Legend`.
+
+# Returns
+
+  - `Makie.Legend`: the legend.
+
+# Examples
+
+```julia
+using MakiePotts, CairoMakie
+fig, ax, plt = pottsplot(frame)
+potts_legend(fig[1, 2], plt)
+```
+
+See also [`legend_entries`](@ref).
 """
 function potts_legend(position, plot::PottsPlot; title = nothing, kwargs...)
     encoded = encode_frame(plot.frame[], plot.encoding[])
@@ -305,13 +494,44 @@ function potts_legend(position, plot::PottsPlot; title = nothing, kwargs...)
 end
 
 """
-Experimental true-three-dimensional volume recipe. Orthogonal slices should use
-the stable `PottsPlot` recipe.
+    pottsvolume(frame; kwargs...) -> Makie.FigureAxisPlot
+    pottsvolume!(ax, frame; kwargs...) -> PottsVolume
 
-Every attribute is live: setting one after the plot is made (`plt.medium_color = :red`)
-redraws it. The frame and attributes given at creation are checked at once and throw their
-own error; an invalid value set later throws when the plot next resolves, wrapped in
-Makie's `ResolveException`.
+Draw a 3D render frame as a volume. Experimental; for 2D slices use [`pottsplot`](@ref)
+with an [`OrthogonalSlice`](@ref).
+
+`plot(frame)` for a 3D frame is the same. The axis defaults to a `Makie.LScene`. Every
+attribute is live: setting one after the plot is made (`plt.medium_color = :red`) redraws
+it. The frame and attributes given at creation are checked at once and throw their own
+error; an invalid value set later throws when the plot next resolves, wrapped in Makie's
+`ResolveException`.
+
+# Arguments
+
+  - `frame`: an `AbstractPottsRenderFrame{3}`, or an `Observable` of one. Throws
+    `MakiePotts.InvalidRenderFrameError` when [`render_frame_conformance`](@ref) finds an
+    issue.
+
+# Keywords
+
+  - `encoding`, `category_palette`, `colormap`, `colorrange`, `medium_color`: as for
+    [`pottsplot`](@ref).
+  - `nan_color = :transparent`, `algorithm = :mip`, `absorption = 1.0`, `visible = true`:
+    as in Makie's `volume`.
+
+# Returns
+
+  - The non-mutating form returns Makie's `FigureAxisPlot`; `pottsvolume!` returns the
+    [`PottsVolume`](@ref) plot.
+
+# Examples
+
+```julia
+using MakiePotts, GLMakie
+pottsvolume(renderframe(sol))
+```
+
+See also [`pottsplot`](@ref).
 """
 Makie.@recipe(PottsVolume, frame) do scene
     Makie.Attributes(
@@ -326,8 +546,37 @@ Makie.@recipe(PottsVolume, frame) do scene
         visible = true
     )
 end
-@doc "Makie recipe type for a true three-dimensional frame." PottsVolume
-@doc "Add a [`PottsVolume`](@ref) to an existing Makie scene." pottsvolume!
+@doc """
+    PottsVolume
+
+The Makie plot type of [`pottsvolume`](@ref). `plot(frame)` uses it for a 3D frame.
+
+# Arguments
+
+  - `frame`: the render frame, read as `plt.frame`.
+
+See also [`pottsvolume`](@ref).
+""" PottsVolume
+@doc """
+    pottsvolume!(ax, frame; kwargs...) -> PottsVolume
+
+Add a [`pottsvolume`](@ref) plot to an existing Makie scene.
+
+# Arguments
+
+  - `ax`: the Makie scene, or a figure position.
+  - `frame`: as for [`pottsvolume`](@ref).
+
+# Keywords
+
+  - As for [`pottsvolume`](@ref).
+
+# Returns
+
+  - [`PottsVolume`](@ref): the plot.
+
+See also [`pottsvolume`](@ref).
+""" pottsvolume!
 
 function Makie.plot!(plot::PottsVolume)
     _check_first_inputs(plot)

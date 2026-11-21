@@ -22,11 +22,21 @@ const _CONTACT_PARTNER = _tag(
     count_contacts(contact_partner, pred, relation)
 
 A contact fold as [`Potts.updates`](@ref), [`Potts.hamiltonian`](@ref) and
-[`Potts.drives`](@ref) print it: `count(pred for _ in contacts(relation))` in cell scope,
-the number of the cell's contact pairs over `relation` whose partner satisfies `pred`.
-`contact_partner` is the fold's bound variable, `pred` is `true` or an expression of the
-partner's kind `neighbor_kind`, and `relation` is the relation's name (`:contact` for
-`contacts`). Symbolic only: it describes the fold and is never called.
+[`Potts.drives`](@ref) print it.
+
+The fold is `count(pred for _ in contacts(relation))` in cell scope: the number of the
+cell's contact pairs over `relation` whose partner satisfies `pred`. It is symbolic only:
+it describes the fold, and a call on numbers throws an `ArgumentError`.
+
+# Arguments
+- `contact_partner`: the fold's bound variable.
+- `pred`: `true`, or an expression of the partner's kind `neighbor_kind`.
+- `relation::Symbol`: the relation's name (`:contact` for `contacts`).
+
+# Returns
+- A symbolic term (on symbolic arguments).
+
+See also [`Potts.updates`](@ref).
 """
 count_contacts(n, pred, rel) = throw(ArgumentError("`count_contacts` is symbolic-only"))
 # `rel::Symbol`, so that a literal `pred = true` still builds the symbolic term

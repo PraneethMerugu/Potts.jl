@@ -296,23 +296,49 @@ end
 
 """
     find_peaks(x; distance = nothing, prominence = nothing, width = nothing,
-        rel_height = 0.5)
-        -> Vector{Int}
+        rel_height = 0.5) -> Vector{Int}
 
-Peaks of the signal `x`, as SciPy 1.7's `scipy.signal.find_peaks` finds them, with 1-based
-indices.
+Return the peaks of the signal `x`, as SciPy 1.7's `scipy.signal.find_peaks` finds them,
+with 1-based indices.
 
 1. Local maxima: samples higher than both neighbors. A flat top (a plateau) counts once, at
    its midpoint `(left + right) ÷ 2`. The first and last samples are never peaks.
-2. `distance` (≥ 1): peaks are taken from the highest down, and each kept peak removes the
-   peaks less than `ceil(distance)` samples from it. Equal heights are taken in the order of
-   NumPy's (unstable) default `argsort`, ported exactly: for 16 peaks or fewer the rightmost
-   comes first; for more it depends on the introsort partitioning.
+2. `distance`: peaks are taken from the highest down, and each kept peak removes the
+   peaks less than `ceil(distance)` samples from it. Equal heights are taken in the order
+   of NumPy's (unstable) default `argsort`, ported exactly: for 16 peaks or fewer the
+   rightmost comes first; for more it depends on the introsort partitioning.
 3. `prominence`: keep the peaks with [`peak_prominences`](@ref) ≥ `prominence`.
 4. `width`: keep the peaks with [`peak_widths`](@ref) at `rel_height` ≥ `width`.
 
-The filters run in that order, each on the survivors of the previous one. SciPy's `height`,
-`threshold`, `plateau_size` and `wlen` options are not ported (`wlen` is always `None`).
+The filters run in that order, each on the survivors of the previous one. SciPy's
+`height`, `threshold`, `plateau_size` and `wlen` options are not available (`wlen` is
+always `None`).
+
+# Arguments
+- `x::AbstractVector`: the signal, converted to `Vector{Float64}`. Throws an
+  `ArgumentError` for a value that is not a vector.
+
+# Keywords
+- `distance = nothing`: the minimum distance between peaks, in samples, at least 1.
+  Throws an `ArgumentError` when below 1.
+- `prominence = nothing`: the minimum prominence.
+- `width = nothing`: the minimum width, in samples.
+- `rel_height = 0.5`: the relative height at which `width` is measured, at least 0.
+
+# Returns
+- `Vector{Int}`: the indices of the peaks, ascending.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> x = [0, 1, 0, 2, 0, 1, 1, 0];
+
+julia> find_peaks(x), find_peaks(x; prominence = 1.5)
+([2, 4, 6], [4])
+```
+
+See also [`peak_prominences`](@ref), [`peak_widths`](@ref), [`merge_peaks`](@ref).
 """
 function find_peaks(
         x; distance = nothing, prominence = nothing, width = nothing, rel_height = 0.5
@@ -340,10 +366,34 @@ end
 """
     peak_prominences(x, peaks) -> (; prominences, left_bases, right_bases)
 
-The prominence of each peak (SciPy 1.7's `scipy.signal.peak_prominences` with `wlen = None`,
-1-based). On each side, scan outwards from the peak until a higher sample or the end of the
-signal, and take the lowest sample seen as that side's base (ties keep the base nearest the
-peak). The prominence is the peak height minus the higher of the two bases.
+Return the prominence of each peak, as SciPy 1.7's `scipy.signal.peak_prominences` with
+`wlen = None` computes it, with 1-based indices.
+
+On each side, the scan runs outwards from the peak until a higher sample or the end of the
+signal, and the lowest sample seen is that side's base (ties keep the base nearest the
+peak). The prominence is the peak height minus the higher of the two bases. A prominence of
+0 logs a warning.
+
+# Arguments
+- `x::AbstractVector`: the signal.
+- `peaks`: the indices of the peaks. Throws an `ArgumentError` for an index outside `x`.
+
+# Returns
+- `NamedTuple`: `(; prominences, left_bases, right_bases)`, with `prominences` of type
+  `Vector{Float64}` and the bases of type `Vector{Int}`.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> peak_prominences([0, 1, 0, 2, 0, 1, 1, 0], [2, 4, 6]).prominences
+3-element Vector{Float64}:
+ 1.0
+ 2.0
+ 1.0
+```
+
+See also [`find_peaks`](@ref), [`peak_widths`](@ref).
 """
 function peak_prominences(x, peaks)
     xs = _signal(x)
@@ -355,12 +405,37 @@ end
     peak_widths(x, peaks; rel_height = 0.5, prominence_data = nothing)
         -> (; widths, width_heights, left_ips, right_ips)
 
-The width of each peak at `rel_height` of its prominence (SciPy 1.7's
-`scipy.signal.peak_widths`, 1-based). The reference height is `x[peak] − prominence ×
-rel_height`; the width runs between the points where the signal crosses it on either side,
-interpolated linearly and never past the prominence bases. `left_ips` and `right_ips` are
-those crossing points (fractional indices). `prominence_data` is the output of
-[`peak_prominences`](@ref), computed when not given.
+Return the width of each peak at `rel_height` of its prominence, as SciPy 1.7's
+`scipy.signal.peak_widths` computes it, with 1-based indices.
+
+The reference height is `x[peak] − prominence × rel_height`. The width runs between the
+points where the signal crosses it on either side, interpolated linearly and never past the
+prominence bases. A width of 0 logs a warning.
+
+# Arguments
+- `x::AbstractVector`: the signal.
+- `peaks`: the indices of the peaks. Throws an `ArgumentError` for an index outside `x`.
+
+# Keywords
+- `rel_height = 0.5`: the relative height, at least 0. Throws an `ArgumentError` when
+  negative.
+- `prominence_data = nothing`: the output of [`peak_prominences`](@ref), computed when not
+  given.
+
+# Returns
+- `NamedTuple`: `(; widths, width_heights, left_ips, right_ips)`, each a
+  `Vector{Float64}`. `left_ips` and `right_ips` are the crossing points (fractional
+  indices).
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> peak_widths([0, 1, 0, 2, 0, 1, 1, 0], [4])
+(widths = [1.0], width_heights = [1.0], left_ips = [3.5], right_ips = [4.5])
+```
+
+See also [`find_peaks`](@ref), [`peak_prominences`](@ref).
 """
 function peak_widths(x, peaks; rel_height = 0.5, prominence_data = nothing)
     xs = _signal(x)
@@ -373,8 +448,30 @@ end
 """
     merge_peaks(peaks, gap) -> Vector{Int}
 
-Thin sorted peak positions: keep a peak only if it lies more than `gap` samples after the
-last kept one. The first peak is always kept.
+Return sorted peak positions thinned: a peak is kept only if it lies more than `gap`
+samples after the last kept one.
+
+The first peak is always kept.
+
+# Arguments
+- `peaks`: the peak positions, ascending.
+- `gap`: the gap, in samples.
+
+# Returns
+- `Vector{Int}`: the kept positions.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> merge_peaks([3, 10, 20, 24], 5)
+3-element Vector{Int64}:
+  3
+ 10
+ 20
+```
+
+See also [`find_peaks`](@ref).
 """
 function merge_peaks(peaks, gap)
     out = Int[]

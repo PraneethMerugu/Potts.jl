@@ -4,13 +4,39 @@
 """
     cell_graph(σ; periodic = (false, …),
         neighborhood = VonNeumann(1)) -> Vector{Vector{Int}}
-    cell_graph(σ, lattice::Lattice; neighborhood = VonNeumann(1))
+    cell_graph(σ, lattice::Lattice; neighborhood = VonNeumann(1)) -> Vector{Vector{Int}}
 
-The contact graph of the cells of σ as adjacency lists: `g[c]` holds, sorted, the distinct
-cells that own a site neighboring (under `neighborhood`) a site of cell `c`, for `c` in
-`1:maximum(σ)`. The medium (0) is not a cell. `periodic` gives one flag per axis for a
-square lattice; pass a CorePotts `Lattice` instead for a hexagonal lattice or a domain.
-Built on CorePotts' [`contact_graph`](@ref).
+Return the contact graph of the cells of σ as adjacency lists.
+
+`g[c]` holds, sorted, the distinct cells that own a site neighboring (under
+`neighborhood`) a site of cell `c`, for `c` in `1:maximum(σ)`. The medium (0) is not a
+cell. It is built on CorePotts' [`contact_graph`](@ref).
+
+# Arguments
+- `σ::AbstractArray`: the ownership.
+- `lattice::Lattice`: a CorePotts lattice of the size of `σ`, for a hexagonal lattice or a
+  masked domain. Throws an `ArgumentError` for another size.
+
+# Keywords
+- `periodic = (false, …)`: one flag per axis of a square lattice. Throws an
+  `ArgumentError` for another count.
+- `neighborhood = VonNeumann(1)`: the neighbors that count as contacts.
+
+# Returns
+- `Vector{Vector{Int}}`: the adjacency lists.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> cell_graph([1 1 0; 2 0 3])
+3-element Vector{Vector{Int64}}:
+ [2]
+ [1]
+ []
+```
+
+See also [`reachable`](@ref), [`components`](@ref).
 """
 function cell_graph(
         σ::AbstractArray; periodic = ntuple(_ -> false, ndims(σ)),
@@ -33,8 +59,29 @@ end
 """
     reachable(g, seeds) -> Vector{Int}
 
-The cells reachable in the adjacency lists `g` (see [`cell_graph`](@ref)) from any of
-`seeds`, the seeds included, sorted. Breadth-first search.
+Return the cells reachable in the adjacency lists `g` from any of `seeds`, the seeds
+included, sorted.
+
+The search is breadth-first.
+
+# Arguments
+- `g`: adjacency lists, as from [`cell_graph`](@ref).
+- `seeds`: the starting cells.
+
+# Returns
+- `Vector{Int}`: the reachable cells.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> reachable([[2], [1], Int[]], [2])
+2-element Vector{Int64}:
+ 1
+ 2
+```
+
+See also [`components`](@ref), [`cell_graph`](@ref).
 """
 function reachable(g, seeds)
     seen = falses(length(g))
@@ -56,9 +103,29 @@ end
 """
     components(g, cells) -> Vector{Vector{Int}}
 
-The connected components of the subgraph of `g` (see [`cell_graph`](@ref)) induced by
-`cells`: edges to cells outside `cells` are ignored. Each component is sorted, and the
-components are ordered by their smallest member.
+Return the connected components of the subgraph of `g` induced by `cells`.
+
+Edges to cells outside `cells` are ignored. Each component is sorted, and the components
+are ordered by their smallest member.
+
+# Arguments
+- `g`: adjacency lists, as from [`cell_graph`](@ref).
+- `cells`: the cells of the subgraph.
+
+# Returns
+- `Vector{Vector{Int}}`: the components.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> components([[2], [1, 3], [2]], [1, 3])
+2-element Vector{Vector{Int64}}:
+ [1]
+ [3]
+```
+
+See also [`reachable`](@ref), [`cell_graph`](@ref).
 """
 function components(g, cells)
     inside = falses(length(g))
@@ -91,19 +158,40 @@ end
 """
     centroids(σ; periodic = (false, …)) -> Vector{NTuple{N, Float64}}
 
-The mean site coordinate (lattice indices) of each cell `1:maximum(σ)`; `NaN`s for an id
-that owns no site. (Unlike the model-level reading of a dead slot, which is 0, a missing
-cell is NaN here so it cannot pass as a real position.)
+Return the mean site coordinate (lattice indices) of each cell `1:maximum(σ)`.
 
-`periodic` has one `Bool` per axis, as in [`cell_graph`](@ref); a single `Bool` applies to
-every axis. On a periodic axis `d` a cell's sites are taken at their minimum image relative
-to the cell's first site in column-major order, and the mean is wrapped into
-`[1, size(σ, d) + 1)`, CorePotts `centroid`'s convention: a cell owning columns 10 and 1 of
-a 10-wide periodic lattice has its centroid at 10.5. Non-periodic axes (the default) take
-the plain mean of the indices, with no unwrapping. The minimum image is exact for a cell
-at most half the lattice wide along `d`. A wider cell gets a result that depends on where
-its first site (column-major) falls: on a 10-wide axis, a cell owning 5:10 reads 5.83, not
-7.5.
+A cell number that owns no site gets `NaN`s, so it cannot pass as a real position.
+
+On a periodic axis `d`, a cell's sites are taken at their minimum image relative to the
+cell's first site in column-major order, and the mean is wrapped into
+`[1, size(σ, d) + 1)`, the convention of CorePotts' `centroid`: a cell owning columns 10
+and 1 of a 10-wide periodic lattice has its centroid at 10.5. Non-periodic axes (the
+default) take the plain mean of the indices, with no unwrapping. The minimum image is exact
+for a cell at most half the lattice wide along `d`. A wider cell gets a result that depends
+on where its first site (column-major) falls: on a 10-wide axis, a cell owning 5:10 reads
+5.83, not 7.5.
+
+# Arguments
+- `σ::AbstractArray{<:Integer, N}`: the ownership.
+
+# Keywords
+- `periodic = (false, …)`: one `Bool` per axis, as in [`cell_graph`](@ref); a single
+  `Bool` applies to every axis. Throws an `ArgumentError` for another count.
+
+# Returns
+- `Vector{NTuple{N, Float64}}`: the centroid of each cell.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> σ = zeros(Int, 10, 1); σ[[10, 1]] .= 1;
+
+julia> centroids(σ; periodic = true), centroids(σ)
+([(10.5, 1.0)], [(5.5, 1.0)])
+```
+
+See also [`cell_graph`](@ref), [`chain_centroids`](@ref).
 """
 function centroids(
         σ::AbstractArray{<:Integer, N};

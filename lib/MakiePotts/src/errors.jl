@@ -28,7 +28,21 @@ function Base.showerror(io::IO, error::MissingRenderChannelError)
     return print(io, ". Construct the frame with an explicit RenderChannel value")
 end
 
-"""Thrown when a Makie recording finishes without producing a nonempty output file."""
+"""
+    RecordingError(destination)
+
+Thrown when a Makie recording finishes without a nonempty output file.
+
+[`record_potts`](@ref) and [`record_field`](@ref) write to a temporary file next to
+`destination` and move it into place only when it is nonempty, so on this error
+`destination` is left as it was.
+
+# Fields
+
+  - `destination::String`: the requested output file.
+
+See also [`record_potts`](@ref).
+"""
 struct RecordingError <: Exception
     destination::String
 end

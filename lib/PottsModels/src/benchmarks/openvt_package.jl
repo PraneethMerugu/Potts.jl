@@ -113,57 +113,81 @@ const _OPENVT_PKG_LATER = (:f8beta,)
 
 """
     PottsModels.openvt_submission_package(outdir::AbstractString;
-                                          bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing),
-                                          allow_pending::Bool = false,
-                                          split = nothing,
-                                          release_tag = PottsModels.OPENVT_BULK_RELEASE_TAG)
+        bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing), allow_pending::Bool = false,
+        split = nothing, release_tag = PottsModels.OPENVT_BULK_RELEASE_TAG)
 
 Build the Potts.jl submission to the OpenVT growing-monolayer benchmark in the consortium
-repository's layout (spec 15 §4.0.1, conforming to the consortium's scripts where the
-manuscript is silent). The framework token `<FW>` is `PottsModels.OPENVT_FRAMEWORK_TOKEN`.
+repository's layout (`docs/design/research/model-specs/15_openvt_monolayer.md` §4.0.1,
+following the consortium's scripts where the manuscript is silent).
 
-With `split = nothing` (the default) it writes `outdir/implementations/<FW>/` (the
-`@potts_model` sources, the record runners, a README on rerunning everything, and
-`parameters.csv`) and `outdir/results/<FW>/` (the O4 relaxation widths and Table S5, the O6
-metrics per run with their replicate means and neighbor histograms, the bare Fig 1 panel as
-`closeup.png`, each record's provenance without its host name, Table 1 as a CSV, and a
-README with the units, seeds, the notes for the consortium scripts and the deviations
-table), plus the bulk items: the O1 per-cell time series (`x,y,i,n,g`) as one descriptively
-named zip per case with their manifest, the A3 inhibition shares derived from that manifest,
-the O2 Figure 5 zip (k = 0…99), and the O3 and O5 sweep files. It returns `outdir`.
+The framework token `<FW>` is `PottsModels.OPENVT_FRAMEWORK_TOKEN`. With `split = nothing`
+(the default) the function writes:
+- `outdir/implementations/<FW>/`: the `@potts_model` sources, the record runners, a README
+  on rerunning everything, and `parameters.csv`;
+- `outdir/results/<FW>/`: the O4 relaxation widths and Table S5, the O6 metrics per run
+  with their replicate means and neighbor histograms, the bare Fig 1 panel as
+  `closeup.png`, each record's provenance without its host name, Table 1 as a CSV, and a
+  README with the units, seeds, the notes for the consortium scripts and the deviations
+  table;
+- the bulk items: the O1 per-cell time series (`x,y,i,n,g`) as one descriptively named zip
+  per case with their manifest, the inhibition shares derived from that manifest, the O2
+  Figure 5 zip (k = 0…99), and the O3 and O5 sweep files.
+
+`results/<FW>/figures/` holds byte copies of the records' renders of the manuscript's
+Figures 5 (`fig5_shared.png`), 7 (`fig7_grid.png`) and 8 (`fig8_grid.png`).
 
 With `split = :email` it writes the same package, split for sending by mail:
-`outdir/core.zip` (every file except the bulk ones, unpacking at the consortium
-repository's root; its results README links each bulk file by name, sha256 and its
-release-download URL under `release_tag`), `outdir/bulk/` (the O1 zips, the O2 zip and the
-O1 manifest, byte copies, to be attached to a public release; nothing here creates one) and
-`outdir/EMAIL.md` (a plain-text draft cover note). It returns
-`(; outdir, core_bytes, bulk_bytes, bulk)` with the size of `core.zip`, the summed size of
-`bulk/` and the bulk file sizes. Any other `split` is an `ArgumentError`.
+- `outdir/core.zip`: every file except the bulk ones, unpacking at the consortium
+  repository's root. Its results README links each bulk file by name, sha256 and its
+  release-download URL under `release_tag`.
+- `outdir/bulk/`: byte copies of the O1 zips, the O2 zip and the O1 manifest, to be
+  attached to a public release. This function does not create the release.
+- `outdir/EMAIL.md`: a plain-text draft cover note.
 
 Everything is read from the committed records under
-`lib/PottsModels/reproductions/data/15/`, the model defaults and the bulk directory; nothing
-is simulated. An item's record is the newest directory (by name) whose `provenance.toml`
-`item` matches. Every record (calibration, Figure 5, Figures 3 and 9, Figures 1 and 4,
-sweeps, O1 re-run, β colonies and O1 post-processing) is required. `allow_pending = true`
-(default `false`) allows a draft build without the β-colonies record (M's Figure 8
-colonies): Figure 8 and its O5 files are left out and the results README says "Figure 8:
-pending". Never upload a draft build.
+`lib/PottsModels/reproductions/data/15/`, the model defaults and the bulk directory;
+nothing is simulated. An item's record is the newest directory (by name) whose
+`provenance.toml` `item` matches. Every record (calibration, Figure 5, Figures 3 and 9,
+Figures 1 and 4, sweeps, O1 re-run, β colonies and O1 post-processing) is required, except
+as `allow_pending` allows.
 
-`results/<FW>/figures/` holds byte copies of the records' renders of M's Figures 5
-(`fig5_shared.png`), 7 (`fig7_grid.png`) and 8 (`fig8_grid.png`).
+Two calls on the same commit and bulk directory write byte-identical files (zip time
+stamps are fixed, not read from the clock). A build that fails part-way removes what it
+wrote, so the same `outdir` can be used again.
 
-`bulk` is a directory outside git holding the O1 zips and the O2 zip that the O1
-post-processing record's `archives.tsv` names (written by its `post_o1.jl`), each with the
-size and sha256 pinned there. Nothing else is read from it, and its files are copied byte
-for byte.
+# Arguments
+- `outdir::AbstractString`: the output directory. It must lie outside any git checkout
+  (the package is not committed) and must not exist or be an empty directory.
 
-Two calls on the same commit and bulk directory write byte-identical files (zip time stamps
-are fixed, not read from the clock). `outdir` must lie outside any git checkout (the package
-is not committed) and must not exist or be an empty directory; `bulk` must be given, be a
-directory outside git and hold the pinned bytes; otherwise this is an `ArgumentError`,
-raised before anything is written. A build that fails part-way removes what it wrote, so the
-same `outdir` can be used again.
+# Keywords
+- `bulk`: a directory outside git that holds the O1 zips and the O2 zip that the O1
+  post-processing record's `archives.tsv` names, each with the size and sha256 recorded
+  there. Nothing else is read from it, and its files are copied byte for byte. By default,
+  the environment variable `OPENVT_PACKAGE_BULK`.
+- `allow_pending::Bool = false`: allow a draft build without the β-colonies record (the
+  manuscript's Figure 8 colonies). Figure 8 and its O5 files are left out and the results
+  README says "Figure 8: pending". Never upload a draft build.
+- `split = nothing`: `nothing` or `:email`.
+- `release_tag = PottsModels.OPENVT_BULK_RELEASE_TAG`: the release tag in the bulk links of
+  `split = :email`.
+
+Throws an `ArgumentError`, before anything is written, for another `split`, an invalid
+`release_tag`, an `outdir` inside git or not empty, a missing record, or a `bulk` that is
+not given, is inside git or does not hold the recorded bytes.
+
+# Returns
+- With `split = nothing`: `outdir`.
+- With `split = :email`: `(; outdir, core_bytes, bulk_bytes, bulk)`, with the size of
+  `core.zip`, the summed size of `bulk/` and the bulk file sizes.
+
+# Examples
+```julia
+using PottsModels
+PottsModels.openvt_submission_package(mktempdir(); bulk = "/data/openvt-bulk",
+    split = :email)
+```
+
+See also [`write_openvt`](@ref), [`openvt_metrics`](@ref).
 """
 function openvt_submission_package(
         outdir::AbstractString; bulk = get(ENV, _OPENVT_PKG_BULK_ENV, nothing),

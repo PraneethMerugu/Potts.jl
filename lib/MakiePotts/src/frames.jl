@@ -16,8 +16,34 @@ end
 @doc "An immutable lattice site owned by a medium domain." ObstacleSite
 
 """
-Semantic owner of one rendered lattice site. `id` is a finite-cell ID for
-`CellSite` and a medium-domain ID otherwise.
+    RenderOwner(kind, id)
+
+The owner of one rendered lattice site: a cell or a medium.
+
+Two owners are equal when kind and number are equal. Frames built by
+[`renderframe`](@ref) give every medium and obstacle site the number 1.
+
+# Arguments
+
+  - `kind::RenderOwnerKind`: [`CellSite`](@ref), [`MediumSite`](@ref) or
+    [`ObstacleSite`](@ref).
+  - `id::Integer`: the cell number for `CellSite`, the medium number otherwise; in
+    `1:typemax(UInt32)`. Throws an `ArgumentError` otherwise.
+
+# Fields
+
+  - `kind::RenderOwnerKind`, `id::UInt32`: as given.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> RenderOwner(CellSite, 3) == RenderOwner(CellSite, 3)
+true
+```
+
+See also [`owner_at`](@ref), [`RenderCellIdentity`](@ref).
 """
 struct RenderOwner
     kind::RenderOwnerKind
@@ -36,7 +62,36 @@ function Base.hash(owner::RenderOwner, seed::UInt)
     return hash(owner.id, hash(owner.kind, seed))
 end
 
-"""Generation-aware finite-cell identity."""
+"""
+    RenderCellIdentity(id, generation)
+
+The identity of one cell: its number and the generation of that number.
+
+A cell number is reused after its cell is gone; the generation tells the two cells apart
+(`CorePotts.cell_generations`). Two identities are equal when both parts are equal.
+
+# Arguments
+
+  - `id::Integer`: the cell number, in `1:typemax(UInt32)`.
+  - `generation::Integer`: the generation, in `0:typemax(UInt64)`.
+
+Throws an `ArgumentError` for a value outside its range.
+
+# Fields
+
+  - `id::UInt32`, `generation::UInt64`: as given.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> RenderCellIdentity(4, 2) == RenderCellIdentity(4, 1)
+false
+```
+
+See also [`RenderCellMetadata`](@ref), [`CellChannelKey`](@ref).
+"""
 struct RenderCellIdentity
     id::UInt32
     generation::UInt64
@@ -56,7 +111,37 @@ function Base.hash(identity::RenderCellIdentity, seed::UInt)
     return hash(identity.generation, hash(identity.id, seed))
 end
 
-"""Semantic metadata for one live finite cell."""
+"""
+    RenderCellMetadata(identity, cell_type; label = "Cell \$(identity.id)")
+
+The metadata of one live cell in a frame: its identity, its kind and its name.
+
+# Arguments
+
+  - `identity::RenderCellIdentity`: the cell.
+  - `cell_type::Integer`: the kind number, in `1:typemax(UInt32)`. Throws an
+    `ArgumentError` otherwise. [`renderframe`](@ref) uses the kind number of the cell.
+
+# Keywords
+
+  - `label::AbstractString`: the name of the cell; `"Cell n"` for cell number `n` by
+    default.
+
+# Fields
+
+  - `identity::RenderCellIdentity`, `cell_type::UInt32`, `label::String`: as given.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> RenderCellMetadata(RenderCellIdentity(4, 1), 2).label
+"Cell 4"
+```
+
+See also [`cell_metadata`](@ref), [`PottsRenderFrame`](@ref).
+"""
 struct RenderCellMetadata
     identity::RenderCellIdentity
     cell_type::UInt32
@@ -84,8 +169,45 @@ function Base.hash(metadata::RenderCellMetadata, seed::UInt)
 end
 
 """
-Physical geometry of a rendered ownership array. Coordinates use cell centers;
-`origin` is the lower physical edge of the first site.
+    RenderGeometry(size; spacing = (1.0, …), origin = (0.0, …),
+        source_axes = (1, 2, …))
+
+The physical geometry of a 2D or 3D ownership array.
+
+Site `i` along axis `k` covers `origin[k] + (i - 1) * spacing[k]` to
+`origin[k] + i * spacing[k]`; plots center it between the two. Two geometries are equal
+when all four fields are equal.
+
+# Arguments
+
+  - `size::NTuple{N, Integer}`: the number of sites on each axis, positive, with `N` 2
+    or 3.
+
+# Keywords
+
+  - `spacing`: the site width on each axis, positive and finite.
+  - `origin`: the lower edge of the first site on each axis, finite.
+  - `source_axes`: the axis of the source array that each axis shows, positive and
+    unique. An [`OrthogonalSlice`](@ref) of axis 3 gives `(1, 2)`.
+
+Throws an `ArgumentError` for a value that breaks these rules.
+
+# Fields
+
+  - `size::NTuple{N, Int}`, `spacing::NTuple{N, T}`, `origin::NTuple{N, T}`,
+    `source_axes::NTuple{N, Int}`, with `T` the float type of `spacing` and `origin`
+    promoted together.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> RenderGeometry((4, 3); spacing = (0.5, 0.5)).spacing
+(0.5, 0.5)
+```
+
+See also [`frame_geometry`](@ref).
 """
 struct RenderGeometry{N, T <: AbstractFloat}
     size::NTuple{N, Int}
@@ -138,7 +260,25 @@ function Base.hash(geometry::RenderGeometry, seed::UInt)
     )
 end
 
-"""Data-lineage record carried by a complete render frame."""
+"""
+    RenderProvenance(source, source_type, residency, request)
+
+Where the data of a render frame came from.
+
+# Arguments
+
+  - `source::Symbol`: the kind of source; `:saved_state` for a frame from
+    [`renderframe`](@ref), `:manual` by default for a frame built directly.
+  - `source_type`: the type of the source (stored as its `String` name).
+  - `residency::Symbol`: where the source data were; `:host` for both cases above.
+  - `request`: the [`RenderRequest`](@ref) used.
+
+# Fields
+
+  - `source::Symbol`, `source_type::String`, `residency::Symbol`, `request`.
+
+See also [`frame_provenance`](@ref).
+"""
 struct RenderProvenance{R}
     source::Symbol
     source_type::String
@@ -154,9 +294,55 @@ function RenderProvenance(
 end
 
 """
-Canonical, validated render-frame snapshot. Construction defensively copies
-mutable input containers; callers consume it as logically immutable through the
-accessor protocol.
+    PottsRenderFrame(mcs, owners, cells; channels = (),
+        geometry = RenderGeometry(size(owners)),
+        provenance = RenderProvenance(:manual, typeof(owners), :host, RenderRequest()))
+
+A checked snapshot of one Potts frame, ready to plot.
+
+The constructor checks the inputs and copies the mutable ones (owners, cells and channel
+values), so later changes to the inputs do not reach the frame. Treat the frame as
+read-only and read it through [`frame_mcs`](@ref), [`frame_size`](@ref),
+[`frame_geometry`](@ref), [`owner_at`](@ref), [`cell_metadata`](@ref),
+[`available_channels`](@ref), [`frame_channel`](@ref) and [`frame_provenance`](@ref).
+
+# Arguments
+
+  - `mcs::Integer`: the MCS of the frame, nonnegative.
+  - `owners::AbstractArray{RenderOwner, N}`: the owner of each site, with `N` 2 or 3.
+  - `cells::AbstractVector{RenderCellMetadata}`: the metadata of the cells. Cell numbers
+    are unique, and every cell owner in `owners` has an entry.
+
+# Keywords
+
+  - `channels::Tuple`: [`RenderChannel`](@ref) values with unique keys. Site values are
+    of the size of `owners`, cell identities belong to `cells` with the same generation,
+    and every value is of its key's value type or `missing`.
+  - `geometry::RenderGeometry{N}`: of the size of `owners`.
+  - `provenance`: a [`RenderProvenance`](@ref).
+
+Throws `MakiePotts.InvalidRenderFrameError`, which lists every broken rule.
+
+# Fields
+
+None public. Use the accessors above.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> c, m = RenderOwner(CellSite, 1), RenderOwner(MediumSite, 1);
+
+julia> cell = RenderCellMetadata(RenderCellIdentity(1, 1), 1);
+
+julia> frame = PottsRenderFrame(5, [c m; c m], [cell]);
+
+julia> frame_mcs(frame), frame_size(frame)
+(5, (2, 2))
+```
+
+See also [`renderframe`](@ref), [`render_frame_conformance`](@ref).
 """
 struct PottsRenderFrame{
         N, O <: AbstractArray{RenderOwner, N},
@@ -268,20 +454,110 @@ function PottsRenderFrame(
     )
 end
 
-"""Return the Monte Carlo step represented by a render frame."""
+"""
+    frame_mcs(frame) -> Int
+
+Return the MCS of a render frame.
+
+# Arguments
+
+  - `frame::PottsRenderFrame`: the frame.
+
+# Returns
+
+  - `Int`: the MCS.
+
+See also [`frame_size`](@ref), [`PottsRenderFrame`](@ref).
+"""
 frame_mcs(frame::PottsRenderFrame) = frame.mcs
-"""Return the spatial dimensions represented by a render frame."""
+"""
+    frame_size(frame) -> NTuple{N, Int}
+
+Return the number of sites on each axis of a render frame. `size(frame)` is the same.
+
+# Arguments
+
+  - `frame::PottsRenderFrame`: the frame.
+
+# Returns
+
+  - `NTuple{N, Int}`: the size, with `N` 2 or 3.
+
+See also [`frame_geometry`](@ref).
+"""
 frame_size(frame::PottsRenderFrame) = frame.geometry.size
-"""Return the physical [`RenderGeometry`](@ref) of a render frame."""
+"""
+    frame_geometry(frame) -> RenderGeometry
+
+Return the physical geometry of a render frame.
+
+# Arguments
+
+  - `frame::PottsRenderFrame`: the frame.
+
+# Returns
+
+  - [`RenderGeometry`](@ref): the geometry.
+
+See also [`frame_size`](@ref).
+"""
 frame_geometry(frame::PottsRenderFrame) = frame.geometry
-"""Return the value-like source-lineage record carried by a frame."""
+"""
+    frame_provenance(frame) -> RenderProvenance
+
+Return the record of where the data of a render frame came from.
+
+# Arguments
+
+  - `frame::PottsRenderFrame`: the frame.
+
+# Returns
+
+  - [`RenderProvenance`](@ref): the record.
+
+See also [`renderframe`](@ref).
+"""
 frame_provenance(frame::PottsRenderFrame) = frame.provenance
-"""Return the semantic [`RenderOwner`](@ref) at `site`."""
+"""
+    owner_at(frame, site) -> RenderOwner
+
+Return the owner of `site` in a render frame.
+
+# Arguments
+
+  - `frame::PottsRenderFrame`: the frame.
+  - `site`: any index of the ownership array, for example a `CartesianIndex`.
+
+# Returns
+
+  - [`RenderOwner`](@ref): the owner.
+
+See also [`cell_metadata`](@ref).
+"""
 owner_at(frame::PottsRenderFrame, site) = frame.owners[site]
 
 """
-Return generation-aware metadata for a finite-cell identity or semantic cell
-owner. Downstream frames implement both call forms.
+    cell_metadata(frame, identity::RenderCellIdentity) -> RenderCellMetadata
+    cell_metadata(frame, owner::RenderOwner) -> RenderCellMetadata
+
+Return the metadata of a cell in a render frame, from its identity or from a cell owner.
+
+A frame type of another package that subtypes [`AbstractPottsRenderFrame`](@ref)
+implements both methods ([`render_frame_conformance`](@ref) checks that they agree).
+
+# Arguments
+
+  - `frame::PottsRenderFrame`: the frame.
+  - `identity::RenderCellIdentity`: the cell. Throws a `KeyError` when the frame has no
+    cell with this number and generation.
+  - `owner::RenderOwner`: a `CellSite` owner. Throws an `ArgumentError` for another kind
+    and a `KeyError` when the frame has no cell with this number.
+
+# Returns
+
+  - [`RenderCellMetadata`](@ref): the metadata.
+
+See also [`owner_at`](@ref).
 """
 function cell_metadata(frame::PottsRenderFrame, identity::RenderCellIdentity)
     index = get(frame.cell_lookup, identity.id, nothing)
@@ -298,10 +574,40 @@ function cell_metadata(frame::PottsRenderFrame, owner::RenderOwner)
     return frame.cells[index]
 end
 
-"""Return the typed keys of all explicitly materialized frame channels."""
+"""
+    available_channels(frame) -> Tuple
+
+Return the keys of the channels of a render frame, in the order they were given.
+
+# Arguments
+
+  - `frame::PottsRenderFrame`: the frame.
+
+# Returns
+
+  - `Tuple`: the [`RenderChannelKey`](@ref) values.
+
+See also [`frame_channel`](@ref).
+"""
 available_channels(frame::PottsRenderFrame) = map(item -> item.key, frame.channels)
 
-"""Return the materialized channel matching `key`, or throw if absent."""
+"""
+    frame_channel(frame, key) -> RenderChannel
+
+Return the channel of a render frame with key `key`.
+
+# Arguments
+
+  - `frame::PottsRenderFrame`: the frame.
+  - `key::RenderChannelKey`: the key. Throws `MakiePotts.MissingRenderChannelError`,
+    which lists the keys the frame has, when no channel matches.
+
+# Returns
+
+  - [`RenderChannel`](@ref): the channel.
+
+See also [`available_channels`](@ref).
+"""
 function frame_channel(frame::PottsRenderFrame, key::RenderChannelKey)
     index = findfirst(item -> item.key == key, frame.channels)
     index === nothing && throw(
@@ -315,7 +621,18 @@ end
 Base.size(frame::PottsRenderFrame) = frame_size(frame)
 Base.ndims(::AbstractPottsRenderFrame{N}) where {N} = N
 
-"""Reusable downstream conformance result for an open render-frame implementation."""
+"""
+    RenderFrameConformance(valid, issues)
+
+The result of [`render_frame_conformance`](@ref). `isvalid(report)` is `report.valid`.
+
+# Fields
+
+  - `valid::Bool`: `true` when no check failed.
+  - `issues::Vector{String}`: one message per failed check, without repeats.
+
+See also [`assert_render_frame_conformance`](@ref).
+"""
 struct RenderFrameConformance
     valid::Bool
     issues::Vector{String}
@@ -333,9 +650,39 @@ Base.isvalid(report::RenderFrameConformance) = report.valid
 end
 
 """
-    render_frame_conformance(frame)
+    render_frame_conformance(frame) -> RenderFrameConformance
 
-Exercise the stable accessor protocol without relying on physical frame fields.
+Check that a render frame answers the accessor functions correctly.
+
+The check calls only the accessors (`frame_mcs`, `frame_size`, `frame_geometry`,
+`owner_at` at every site, both `cell_metadata` methods for each cell site,
+`available_channels`, `frame_channel` and `frame_provenance`), so it applies to a frame
+type of another package that subtypes [`AbstractPottsRenderFrame`](@ref). An accessor
+that throws is reported as an issue, not rethrown (except for fatal errors such as
+`InterruptException`). The site loop stops at the first failing site.
+
+# Arguments
+
+  - `frame::AbstractPottsRenderFrame`: the frame.
+
+# Returns
+
+  - [`RenderFrameConformance`](@ref): the result.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> m = RenderOwner(MediumSite, 1);
+
+julia> frame = PottsRenderFrame(0, [m m; m m], RenderCellMetadata[]);
+
+julia> isvalid(render_frame_conformance(frame))
+true
+```
+
+See also [`assert_render_frame_conformance`](@ref).
 """
 function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
     issues = String[]
@@ -417,7 +764,24 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
     return RenderFrameConformance(isempty(issues), unique(issues))
 end
 
-"""Throw `InvalidRenderFrameError` unless the open accessor protocol conforms."""
+"""
+    assert_render_frame_conformance(frame) -> frame
+
+Return `frame` when [`render_frame_conformance`](@ref) finds no issue.
+
+The plot recipes and [`record_potts`](@ref) call this on each frame.
+
+# Arguments
+
+  - `frame::AbstractPottsRenderFrame`: the frame. Throws
+    `MakiePotts.InvalidRenderFrameError`, which lists the issues, when a check fails.
+
+# Returns
+
+  - `frame`, unchanged.
+
+See also [`PottsRenderFrame`](@ref).
+"""
 function assert_render_frame_conformance(frame::AbstractPottsRenderFrame)
     report = render_frame_conformance(frame)
     report.valid || throw(InvalidRenderFrameError(report.issues))

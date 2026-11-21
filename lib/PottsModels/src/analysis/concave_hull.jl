@@ -11,11 +11,10 @@
 const _Point2 = NTuple{2, Float64}
 
 """
-    concave_hull(points; concavity = 2.0, length_threshold = 0.0) -> Vector{NTuple{2,
-        Float64}}
+    concave_hull(points; concavity = 2.0, length_threshold = 0.0)
+        -> Vector{NTuple{2, Float64}}
 
-The concave hull of the planar points `points` (any collection of 2-tuples or 2-vectors of
-reals; converted to `Float64`, and not modified). The result is the closed boundary, without
+Return the concave hull of the planar points `points`: the closed boundary, without
 repeating the first vertex.
 
 The construction is the OpenVT monolayer benchmark's (`metrics.cpp` and `concaveman.h` in
@@ -36,23 +35,20 @@ the consortium repository), step for step:
 4. The vertices are listed clockwise, starting at the successor of the last convex-hull
    vertex, so points carved into the closing edge come first.
 
-A larger `concavity` gives a simpler hull (`Inf`: the convex hull); `metrics.cpp` uses 1.5.
-An empty `points`, a non-finite coordinate, a `concavity` that is not positive or a negative
-`length_threshold` is an `ArgumentError`.
-
 The arithmetic follows the C++ operation for operation, without fused multiply-adds. The
 result is identical to the reference (`metrics.cpp` built with `-ffp-contract=off`) on the
-25 OpenVT parameter-plane colonies and on fuzzed clouds without ties. It departs from the
-reference on purpose in two places, recorded as defects D12 and D13 of the benchmark spec.
-In both, the reference's result depends on luck, and this one is the correct hull:
+25 OpenVT parameter-plane colonies and on fuzzed clouds without ties
+(`test/acceptance/openvt_analysis_port_tests.jl`). It departs from the reference in two
+places, both listed in `docs/design/research/model-specs/15_openvt_monolayer.md`. In both,
+the reference's result depends on chance, and this one is the correct hull:
 
-- **D12, the Graham order.** `metrics.cpp` sorts with a floating-point orientation whose
-  sign is rounding noise for points collinear with `p₀`, which is not a strict weak
-  ordering. Here the orientation sign is exact: it is `metrics.cpp`'s value wherever that
-  value's rounding bound decides the sign, and is computed in exact rational arithmetic
-  otherwise. Points on one ray from `p₀` go nearer first, and collinear points are dropped,
-  so the convex hull is strictly convex and does not depend on the sort algorithm.
-- **D13, the candidate search.** concaveman's R-tree prunes boxes by a segment–box distance
+- **The Graham order.** `metrics.cpp` sorts with a floating-point orientation whose sign
+  is rounding noise for points collinear with `p₀`, which is not a strict weak ordering.
+  Here the orientation sign is exact: it is `metrics.cpp`'s value wherever that value's
+  rounding bound decides the sign, and is computed in exact rational arithmetic otherwise.
+  Points on one ray from `p₀` go nearer first, and collinear points are dropped, so the
+  convex hull is strictly convex and does not depend on the sort algorithm.
+- **The candidate search.** concaveman's R-tree prunes boxes by a segment–box distance
   that overestimates next to near-parallel or axis-aligned edges, so it can miss the
   nearest candidate. Here every live point within the distance limit is examined, nearest
   first.
@@ -64,13 +60,38 @@ Two further caveats:
   differ on a perfect lattice). Here a tie goes to the point that comes first in the Graham
   order.
 - **Platform.** All arithmetic is `Float64`. The reference was validated on arm64, where
-  `long double` is `double`; an x86 build of `metrics.cpp` with 80-bit `long double` may
+  `long double` is `double`; an x86 build of `metrics.cpp` with 80-bit `long double` can
   differ in the last bits.
 
-Points and hull edges are indexed by uniform grids: a hull of ``10⁴`` colony centroids
-takes milliseconds. Near-degenerate input whose orientation signs need exact rational
-arithmetic (many points exactly collinear at non-integer coordinates) is slower, up to
-seconds for ``10⁴`` points on one line.
+Points and hull edges are indexed by uniform grids. Near-degenerate input whose
+orientation signs need exact rational arithmetic (many points exactly collinear at
+non-integer coordinates) is slower.
+
+# Arguments
+- `points`: any collection of 2-tuples or 2-vectors of reals, converted to `Float64` and
+  not modified.
+
+# Keywords
+- `concavity::Real = 2.0`: a larger value gives a simpler hull (`Inf`: the convex hull);
+  `metrics.cpp` uses 1.5. It must be positive.
+- `length_threshold::Real = 0.0`: edges shorter than this are not refined. It must not be
+  negative.
+
+Throws an `ArgumentError` for empty `points`, a coordinate that is not finite, a
+`concavity` that is not positive or a negative `length_threshold`.
+
+# Returns
+- `Vector{NTuple{2, Float64}}`: the boundary vertices, clockwise.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> length(concave_hull([(0, 0), (2, 0), (2, 2), (0, 2), (1, 1)]))
+4
+```
+
+See also `PottsModels.openvt_metrics`.
 """
 function concave_hull(points; concavity::Real = 2.0, length_threshold::Real = 0.0)
     pts = _Point2[(Float64(p[1]), Float64(p[2])) for p in points]

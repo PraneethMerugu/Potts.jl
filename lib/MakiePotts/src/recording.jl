@@ -59,14 +59,51 @@ function _atomic_record(write_recording::Function, filename::AbstractString)
 end
 
 """
-    record_potts(filename, frames; framerate=30, kwargs...)
-    record_potts(filename, solution; request=RenderRequest(), kwargs...)
+    record_potts(filename, frames; framerate = 30, kwargs...) -> String
+    record_potts(filename, solution; request = RenderRequest(), kwargs...) -> String
 
-Thin recording wrapper over `Makie.record`. All frames are validated before the
-first output frame is written. `solution` is a `PottsSolution`, whose states are rendered
-first (`renderframes`), or the frames a run wrote to disk (`CorePotts.PottsFrames`), which
-are read and rendered one at a time; each is validated when it is rendered, and a failure
-leaves no file.
+Write a video of 2D render frames, one video frame per render frame, with `Makie.record`.
+
+A vector of frames is checked in full before the first frame is written. A
+`CorePotts.PottsSolution` is rendered first ([`renderframes`](@ref)). Frames a run wrote to
+disk (`CorePotts.PottsFrames`) are read, rendered and checked one at a time. The file is
+written to a temporary file next to `filename` and moved into place when it is complete,
+so a failure leaves no file.
+
+# Arguments
+
+  - `filename::AbstractString`: the output file; its extension (`.mp4`, `.gif`, …) sets
+    the format. Throws an `ArgumentError` without one.
+  - `frames::AbstractVector{<:AbstractPottsRenderFrame{2}}`: the frames, at least one,
+    all with the same geometry.
+  - `solution`: a `CorePotts.PottsSolution` or `CorePotts.PottsFrames` of a 2D run.
+
+# Keywords
+
+  - `request::RenderRequest = RenderRequest()`: as for [`renderframe`](@ref).
+  - `framerate::Real = 30`: frames per second, positive and finite.
+  - `encoding::AbstractPottsEncoding = CellTypeEncoding()`: the encoding.
+  - `title::AbstractString = "Potts model"`: the axis title.
+  - `figure = (;)`, `axis = (;)`, `plot = (;)`: keywords of the figure, the axis and
+    [`pottsplot`](@ref).
+
+Throws an `ArgumentError` for no frames, frames of different geometry or a bad
+framerate, `MakiePotts.InvalidRenderFrameError` for a frame that fails
+[`render_frame_conformance`](@ref), and [`MakiePotts.RecordingError`](@ref) when Makie
+writes an empty file.
+
+# Returns
+
+  - `String`: `filename`.
+
+# Examples
+
+```julia
+using Potts, MakiePotts, CairoMakie
+record_potts("run.mp4", sol; framerate = 10, title = "Mix")
+```
+
+See also [`explore_potts`](@ref), [`record_field`](@ref).
 """
 function record_potts(
         filename::AbstractString,

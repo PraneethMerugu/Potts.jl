@@ -5,17 +5,31 @@
 """
     CompiledPottsSystem
 
-A `PottsSystem` after `mtkcompile`: an MTK `AbstractSystem` that is complete. MTK's
-accessors (`equations`, `unknowns`, `parameters`, `observed`, `initial_conditions`,
-`guesses`, `inputs`, `outputs`, `independent_variable`, the metadata) and `csys.x` answer as
-for the model it was compiled from, and SymbolicIndexingInterface getters built from it
-(`getp(csys, p)`) work on its problems, integrators and solutions. It also holds what a CPM
-sweep needs and no MTK system holds: the energy terms classified by domain with their
-derived copy deltas, the trackers and relations the model needs, and its footprint. It is
-read-only: `setmetadata`, `rename`, `compose`, `extend`, `toggle_namespacing` and its use as
-a component of an MTK System (`system ∘ csys`) are `ArgumentError`s; apply them to the
-model, then compile it. [`Potts.inner`](@ref)`(csys)` is the System of the model as
+A `PottsSystem` after `mtkcompile`: a complete ModelingToolkit `AbstractSystem`.
+
+MTK's accessors (`equations`, `unknowns`, `parameters`, `observed`, `initial_conditions`,
+`guesses`, `inputs`, `outputs`, `independent_variable`, the metadata) and `csys.x` answer
+as for the model it was compiled from. SymbolicIndexingInterface getters built from it
+(`getp(csys, p)`) work on its problems, integrators and solutions.
+
+It also holds what a CPM sweep needs and no MTK system holds: the energy terms classified
+by domain with their derived copy deltas, the trackers and relations that the model needs,
+and its footprint.
+
+It is read-only. `setmetadata`, `rename`, `compose`, `extend`, `toggle_namespacing` and its
+use as a component of an MTK System (`system ∘ csys`) throw an `ArgumentError`: apply them
+to the model, then compile it. [`Potts.inner`](@ref)`(csys)` is the System of the model as
 compiled.
+
+The fields are not public. Read it through the MTK accessors and [`Potts.inner`](@ref).
+
+# Examples
+```julia
+csys = mtkcompile(sys)
+prob = PottsProblem(csys, op, (0, 100); seed = 1)
+```
+
+See also [`PottsSystem`](@ref), [`generated_code`](@ref), [`Potts.ode_system`](@ref).
 """
 struct CompiledPottsSystem <: ModelingToolkitBase.AbstractSystem
     sys::PottsSystem

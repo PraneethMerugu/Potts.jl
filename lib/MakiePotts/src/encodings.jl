@@ -10,7 +10,34 @@ end
 @doc "The encoding produces numeric values suitable for a Makie \
     `Colorbar`." ContinuousEncoding
 
-"""Encode finite cells by biological cell type; this is the default."""
+"""
+    CellTypeEncoding(; label = "Cell type")
+
+Color cells by kind (the frame's `cell_type`). This is the default encoding of the plot
+recipes.
+
+Categorical: medium and obstacle sites take the first category, and each kind
+present in the frame takes the next ones in increasing order.
+
+# Keywords
+
+  - `label::AbstractString = "Cell type"`: the title of the legend.
+
+# Fields
+
+  - `label::String`: as given.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> encoding_label(CellTypeEncoding())
+"Cell type"
+```
+
+See also [`CellIdentityEncoding`](@ref), [`encode_frame`](@ref).
+"""
 struct CellTypeEncoding <: AbstractPottsEncoding
     label::String
 end
@@ -18,7 +45,34 @@ function CellTypeEncoding(; label::AbstractString = "Cell type")
     return CellTypeEncoding(String(label))
 end
 
-"""Encode finite cells by generation-aware identity."""
+"""
+    CellIdentityEncoding(; label = "Cell identity")
+
+Color cells by identity, so that each cell has its own color.
+
+Categorical: medium and obstacle sites take the first category, and each cell identity
+(number and generation) present in the frame takes the next ones in increasing order.
+The default colors depend only on the identity, so a cell keeps its color across frames.
+
+# Keywords
+
+  - `label::AbstractString = "Cell identity"`: the title of the legend.
+
+# Fields
+
+  - `label::String`: as given.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> encoding_kind(CellIdentityEncoding()) == CategoricalEncoding
+true
+```
+
+See also [`CellTypeEncoding`](@ref), [`encode_frame`](@ref).
+"""
 struct CellIdentityEncoding <: AbstractPottsEncoding
     label::String
 end
@@ -26,7 +80,39 @@ function CellIdentityEncoding(; label::AbstractString = "Cell identity")
     return CellIdentityEncoding(String(label))
 end
 
-"""Encode one requested numeric channel."""
+"""
+    ChannelEncoding(key; label = nothing)
+
+Color sites by the values of the channel with key `key`.
+
+Continuous: a site channel colors each site, a cell channel colors the sites of each cell
+and a medium channel colors the medium and obstacle sites. Sites outside the channel's
+scope and `missing` values are `NaN` (drawn in the plot's `nan_color`).
+
+# Arguments
+
+  - `key::RenderChannelKey`: the channel. The frame must have it.
+
+# Keywords
+
+  - `label = nothing`: the title; `nothing` uses the channel's `label`.
+
+# Fields
+
+  - `key`: as given.
+  - `label::Union{Nothing, String}`: as given.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> required_channels(ChannelEncoding(SiteChannelKey(:c, Float64)))
+(site channel :c::Float64,)
+```
+
+See also [`RenderChannel`](@ref), [`encode_frame`](@ref).
+"""
 struct ChannelEncoding{K <: RenderChannelKey} <: AbstractPottsEncoding
     key::K
     label::Union{Nothing, String}
@@ -35,19 +121,110 @@ function ChannelEncoding(key::RenderChannelKey; label = nothing)
     return ChannelEncoding(key, label === nothing ? nothing : String(label))
 end
 
-"""Return whether an encoding is categorical or continuous."""
+"""
+    encoding_kind(encoding) -> EncodingKind
+
+Return whether an encoding is categorical or continuous.
+
+# Arguments
+
+  - `encoding`: a [`CellTypeEncoding`](@ref), [`CellIdentityEncoding`](@ref) or
+    [`ChannelEncoding`](@ref).
+
+# Returns
+
+  - `EncodingKind`: [`CategoricalEncoding`](@ref) for the two cell encodings,
+    [`ContinuousEncoding`](@ref) for `ChannelEncoding`.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> encoding_kind(CellTypeEncoding()) == CategoricalEncoding
+true
+```
+
+See also [`required_channels`](@ref).
+"""
 encoding_kind(::Union{CellTypeEncoding, CellIdentityEncoding}) = CategoricalEncoding
 encoding_kind(::ChannelEncoding) = ContinuousEncoding
-"""Return the typed channels that must be present for an encoding."""
+"""
+    required_channels(encoding) -> Tuple
+
+Return the keys of the channels a frame must have for `encoding`.
+
+# Arguments
+
+  - `encoding`: a [`CellTypeEncoding`](@ref), [`CellIdentityEncoding`](@ref) or
+    [`ChannelEncoding`](@ref).
+
+# Returns
+
+  - `Tuple`: `()` for the two cell encodings, `(encoding.key,)` for `ChannelEncoding`.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> required_channels(CellTypeEncoding())
+()
+```
+
+See also [`encoding_kind`](@ref).
+"""
 required_channels(::Union{CellTypeEncoding, CellIdentityEncoding}) = ()
 required_channels(encoding::ChannelEncoding) = (encoding.key,)
-"""Return the human-readable label of an encoding."""
+"""
+    encoding_label(encoding) -> String
+
+Return the title of an encoding.
+
+# Arguments
+
+  - `encoding`: a [`CellTypeEncoding`](@ref), [`CellIdentityEncoding`](@ref) or
+    [`ChannelEncoding`](@ref).
+
+# Returns
+
+  - `String`: the `label` of the encoding. For a `ChannelEncoding` with no `label`, the
+    name of its key.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> encoding_label(ChannelEncoding(SiteChannelKey(:c, Float64)))
+"c"
+```
+
+See also [`EncodedPottsFrame`](@ref).
+"""
 encoding_label(encoding::Union{CellTypeEncoding, CellIdentityEncoding}) = encoding.label
 function encoding_label(encoding::ChannelEncoding)
     return encoding.label === nothing ? String(encoding.key.name) : encoding.label
 end
 
-"""One semantic categorical legend entry independent of any Makie Block."""
+"""
+    MakiePotts.LegendEntry(value, label, color_key)
+
+One entry of a categorical legend, independent of Makie.
+
+`MakiePotts.LegendEntry` is public but not exported, because Makie exports a
+`LegendEntry` of its own.
+
+# Fields
+
+  - `value`: the category: `:medium`, a kind number or a
+    [`RenderCellIdentity`](@ref).
+  - `label::String`: the text of the entry, for example `"Cell type 2"`.
+  - `color_key::UInt64`: the key of the default color of the category; `0` for the
+    medium.
+
+See also [`legend_entries`](@ref), [`potts_legend`](@ref).
+"""
 struct LegendEntry
     value
     label::String
@@ -55,8 +232,27 @@ struct LegendEntry
 end
 
 """
-Numerical array plus semantic mapping produced by an encoding. Styling remains
-in the recipe and may therefore inherit from Makie themes.
+    EncodedPottsFrame
+
+The numbers that an encoding gives a frame, with the meaning of each category.
+
+[`encode_frame`](@ref) makes it. The colors are chosen by the plot recipe, so a Makie
+theme applies to them.
+
+# Fields
+
+  - `values::AbstractArray{Float64, N}`: one number per site. Categorical encodings give
+    the category number, from 1; continuous encodings give the value or `NaN`.
+  - `encoding`: the encoding.
+  - `categories::Vector{MakiePotts.LegendEntry}`: one entry per category, in category
+    order; empty for a continuous encoding.
+  - `label::String`: the title.
+  - `units::Union{Nothing, String}`: the channel units, or `nothing`.
+  - `finite_range::Union{Nothing, Tuple{Float64, Float64}}`: the extrema of the finite
+    values of a continuous encoding (widened by 0.5 on each side when they are equal), or
+    `nothing`.
+
+See also [`legend_entries`](@ref).
 """
 struct EncodedPottsFrame{N, A <: AbstractArray{Float64, N}, E}
     values::A
@@ -72,7 +268,42 @@ function _cell_identity(frame, owner::RenderOwner)
     return metadata.identity
 end
 
-"""Materialize semantic numeric values and legend metadata from a render frame."""
+"""
+    encode_frame(frame, encoding) -> EncodedPottsFrame
+
+Return the numbers that `encoding` gives each site of `frame`, with the categories.
+
+The categories of [`CellTypeEncoding`](@ref) are named `"Medium"` and `"Cell type n"`;
+those of [`CellIdentityEncoding`](@ref) are named `"Medium"` and
+`"Cell n · generation g"`. See [`ChannelEncoding`](@ref) for the continuous case.
+
+# Arguments
+
+  - `frame::AbstractPottsRenderFrame`: the frame.
+  - `encoding`: the encoding. A `ChannelEncoding` throws
+    `MakiePotts.MissingRenderChannelError` when `frame` has no channel with its key.
+
+# Returns
+
+  - [`EncodedPottsFrame`](@ref): the encoded frame.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> c, m = RenderOwner(CellSite, 1), RenderOwner(MediumSite, 1);
+
+julia> cell = RenderCellMetadata(RenderCellIdentity(1, 1), 3);
+
+julia> encode_frame(PottsRenderFrame(0, [c m; c m], [cell]), CellTypeEncoding()).values
+2×2 Matrix{Float64}:
+ 2.0  1.0
+ 2.0  1.0
+```
+
+See also [`legend_entries`](@ref).
+"""
 function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellTypeEncoding)
     type_ids = UInt32[]
     for site in CartesianIndices(frame_size(frame))
@@ -179,7 +410,41 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::ChannelEncoding
     )
 end
 
-"""Return a copy of the semantic legend entries produced by an encoding."""
+"""
+    legend_entries(encoded::EncodedPottsFrame) -> Vector{MakiePotts.LegendEntry}
+    legend_entries(frame, encoding) -> Vector{MakiePotts.LegendEntry}
+
+Return a copy of the categories of an encoded frame, or of `encode_frame(frame, encoding)`.
+
+# Arguments
+
+  - `encoded::EncodedPottsFrame`: the encoded frame.
+  - `frame::AbstractPottsRenderFrame`, `encoding::AbstractPottsEncoding`: as for
+    [`encode_frame`](@ref).
+
+# Returns
+
+  - `Vector{MakiePotts.LegendEntry}`: the categories; empty for a continuous encoding.
+
+# Examples
+
+```jldoctest
+julia> using MakiePotts
+
+julia> c, m = RenderOwner(CellSite, 1), RenderOwner(MediumSite, 1);
+
+julia> cell = RenderCellMetadata(RenderCellIdentity(1, 1), 3);
+
+julia> frame = PottsRenderFrame(0, [c m; c m], [cell]);
+
+julia> [e.label for e in legend_entries(frame, CellTypeEncoding())]
+2-element Vector{String}:
+ "Medium"
+ "Cell type 3"
+```
+
+See also [`potts_legend`](@ref).
+"""
 legend_entries(encoded::EncodedPottsFrame) = copy(encoded.categories)
 function legend_entries(frame::AbstractPottsRenderFrame, encoding::AbstractPottsEncoding)
     return legend_entries(encode_frame(frame, encoding))

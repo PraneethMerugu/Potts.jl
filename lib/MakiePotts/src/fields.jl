@@ -2,13 +2,33 @@
 # recording wrapper. The solution types and their reads come from LatticeFields.
 
 """
-    FieldFrames(t, series; centers = nothing)
+    MakiePotts.FieldFrames(t, series; centers = nothing)
 
-The saves of one field of a lattice field solution, as the field recipe reads them: the
-save times `t`, the time-first values `series` (size `(length(t), dims...)`, a
-LatticeFields `FieldSeries`) and the coordinates of the site centers on each axis
-(`centers`, one vector per axis of length `dims[k]`, or `nothing` to count sites).
-`field_frames(sol, c)` builds it.
+The saves of one field of a lattice field solution, as [`fieldplot`](@ref) reads them.
+
+[`MakiePotts.field_frames`](@ref)`(sol, c)` builds it.
+
+# Arguments
+
+  - `t::AbstractVector`: the save times, at least one.
+  - `series::AbstractArray`: the values, time first, of size `(length(t), dims...)` for a
+    2D or 3D grid of size `dims` (a LatticeFields `FieldSeries`).
+
+# Keywords
+
+  - `centers = nothing`: the site center coordinates on each axis, one vector of length
+    `dims[k]` per axis, or `nothing` for `1:dims[k]`.
+
+Throws an `ArgumentError` when the sizes do not agree, when there are no saves, or when
+the grid is not 2D or 3D.
+
+# Fields
+
+  - `t::Vector`: the save times.
+  - `series`: as given.
+  - `centers::Tuple`: the centers on each axis.
+
+See also [`MakiePotts.field_frames`](@ref).
 """
 struct FieldFrames{TT, S <: AbstractArray, C}
     t::Vector{TT}
@@ -42,12 +62,25 @@ struct FieldFrames{TT, S <: AbstractArray, C}
 end
 
 """
-    field_frames(sol, c) -> FieldFrames
+    MakiePotts.field_frames(sol, c) -> MakiePotts.FieldFrames
 
-The saves of field `c` of a lattice field solution `sol`: the solution of a problem from
-`LatticePDE.discretize` (a field algorithm or an OrdinaryDiffEq solver) or a LatticeFields
-`FieldSolution`. The centers are the system's coordinates when the solution has them
-(`sol[x]`), else the site counts `1:n`.
+Return the saves of field `c` of a lattice field solution `sol`.
+
+The centers are the system's coordinates when the solution has them (`sol[x]`). A coarse
+grid whose size divides the lattice size gets the centers of its blocks. Otherwise, and
+when the solution has no coordinates, the centers are the site counts `1:n`.
+
+# Arguments
+
+  - `sol`: the solution of a problem from `LatticePDE.discretize` (a field algorithm or an
+    OrdinaryDiffEq solver) or a LatticeFields `FieldSolution`.
+  - `c`: any key that `sol[c]` takes: the variable, `c(t, x, y)` or `:c`.
+
+# Returns
+
+  - [`MakiePotts.FieldFrames`](@ref): the saves.
+
+See also [`fieldplot`](@ref), [`record_field`](@ref).
 """
 function field_frames(sol::Union{FieldSolution, LatticeSolution}, field)
     series = field_series(sol, field)
@@ -173,8 +206,38 @@ Makie.@recipe(FieldPlot, solution, field) do scene
         visible = true
     )
 end
-@doc "Makie recipe type of [`fieldplot`](@ref): a field of a lattice solution." FieldPlot
-@doc "Add a [`fieldplot`](@ref) to an existing axis or scene." fieldplot!
+@doc """
+    FieldPlot
+
+The Makie plot type of [`fieldplot`](@ref).
+
+# Arguments
+
+  - `solution`: the lattice field solution, read as `plt.solution`.
+  - `field`: the field key, read as `plt.field`.
+
+See also [`fieldplot`](@ref).
+""" FieldPlot
+@doc """
+    fieldplot!(ax, sol, c; kwargs...) -> FieldPlot
+
+Add a [`fieldplot`](@ref) plot to an existing Makie axis or scene.
+
+# Arguments
+
+  - `ax`: the Makie axis or scene, or a figure position.
+  - `sol`, `c`: as for [`fieldplot`](@ref).
+
+# Keywords
+
+  - As for [`fieldplot`](@ref).
+
+# Returns
+
+  - [`FieldPlot`](@ref): the plot.
+
+See also [`fieldplot`](@ref).
+""" fieldplot!
 
 function Makie.preferred_axis_type(::Type{<:FieldPlot}, solution, field)
     return ndims(field_frames(solution, field).series) == 4 ? Makie.LScene : Makie.Axis
