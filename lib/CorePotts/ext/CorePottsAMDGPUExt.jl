@@ -79,4 +79,27 @@ function CorePotts._host_copy(a::ROCArray{T, N}) where {T, N}
     return CorePotts._copy_to_host!(Array{T, N}(undef, size(a)), a)
 end
 
+# Frames (`FrameWritingCallback`): the copy into a pinned host buffer is enqueued on the
+# task's stream without a wait, and an event recorded after it tells the writer task when
+# the copies are done. The writer task spins on the event (`_spin_until`: it yields, so a
+# single thread still runs the rest of the program).
+function CorePotts._frame_copy_async!(dst::Array{T}, src::ROCArray{T}) where {T}
+    copyto!(dst, 1, src, 1, length(src); async = true)
+    return nothing
+end
+CorePotts._frame_copied(::ROCBackend) = AMDGPU.HIP.HIPEvent(AMDGPU.stream())
+
+"""`done()` for `_spin_until`: the event's work is done (an error is raised by `isdone`)."""
+struct EventDone
+    event::AMDGPU.HIP.HIPEvent
+end
+(d::EventDone)() = AMDGPU.HIP.isdone(d.event)
+
+function CorePotts._wait_frame_copied(e::AMDGPU.HIP.HIPEvent)
+    CorePotts._spin_until(EventDone(e), CorePotts.DEVICE_WAIT_TIMEOUT)
+    return nothing
+end
+# buffers pinned by `KernelAbstractions.pagelock!` (AMDGPU's `Mem.pin`)
+CorePotts._unpin!(::ROCBackend, a::Array) = (AMDGPU.Mem.unpin(pointer(a)); nothing)
+
 end # module CorePottsAMDGPUExt
