@@ -26,11 +26,19 @@ end
     Potts.FieldBinding(path, name, source)
 
 A coupling of a model input to the field side: the input `name` of the component at
-`path` (a vector of component names, empty for the model itself) is driven by `source`.
-Bindings are stored per component as `(path, name)`; `compose` prefixes the
-path by the component name, and the input resolves after the wrap as
-`getproperty(foldl(getproperty, path; init = sys), name)` ([`Potts.resolve`](@ref)), a term
-of `unknowns(sys)`. They are stored and printed; the field compiler consumes them.
+`path` is driven by `source`.
+
+Bindings are stored per component as `(path, name)`. `compose` prefixes the path with the
+component name, and after the wrap the input resolves as
+`getproperty(foldl(getproperty, path; init = sys), name)` ([`Potts.resolve`](@ref)), a
+term of `unknowns(sys)`. Bindings are stored and printed; the field compiler reads them.
+
+# Fields
+- `path::Vector{Symbol}`: the component names, empty for the model itself.
+- `name::Symbol`: the input's name.
+- `source`: what drives the input.
+
+See also [`Potts.resolve`](@ref), [`Potts.PottsPart`](@ref).
 """
 struct FieldBinding
     path::Vector{Symbol}
@@ -39,16 +47,31 @@ struct FieldBinding
 end
 
 """
-    Potts.PottsPart(; kinds, lattice, sweep, …)
+    Potts.PottsPart(; kinds, lattice, sweep, kwargs...)
 
-The Potts payload of a [`PottsSystem`](@ref): everything that is not an MTK system. Kinds
-(the first is the medium), the lattice, the declared parameters and scoped variables (as
-written: the inner `System` holds them too), Hamiltonian terms, drives, constraints,
-synchronous/on-copy updates, the `@equations` and `@initialization_equations` as written,
-lifecycle rules, site conversion passes, relationships and link rules, `@observed`
-equations, `@components`, the conditions of the coupled fields (`bcs`, stored and printed;
-the field compiler classifies them), the `@schedule`, the sweep and the field bindings
-([`Potts.FieldBinding`](@ref)).
+The Potts payload of a [`PottsSystem`](@ref): everything that is not an MTK system.
+
+The payload holds the kinds (the first is the medium), the lattice, the declared
+parameters and scoped variables (as written: the inner `System` holds them too), the
+energy terms, drives, constraints, the synchronous and on-copy updates, the `@equations`
+and `@initialization_equations` as written, the lifecycle rules, the site conversion
+passes, the relationships and link rules, the `@observed` equations, the `@components`,
+the conditions of the coupled fields (`bcs`, stored and printed; the field compiler
+classifies them), the `@schedule`, the sweep and the field bindings
+([`Potts.FieldBinding`](@ref)). Its fields are the keywords of the
+`PottsSystem(; name, kwargs...)` constructor. Most of their element types are not public.
+
+# Keywords
+- `kinds::Vector{Symbol}`: the kinds, the medium first.
+- `lattice::LatticeSpec`: the lattice.
+- `sweep`: the sweep protocol (acceptance law, temperature, MCS duration).
+- The other fields are optional and default to empty: `frozen_kinds`, `kind_classes`,
+  `parameters`, `variables`, `relations`, `energies`, `drives`, `constraints`, `updates`,
+  `equations`, `initialization_eqs`, `divisions`, `converts`, `relationships`,
+  `link_rules`, `observed`, `components`, `discrete`, `bcs`, `schedule`, `structural`,
+  `sources`, `metadata` and `bindings`.
+
+See also [`PottsSystem`](@ref), [`Potts.part`](@ref).
 """
 Base.@kwdef struct PottsPart
     kinds::Vector{Symbol}
@@ -98,53 +121,78 @@ struct _Wrap end
 """
     PottsSystem
 
-A cellular Potts model: an MTK `AbstractSystem` that holds a complete ModelingToolkitBase
-`System` for its quantities, equations and observed quantities (`Potts.inner(sys)`), a
-`PDESystem` for its fields or `nothing` (`Potts.fields(sys)`), and the Potts payload
-([`Potts.PottsPart`](@ref): kinds, lattice, energies, drives, constraints, sweep, lifecycle,
-…). Built by `@potts_model`, by the keyword constructor
-`PottsSystem(; name, kinds, lattice, sweep, parameters, variables, energies, …)` (the
-[`Potts.PottsPart`](@ref) fields; `checks = false` skips the construction checks), or by
+A cellular Potts model: a ModelingToolkit `AbstractSystem`.
+
+A `PottsSystem` holds three parts:
+
+- a complete ModelingToolkitBase `System` for its quantities, equations and observed
+  quantities ([`Potts.inner`](@ref)`(sys)`);
+- a `PDESystem` for its fields, or `nothing` ([`Potts.fields`](@ref)`(sys)`);
+- the Potts payload ([`Potts.PottsPart`](@ref): kinds, lattice, energies, drives,
+  constraints, sweep, lifecycle, …).
+
+`@potts_model` builds it. So do the keyword constructor
+`PottsSystem(; name, kinds, lattice, sweep, parameters, variables, energies, …)` and
 [`Potts.wrap_system`](@ref).
 
-MTK's accessors read the inner System: `equations(sys)` (the `@equations` as written, plus
-each component's equations, namespaced `dc₊y`), `unknowns(sys)` (the declared variables of
-every scope plus each component's unknowns; never the lattice ownership, kinds or built-in
-cell properties, and never a field: the fields and their equations are in
-[`Potts.fields`](@ref)`(sys)`, a `PDESystem`; `sys.c` still names the field `c`),
-`parameters(sys)`, `observed(sys)` (one `name ~ expr` per `@observed` quantity),
-`initial_conditions(sys)` (each parameter's value: its default, or the keyword that
-overrides it), `bindings(sys)`, `guesses(sys)`, `inputs(sys)`, `outputs(sys)`,
-`independent_variable(sys)` and `get_iv(sys)` (`t`), the metadata (`getmetadata`,
-`hasmetadata`; `setmetadata` returns the model with its inner System's metadata set) and
-`nameof(sys)`. A model is complete: `iscomplete(sys)` is `true`, `does_namespacing(sys)` is
-`false` and `complete(sys)` returns it (MTK's `complete` keywords are an `ArgumentError`
-that names them). SymbolicIndexingInterface getters and setters built from the model
-(`getp(sys, λ)`, `getu(sys, volume)`) look their symbol up in the problem, integrator or
-solution they are applied to; other SymbolicIndexingInterface queries are answered by the
-inner System.
+MTK's accessors read the inner System:
 
-`sys.x` is MTK's own `getproperty` on the complete inner System: the declared symbol itself
-(`sys.λ` is `λ`), and `sys.dc.y` is the component quantity `dc₊y`. A name that is not a
-quantity or component of the system is an `ArgumentError`. Either form, and the namespaced
-`name₊x` of the model's own name, works as a key wherever a model quantity is named
-(operating point, `remake`, `getu`/`setu`/`getp`, `observe`, `prob[…]`/`sol[…]`, `solvers`)
-for a model built by `@potts_model` or the keyword constructor. A model from
-`compose` compiles, solves
-and extends with each component as a model-scope component (`@components model c = system`);
-a `Potts.wrap_system` of a hand-built System does when its top-level content is its
-payload's and the rest is subsystems (otherwise an `ArgumentError` naming the content).
+- `equations(sys)`: the `@equations` as written, plus each component's equations,
+  namespaced `dc₊y`.
+- `unknowns(sys)`: the declared variables of every scope plus each component's unknowns.
+  It never lists the lattice ownership, kinds, built-in cell properties or a field. The
+  fields and their equations are in [`Potts.fields`](@ref)`(sys)`, a `PDESystem`, and
+  `sys.c` still names the field `c`.
+- `parameters(sys)`, `observed(sys)` (one `name ~ expr` per `@observed` quantity),
+  `initial_conditions(sys)` (each parameter's value: its default, or the keyword that
+  overrides it), `bindings(sys)`, `guesses(sys)`, `inputs(sys)`, `outputs(sys)`,
+  `independent_variable(sys)` and `get_iv(sys)` (`t`).
+- The metadata (`getmetadata`, `hasmetadata`). `setmetadata` returns the model with its
+  inner System's metadata set.
+- `nameof(sys)`.
 
-MTK's operations: `compose(sys, [components])` adds components,
-`extend``(sys, base)` merges two
-Potts models (`@extend`), and `rename(sys, name)` (and `@named models[1:n] = Model(…)`)
-renames. MTK's `extend` between a Potts model and another system, and MTK's `compose` with a
-Potts model inside a plain `System` (alone or among other systems), are `ArgumentError`s
-naming the route; `toggle_namespacing` is an `ArgumentError`. Every SciMLBase problem
-constructor (`ODEProblem`, `JumpProblem`, …) is an `ArgumentError` naming `PottsProblem`;
-`mtkcompile(sys)` compiles the CPM ([`CompiledPottsSystem`](@ref)). Other MTKBase functions
-(`get_eqs`, …) are asked of `Potts.inner(sys)`. `Potts.lattice(sys)` is the model's lattice
-and `Potts.declared_parameters(sys)`/`Potts.declared_variables(sys)` its own declarations.
+A model is complete: `iscomplete(sys)` is `true`, `does_namespacing(sys)` is `false`, and
+`complete(sys)` returns it (MTK's `complete` keywords throw an `ArgumentError` that names
+them). SymbolicIndexingInterface getters and setters built from the model (`getp(sys, λ)`,
+`getu(sys, volume)`) look their symbol up in the problem, integrator or solution they are
+applied to. The inner System answers the other SymbolicIndexingInterface queries.
+
+`sys.x` is MTK's own `getproperty` on the complete inner System: the declared symbol
+itself (`sys.λ` is `λ`), and `sys.dc.y` is the component quantity `dc₊y`. A name that is
+not a quantity or component of the system throws an `ArgumentError`. Either form, and the
+namespaced `name₊x` of the model's own name, works as a key wherever a model quantity is
+named: the operating point, `remake`, `getu`/`setu`/`getp`, `observe`,
+`prob[…]`/`sol[…]` and `solvers`. This holds for a model built by `@potts_model` or the
+keyword constructor. A model from `compose` compiles, solves and extends with each
+component as a model-scope component (`@components model c = system`). A
+`Potts.wrap_system` of a hand-built System does so when its top-level content is its
+payload's and the rest is subsystems; otherwise it throws an `ArgumentError` that names
+the content.
+
+MTK's operations:
+
+- `compose(sys, [components])` adds components.
+- `extend(sys, base)` merges two Potts models (`@extend`).
+- `rename(sys, name)` (and `@named models[1:n] = Model(…)`) renames.
+- `mtkcompile(sys)` compiles the CPM ([`CompiledPottsSystem`](@ref)).
+
+MTK's `extend` between a Potts model and another system, and MTK's `compose` with a Potts
+model inside a plain `System` (alone or among other systems), throw an `ArgumentError`
+that names the route. So does `toggle_namespacing`. Every SciMLBase problem constructor
+(`ODEProblem`, `JumpProblem`, …) throws an `ArgumentError` that names `PottsProblem`.
+Other ModelingToolkitBase functions (`get_eqs`, …) are asked of `Potts.inner(sys)`.
+[`Potts.lattice`](@ref)`(sys)` is the model's lattice, and
+[`Potts.declared_parameters`](@ref)`(sys)` and [`Potts.declared_variables`](@ref)`(sys)`
+are its own declarations. The fields of the struct are not public.
+
+# Examples
+```julia
+@named sorting = Sorting()     # a `@potts_model` constructor
+sorting.λ                      # the declared symbol λ
+csys = mtkcompile(sorting)
+```
+
+See also [`@potts_model`](@ref), [`CompiledPottsSystem`](@ref), [`Potts.inner`](@ref).
 """
 struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     name::Symbol                                          # equals nameof(inner)
@@ -168,38 +216,70 @@ _p(sys::PottsSystem, f::Symbol) = getfield(getfield(sys, :part), f)
     Potts.inner(sys::PottsSystem)
     Potts.inner(csys::CompiledPottsSystem)
 
-The complete (flattened) ModelingToolkitBase `System` of a model: its parameters, its cell,
-model and site variables, their `@equations`, `@observed` and components. The fields and
-their equations are not in it (an MTK `System` has one independent variable, the time): they
-are in [`Potts.fields`](@ref)`(sys)`, a `PDESystem`. Generic MTK code takes it where it
-needs a `System` (`mtkcompile(Potts.inner(sys); inputs = …)` compiles the cell/model ODE
-alone). Of a compiled system it is the System of the model as `mtkcompile` lowered it: an
-algebraic variable it eliminated is among its observed equations.
+Return the complete (flattened) ModelingToolkitBase `System` of a model.
+
+The System holds the parameters, the cell, model and site variables, their `@equations`,
+the `@observed` quantities and the components. The fields and their equations are not in
+it, because an MTK `System` has one independent variable, the time. They are in
+[`Potts.fields`](@ref)`(sys)`, a `PDESystem`. Generic MTK code takes the System where it
+needs one: `mtkcompile(Potts.inner(sys); inputs = …)` compiles the cell and model ODEs
+alone. For a compiled system it is the System of the model as `mtkcompile` lowered it: an
+algebraic variable that it eliminated is among its observed equations.
+
+# Arguments
+- `sys::PottsSystem` or `csys::CompiledPottsSystem`: the model.
+
+# Returns
+- `System`: the inner System.
+
+See also [`Potts.fields`](@ref), [`Potts.PottsSweepSpec`](@ref).
 """
 inner(sys::PottsSystem) = getfield(sys, :inner)
 
 """
     Potts.part(sys::PottsSystem) -> PottsPart
 
-The Potts payload of a model (kinds, lattice, energies, sweep, …). A component for
-`compose` is built with [`Potts.component`](@ref), which takes the model's kinds and
-lattice and none of its statements.
+Return the Potts payload of a model (kinds, lattice, energies, sweep, …).
+
+A component for `compose` is built with [`Potts.component`](@ref), which takes the model's
+kinds and lattice and none of its statements.
+
+# Arguments
+- `sys::PottsSystem`: the model.
+
+# Returns
+- `PottsPart`: the payload.
+
+See also [`Potts.PottsPart`](@ref).
 """
 part(sys::PottsSystem) = getfield(sys, :part)
 
 """
     Potts.component(name, sys::System, model::PottsSystem) -> PottsSystem
 
-The MTK `System` `sys` as a component of `model`, for `compose`: it is
-`Potts.wrap_system(name, sys, nothing, part)` with a payload that has the kinds, the lattice
-and the sweep of `model` and no statements (no energies, drives, constraints, …), which is
-what a composed component may carry. `sys` is named `name` (`@named`); a Catalyst reaction
-network `rn` is `Potts.component(name, Catalyst.ode_model(complete(rn)), model)`.
+Return the MTK `System` `sys` as a component of `model`, for `compose`.
 
+The result is `Potts.wrap_system(name, sys, nothing, part)`. Its payload has the kinds, the
+lattice and the sweep settings of `model` and no statements (no energies, drives,
+constraints, …), which is what a composed component may carry. A Catalyst reaction
+network `rn` is
+`Potts.component(name, Catalyst.ode_model(complete(rn)), model)`.
+
+# Arguments
+- `name::Symbol`: the component name; `sys` must have this name (`@named`).
+- `sys::System`: the MTK system.
+- `model::PottsSystem`: the model that the component joins.
+
+# Returns
+- `PottsSystem`: the component.
+
+# Examples
 ```julia
 @named decay = System([D(y) ~ -k * y], t)
 sys = compose(model, [Potts.component(:decay, decay, model)])
 ```
+
+See also [`Potts.couple`](@ref), [`Potts.wrap_system`](@ref).
 """
 function component(name::Symbol, sys::ModelingToolkitBase.System, model::PottsSystem)
     return wrap_system(name, sys, nothing, _component_part(model))
@@ -208,20 +288,36 @@ end
 """
     Potts.component(name, pdesys::PDESystem, model::PottsSystem) -> PottsSystem
 
-The `PDESystem` `pdesys` (named `name`) as fields of `model`, for `compose`.
-`compose(model, [Potts.component(:drug, pdesys, model)])` adds each dependent variable
-`c` as the field `drug₊c`, each parameter `k` as the parameter `drug₊k` (with its value),
-each equation as a field equation and each condition as a condition of the model, so the
-fields run as the fields of `@fields` do: with the default field solver, or by name in
-`FieldGroups(:drug₊c => …)`. A condition at the start time, `c(0, x, y) ~ v`, is the field's
-initial value. Its time interval is not read (the problem's `tspan` is).
+Return the `PDESystem` `pdesys` as fields of `model`, for `compose`.
+
+`compose(model, [Potts.component(:drug, pdesys, model)])` adds each dependent variable `c`
+as the field `drug₊c`, each parameter `k` as the parameter `drug₊k` (with its value), each
+equation as a field equation and each condition as a condition of the model. So the fields
+run as the fields of `@fields` do: with the default field solver, or by name in
+`FieldGroups(:drug₊c => …)`. A condition at the start time, `c(0, x, y) ~ v`, is the
+field's initial value. Its time interval is not read (the problem's `tspan` is).
 
 The spatial domain is the lattice's, in the model's length unit: axis `d` spans
-`[0, dims[d] · spacing[d]]` (`[0, dims[d]]` without `@lattice spacing`), the domain
-`Potts.fields(model)` gives; another interval is an `ArgumentError` naming both. An input
-variable (`[input = true]`) is filled by the CPM by its `lattice_input_name` (or else its
-own name): `"kind"` is the kind of each site (0 for the medium), and the name of a field
+`[0, dims[d] · spacing[d]]` (`[0, dims[d]]` without `@lattice spacing`), the domain that
+`Potts.fields(model)` gives. Another interval throws an `ArgumentError` that names both.
+The CPM fills an input variable (`[input = true]`) by its `lattice_input_name`, or else by
+its own name. `"kind"` is the kind of each site (0 for the medium), and the name of a field
 or site variable of the model reads that variable.
+
+# Arguments
+- `name::Symbol`: the component name; `pdesys` must have this name.
+- `pdesys::PDESystem`: the fields.
+- `model::PottsSystem`: the model that the fields join.
+
+# Returns
+- `PottsSystem`: the component.
+
+# Examples
+```julia
+sys = compose(model, [Potts.component(:drug, pdesys, model)])
+```
+
+See also [`Potts.couple`](@ref), [`Potts.fields`](@ref).
 """
 function component(name::Symbol, pdesys::ModelingToolkitBase.PDESystem, model::PottsSystem)
     return wrap_system(
@@ -231,45 +327,66 @@ function component(name::Symbol, pdesys::ModelingToolkitBase.PDESystem, model::P
 end
 
 """
-    Potts.couple(model::PottsSystem, pdesys::PDESystem; inputs = []) -> PottsSystem
+    Potts.couple(model::PottsSystem, pdesys::PDESystem; inputs = ()) -> PottsSystem
 
-`model` with the fields of the plain `PDESystem` `pdesys`, under their own names: each
-dependent variable `c` becomes the field `c` of the model, each parameter `k` the parameter
-`k` (with its value), and each equation and condition joins the model's fields, as in
-[`Potts.component`](@ref) but without a namespace. The fields then run in the model's MCS
-loop with its `field_solver`, are read as `sol[:c]`, take `FieldGroups(:c => …)` pairs and
-the operating point `:c => values`, and a model that extends the result reads them by name
-(`@extend c = base = …`, then `@drive … c[target]`).
+Return `model` with the fields of the plain `PDESystem` `pdesys`, under their own names.
 
-`inputs` binds each input of `pdesys` (a dependent variable declared `[input = true]`) to a
-CPM expression at a site: `inputs = [endo => Potts.is_kind(model, :A), vol =>
-Potts.at(Potts.B.volume, Potts.B.owner)]`. A kind is compared by its number
-([`Potts.is_kind`](@ref), or `Potts.kind == Potts.lookup(model, :A)`): `Potts.kind == :A` is
-Julia's constant `false`, and a binding to a constant truth value is an `ArgumentError`
-saying so. The field compiler fills each one per site every MCS, as it fills the CPM reads
-of a field equation, so `pdesys` itself holds only plain input fields (0/1 or numbers),
-never a Potts quantity. A key is the input variable (`endo` or `endo(t, x, y)`) or its name.
-A `Bool` input (`endo(..)::Bool`) takes a truth value. An input left unbound is filled by
-its `lattice_input_name` (or its name), as in [`Potts.component`](@ref): `kind`, `owner`,
-`position`, `site`, `mcs`, `time`, or a field or site variable of the model.
+Each dependent variable `c` becomes the field `c` of the model, each parameter `k` the
+parameter `k` (with its value), and each equation and condition joins the model's fields,
+as in [`Potts.component`](@ref) but without a namespace. The fields then run in the
+model's MCS loop with its `field_solver`. They are read as `sol[:c]`, take
+`FieldGroups(:c => …)` pairs and the operating point `:c => values`, and a model that
+extends the result reads them by name (`@extend c = base = …`, then
+`@drive … c[target]`).
 
-The spatial domain of `pdesys` is the lattice's, in the model's length unit (axis `d` spans
-`[0, dims[d] · spacing[d]]`). An axis `pdesys` gives no interval for takes that one; a given
-interval must equal it. Its time interval is not read (the problem's `tspan` is). A name
-`model` already has is an `ArgumentError`; compose it as a component to namespace it.
-`pdesys` stays a plain MTK system. [`Potts.fields`](@ref)`(model)` is the PDESystem of the
-coupled model's fields (each binding written in as its CPM input), and
-[`Potts.field_inputs`](@ref) gives the current values of its inputs, so
-`discretize(Potts.fields(model), disc; inputs =
-collect(Potts.field_inputs(integ)))` solves the fields with any SciML solver at the CPM
-state of an integrator (`Potts.field_inputs(integ, pdesys)` gives those of `pdesys` itself).
-Inside `@potts_model`, write `@fields c = pdesys (endo => kind == A, …)`: the fields join
+The field compiler fills each binding per site every MCS, as it fills the CPM reads of a
+field equation. So `pdesys` itself holds only plain input fields (0/1 or numbers), never a
+Potts quantity. An input left unbound is filled by its `lattice_input_name` (or its name),
+as in [`Potts.component`](@ref): `kind`, `owner`, `position`, `site`, `mcs`, `time`, or a
+field or site variable of the model.
+
+The spatial domain of `pdesys` is the lattice's, in the model's length unit (axis `d`
+spans `[0, dims[d] · spacing[d]]`). An axis that `pdesys` gives no interval for takes that
+one; a given interval must equal it. Its time interval is not read (the problem's `tspan`
+is). A name that `model` already has throws an `ArgumentError`: compose `pdesys` as a
+component to namespace it. `pdesys` stays a plain MTK system.
+[`Potts.fields`](@ref)`(model)` is the PDESystem of the coupled model's fields (each
+binding written in as its CPM input), and [`Potts.field_inputs`](@ref) gives the current
+values of its inputs. So
+`discretize(Potts.fields(model), disc; inputs = collect(Potts.field_inputs(integ)))`
+solves the fields with any SciML solver at the CPM state of an integrator, and
+`Potts.field_inputs(integ, pdesys)` gives the inputs of `pdesys` itself.
+
+Inside `@potts_model`, write `@fields c = pdesys (endo => kind == A, …)`. The fields join
 the model at that line, and the names before `=` (`c`, or a list `c, u`) are bound to them
 for the statements after it (`@drive Chemotaxis(c; …)`). A name may also be a parameter of
-`pdesys` (`@fields c, s = pdesys
-(…)`): a later statement then reads the model's copy of it (`@drive copy => -s *
-…`). Without names (`@fields pdesys (…)`) the fields join the model and are reached by name
-(`sol[:c]`) only.
+`pdesys` (`@fields c, s = pdesys (…)`): a later statement then reads the model's copy of
+it (`@drive copy => -s * …`). Without names (`@fields pdesys (…)`), the fields join the
+model and are reached by name only (`sol[:c]`).
+
+# Arguments
+- `model::PottsSystem`: the model.
+- `pdesys::PDESystem`: the fields.
+
+# Keywords
+- `inputs = ()`: bindings `input => expr` of each input of `pdesys` (a dependent variable
+  declared `[input = true]`) to a CPM expression at a site, for example
+  `[endo => Potts.is_kind(model, :A), vol => Potts.at(Potts.B.volume, Potts.B.owner)]`. A
+  key is the input variable (`endo` or `endo(t, x, y)`) or its name. A `Bool` input
+  (`endo(..)::Bool`) takes a truth value. A kind is compared by its number
+  ([`Potts.is_kind`](@ref), or `Potts.kind == Potts.lookup(model, :A)`):
+  `Potts.kind == :A` is Julia's constant `false`, and a binding to a constant truth value
+  throws an `ArgumentError` that says so.
+
+# Returns
+- `PottsSystem`: the coupled model.
+
+# Examples
+```julia
+coupled = Potts.couple(model, pdesys; inputs = [endo => Potts.is_kind(model, :A)])
+```
+
+See also [`Potts.is_kind`](@ref), [`Potts.fields`](@ref), [`Potts.field_inputs`](@ref).
 """
 function couple(model::PottsSystem, pdesys::ModelingToolkitBase.PDESystem; inputs = ())
     what = "Potts.couple"
@@ -283,12 +400,28 @@ end
 """
     Potts.is_kind(model::PottsSystem, name::Symbol, names::Symbol...)
 
-The test that a site's kind is `name` (or one of `name, names…`), for a binding of
-[`Potts.couple`](@ref): `inputs = [endo => Potts.is_kind(model, :A)]`. One name gives
-`Potts.kind == Potts.lookup(model, name)`, several a membership test
-(`ismember(Potts.kind, (a, b))`). The medium is a kind (`:medium`, number 0). A name that is
-not a kind of `model` is an `ArgumentError` that lists its kinds. (`Potts.kind == :A` is
-Julia's constant `false`; this is the route.)
+Return the test that a site's kind is `name` (or one of `name, names…`), for a binding of
+[`Potts.couple`](@ref).
+
+One name gives `Potts.kind == Potts.lookup(model, name)`. Several names give a membership
+test, `ismember(Potts.kind, (a, b))`. The medium is a kind (`:medium`, number 0).
+`Potts.kind == :A` is Julia's constant `false`; `is_kind` is the way to compare a kind by
+name.
+
+# Arguments
+- `model::PottsSystem`: the model whose kinds are named.
+- `name::Symbol`, `names::Symbol...`: kind names. A name that is not a kind of `model`
+  throws an `ArgumentError` that lists its kinds.
+
+# Returns
+- A symbolic truth value over the built-in `kind`.
+
+# Examples
+```julia
+inputs = [endo => Potts.is_kind(model, :A)]
+```
+
+See also [`Potts.couple`](@ref).
 """
 function is_kind(model::PottsSystem, names::Symbol...)
     ks = _p(model, :kinds)
@@ -326,31 +459,45 @@ end
     Potts.fields(sys::PottsSystem)
     Potts.fields(c::CompiledPottsSystem)
 
-The `PDESystem` of a model's fields, or `nothing` for a model without fields. A model built
-by `@potts_model`, `Potts.couple` or `compose` has its PDESystem built from the field
-variables, equations and conditions of its coupled PDESystems; a compiled model returns the
-one `mtkcompile` built. Either carries the model's defaults as `initial_conditions` (each
-field's initial value and each parameter's value), so LatticePDE's `discretize` takes it as
-a plain PDE system. Its CPM couplings are `input = true` dependent variables, each with a
-name (`lattice_input_name`): `kind` for the kind of each site (a binding to a kind
-expression, `endo => kind == A`, is written into the equations as that expression of
-`kind`), `domain` for an irregular domain, the name of the coupled PDESystem's input for a
-binding to a CPM read (`vol` for `vol => volume[owner]`: the input variable is
-`vol(t, x, y)`, in the equations too), and the CPM read as the model writes it
-(`volume[owner]`) for any other. [`Potts.field_inputs`](@ref) gives their values by these
-names, so
+Return the `PDESystem` of a model's fields.
 
+A model built by `@potts_model`, `Potts.couple` or `compose` has its PDESystem built from
+the field variables, equations and conditions of its coupled PDESystems. A compiled model
+returns the one that `mtkcompile` built. A hand-wrapped PDESystem
+([`Potts.wrap_system`](@ref)) is returned as given. Either carries the model's defaults as
+`initial_conditions` (each field's initial value and each parameter's value), so
+LatticePDE's `discretize` takes it as a plain PDE system. Its conditions are those of the
+coupled PDESystems, as `discretize` takes them.
+
+Its CPM couplings are `input = true` dependent variables, each with a name
+(`lattice_input_name`):
+
+- `kind`: the kind of each site. A binding to a kind expression, `endo => kind == A`, is
+  written into the equations as that expression of `kind`.
+- `domain`: an irregular domain.
+- the name of the coupled PDESystem's input, for a binding to a CPM read: `vol` for
+  `vol => volume[owner]`. The input variable is `vol(t, x, y)`, in the equations too.
+- the CPM read as the model writes it (`volume[owner]`), for any other.
+
+[`Potts.field_inputs`](@ref) gives their values by these names. By hand, pass
+`inputs = [:kind => K, :vol => V]`, with `K` the kind number of each site (0 for the
+medium). For a coupled PDESystem of your own, `Potts.field_inputs(integ, pdesys)` gives
+its inputs.
+
+# Arguments
+- `sys::PottsSystem` or `c::CompiledPottsSystem`: the model.
+
+# Returns
+- A `PDESystem`, or `nothing` for a model without fields.
+
+# Examples
 ```julia
 F = Potts.fields(model)
-prob = discretize(F, LatticeDiscretization(Grid(dims)); inputs = \
-collect(Potts.field_inputs(integ)))
+inputs = collect(Potts.field_inputs(integ))
+prob = discretize(F, LatticeDiscretization(Grid(dims)); inputs)
 ```
 
-solves the fields with any SciML solver at the CPM state of `integ` (by hand,
-`inputs = [:kind => K, :vol => V]`, with `K` the kind number of each site, 0 for the
-medium). For a coupled PDESystem of your own, `Potts.field_inputs(integ, pdesys)` gives its
-inputs. Its conditions are those of the coupled PDESystems, as `discretize` takes them. A
-hand-wrapped PDESystem (`Potts.wrap_system`) is returned as given.
+See also [`Potts.field_inputs`](@ref), [`Potts.couple`](@ref).
 """
 function fields(sys::PottsSystem)
     f = _stored_fields(sys)
@@ -537,11 +684,24 @@ _stored_fields(sys::PottsSystem) = getfield(sys, :fields)
 """
     Potts.wrap_system(name, sys::System, fields, part::PottsPart) -> PottsSystem
 
-The `PottsSystem` holding `sys`, `fields` (a `PDESystem` or `nothing`) and the payload
-`part`. Compose first, then wrap: an uncompleted `sys` is completed here (`complete`
-flattens it and keeps the hierarchy as its parent). A complete system that still has
-subsystems (`compose(complete(a), …)`) is an `ArgumentError`, and so is a name of `sys` or
-`fields` other than `name`. The inner System carries the `Potts.PottsSweepSpec` metadata.
+Return the `PottsSystem` that holds `sys`, `fields` and the payload `part`.
+
+Compose first, then wrap. An uncompleted `sys` is completed here: `complete` flattens it
+and keeps the hierarchy as its parent. The inner System carries the
+[`Potts.PottsSweepSpec`](@ref) metadata.
+
+# Arguments
+- `name::Symbol`: the model name. A name of `sys` or `fields` other than `name` throws an
+  `ArgumentError`.
+- `sys::System`: the inner System. A complete system that still has subsystems
+  (`compose(complete(a), …)`) throws an `ArgumentError`.
+- `fields`: a `PDESystem`, or `nothing`.
+- `part::PottsPart`: the Potts payload.
+
+# Returns
+- `PottsSystem`: the model.
+
+See also [`Potts.PottsPart`](@ref), [`Potts.component`](@ref).
 """
 function wrap_system(
         name::Symbol, sys::ModelingToolkitBase.System,
@@ -570,13 +730,23 @@ function wrap_system(
 end
 
 """
-    PottsSystem(; name, kinds, lattice, sweep, parameters, variables, energies, …,
-        checks = true)
+    PottsSystem(; name, kinds, lattice, sweep, kwargs..., checks = true)
 
-The model with payload `Potts.PottsPart(; kinds, lattice, sweep, …)`, its inner System built
-from the declared parameters, variables, `@equations`, `@initialization_equations`,
-`@observed` and `@components`. `checks = false` skips the construction checks (reserved and
-clashing names).
+Build a model from its payload, `Potts.PottsPart(; kinds, lattice, sweep, kwargs...)`.
+
+The inner System is built from the declared parameters, variables, `@equations`,
+`@initialization_equations`, `@observed` and `@components`.
+
+# Keywords
+- `name::Symbol`: the model name.
+- `kinds`, `lattice`, `sweep` and the other fields of [`Potts.PottsPart`](@ref): the
+  payload.
+- `checks::Bool = true`: run the construction checks (reserved and clashing names).
+
+# Returns
+- `PottsSystem`: the model.
+
+See also [`@potts_model`](@ref), [`Potts.PottsPart`](@ref).
 """
 function PottsSystem(; name::Symbol, checks::Bool = true, kw...)
     part = _robin_slots(_check_field_lines(PottsPart(; kw...)))
@@ -1081,8 +1251,17 @@ end
 """
     Potts.resolve(sys::PottsSystem, b::Potts.FieldBinding)
 
-The input that the binding `b` drives:
-`getproperty(foldl(getproperty, b.path; init = sys), b.name)`, a term of `unknowns(sys)`.
+Return the input that the binding `b` drives.
+
+# Arguments
+- `sys::PottsSystem`: the model.
+- `b::Potts.FieldBinding`: the binding.
+
+# Returns
+- `getproperty(foldl(getproperty, b.path; init = sys), b.name)`, a term of
+  `unknowns(sys)`.
+
+See also [`Potts.FieldBinding`](@ref).
 """
 function resolve(sys::PottsSystem, b::FieldBinding)
     return getproperty(foldl(getproperty, b.path; init = sys), b.name)
@@ -1497,22 +1676,48 @@ end
 """
     Potts.declared_parameters(sys::PottsSystem)
 
-The parameter symbols of a model (scalars and kind tables), as declared. MTK's
-`parameters(sys)` lists the parameters of the compiled system.
+Return the parameter symbols of a model (scalars and kind tables), as declared.
+
+MTK's `parameters(sys)` lists the parameters of the compiled system.
+
+# Arguments
+- `sys::PottsSystem`: the model.
+
+# Returns
+- `Vector{Any}`: the declared parameter symbols.
+
+See also [`Potts.declared_variables`](@ref).
 """
 declared_parameters(sys::PottsSystem) = _p(sys, :parameters)
 """
     Potts.declared_variables(sys::PottsSystem)
 
-The scoped state variables of a model, as declared.
+Return the scoped state variables of a model, as declared.
+
+# Arguments
+- `sys::PottsSystem`: the model.
+
+# Returns
+- `Vector{Any}`: the declared variable symbols.
+
+See also [`Potts.declared_parameters`](@ref).
 """
 declared_variables(sys::PottsSystem) = _p(sys, :variables)
 
 """
     Potts.lattice(sys::PottsSystem)
 
-The lattice of a model (its `LatticeSpec`: `dims`, neighborhood, boundary). `sys.lattice`
-is not a field read: `sys.<name>` is a declared symbol.
+Return the lattice of a model.
+
+`sys.lattice` is not a field read: `sys.<name>` is a declared symbol.
+
+# Arguments
+- `sys::PottsSystem`: the model.
+
+# Returns
+- `LatticeSpec`: the lattice specification (`dims`, relation, boundary, …).
+
+See also [`Potts.LatticeSpec`](@ref).
 """
 lattice(sys::PottsSystem) = _p(sys, :lattice)
 
@@ -1664,10 +1869,27 @@ end
 """
     PottsSystem(name, inner, fields, part; checks = false)
 
-The model `Potts.wrap_system(nameof(inner), inner, fields, part)` renamed `name`: MTK's
-rebuild of a system from its fields (`@set sys.name = name`, which `rename` and
-`@named models[1:n]` use). Only the name may change; build a model with `@potts_model`, the
-keyword constructor or [`Potts.wrap_system`](@ref).
+Return the model with the inner System `inner`, the fields `fields` and the payload
+`part`, renamed `name`.
+
+The System is used as given (it is not completed here). This is MTK's rebuild of a system
+from its fields (`@set sys.name = name`, which `rename` and `@named models[1:n]` use).
+Only the name may change: build a model with `@potts_model`, the keyword constructor or
+[`Potts.wrap_system`](@ref).
+
+# Arguments
+- `name::Symbol`: the new name.
+- `inner::System`: the inner System.
+- `fields`: a `PDESystem`, or `nothing`.
+- `part::PottsPart`: the payload.
+
+# Keywords
+- `checks = false`: accepted for MTK's rebuild and not read.
+
+# Returns
+- `PottsSystem`: the renamed model.
+
+See also [`Potts.wrap_system`](@ref).
 """
 function PottsSystem(
         name::Symbol, I::ModelingToolkitBase.System,

@@ -37,18 +37,40 @@ end
 _same_temperature(t, g) = t === g      # (and `anneal`'s `_ZeroTemperature`, analysis.jl)
 
 """
-    generated_code(sys; T = Float64, field_solver, ode_solver, solvers)
+    generated_code(sys; T = Float64, field_solver = nothing, ode_solver = ExplicitEuler(),
+        solvers = (), discretization = nothing)
 
-The code Potts generates for model `sys` (a `PottsSystem` or `CompiledPottsSystem`) in
-scalar type `T` with the solver keywords of `PottsProblem`, as expressions: `delta_H`,
-`commit!`, `constraint`, `temperature`, `total_energy`, `delta_E` (ΔH without drives),
-`phases`, every other function (MCS phases, lifecycle), in build order, and `lifecycle`:
-`nothing` for a model without divisions, else `(; trigger, before)`, the trigger (the event
-of a cell) and the cell update that runs in the trigger's work item (`Lifecycle.before`), or
-`nothing`. That update is the model's last after-MCS cell update when the trigger reads the
-columns it writes only at its own cell; it then runs with the lifecycle and is not among
-`phases`. Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for
-JET).
+Return the code that Potts generates for model `sys`, as expressions.
+
+Each function is an expression `(args…) -> body` that can be `eval`'d into a plain
+function (for example for JET).
+
+# Arguments
+- `sys`: a `PottsSystem` (compiled here with `mtkcompile`) or a `CompiledPottsSystem`.
+
+# Keywords
+- `T::Type = Float64`: the scalar type of the generated code.
+- `field_solver = nothing`, `ode_solver = ExplicitEuler()`, `solvers = ()`,
+  `discretization = nothing`: the solver keywords of `PottsProblem`.
+
+# Returns
+- A `NamedTuple` with the fields:
+  - `delta_H`, `commit!`, `constraint`, `temperature`, `total_energy`;
+  - `delta_E`: ΔH without drives;
+  - `phases`: every other function (MCS phases, lifecycle), in build order;
+  - `lifecycle`: `nothing` for a model without divisions, else `(; trigger, before)`. Here
+    `trigger` is the event of a cell, and `before` is the cell update that runs in the
+    trigger's work item (`Lifecycle.before`), or `nothing`. That update is the model's
+    last after-MCS cell update when the trigger reads the columns it writes only at its
+    own cell. It then runs with the lifecycle and is not among `phases`.
+
+# Examples
+```julia
+code = generated_code(sys)
+code.delta_H
+```
+
+See also [`CompiledPottsSystem`](@ref).
 """
 function generated_code(
         sys; T::Type = Float64, field_solver = nothing,
@@ -1935,7 +1957,18 @@ end
 """
     energy_change(prob, u, prop)
 
-The authored energy change of proposal `prop` in state `u` (the model's ΔH without drives).
+Return the authored energy change of proposal `prop` in state `u`: the model's ΔH without
+drives.
+
+# Arguments
+- `prob::PottsProblem`: a problem built from a `@potts_model`.
+- `u`: a host state.
+- `prop`: a proposal (a `CorePotts.Proposal`).
+
+# Returns
+- The energy change, in the problem's scalar type.
+
+See also [`total_energy`](@ref).
 """
 function energy_change(prob::CorePotts.PottsProblem, u, prop)
     return prob.f.sys.delta_E(u, prob.p, prop, _host_ctx(prob))
@@ -1944,18 +1977,36 @@ end
 """
     total_energy(prob, u = prob.u0)
 
-The authored Hamiltonian `H` of state `u` (brute force, host), generated from the same
-terms as the model's ΔH. A dead cell (`volume == 0`) contributes nothing:
-cell terms sum over alive cells, cluster terms over the roots of clusters with at
-least one alive member, edge terms over links whose two ends are both alive; free slots
-add nothing.
+Return the authored energy ``H`` of state `u`, generated from the same terms as the model's
+ΔH and computed by brute force on the host.
 
-So `ΔH == H(after) − H(before)` for every copy except a killing one (the copy takes the
-old owner `o`'s last site), whose ΔH pays o's cell terms down to the empty state (and its
-cluster's, if no alive member is left): there `ΔH == H(after) − H(before) + E_cell(o,
-empty) [+ E_cluster(empty)]`. Links carry no such credit: the killing copy's ΔH removes
-o's edges at their pre-copy energy. With `E_cell(empty) = 0` (e.g. `λ·volume²`) and no
-cluster term with `E_cluster(empty) ≠ 0`, ΔH equals the H difference for every copy.
+A dead cell (`volume == 0`) contributes nothing. Cell terms sum over alive cells, cluster
+terms over the roots of clusters with at least one alive member, and edge terms over links
+whose two ends are both alive. Free slots add nothing.
+
+So `ΔH == H(after) − H(before)` for every copy except a killing one: a copy that takes the
+old owner `o`'s last site. Its ΔH pays `o`'s cell terms down to the empty state, and its
+cluster's terms if no alive member is left. There
+`ΔH == H(after) − H(before) + E_cell(o, empty) [+ E_cluster(empty)]`. Links carry no such
+credit: the killing copy's ΔH removes `o`'s edges at their energy before the copy. With
+`E_cell(empty) = 0` (for example `λ·volume²`) and no cluster term with
+`E_cluster(empty) ≠ 0`, ΔH equals the difference of ``H`` for every copy.
+
+# Arguments
+- `prob::PottsProblem`: a problem built from a `PottsSystem`. Throws an `ArgumentError`
+  otherwise.
+- `u = prob.u0`: a host state.
+
+# Returns
+- The energy, in the problem's scalar type.
+
+# Examples
+```julia
+prob = PottsProblem(sys, op, (0, 100); seed = 1)
+total_energy(prob)
+```
+
+See also [`energy_change`](@ref), [`Potts.hamiltonian`](@ref).
 """
 function total_energy(prob::CorePotts.PottsProblem, u = prob.u0)
     info = prob.f.sys

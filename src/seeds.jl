@@ -34,19 +34,31 @@ end
     Potts.layer_rng(seed) -> StableRNG
     Potts.layer_rng(seed, stream) -> StableRNG
 
-The random stream of a randomized layout layer or initial-state builder with top-level seed
-`seed` (an integer in `0:typemax(UInt64)`): `StableRNG(UInt64(seed))`, or, for the named
-sub-stream `stream` (a `Symbol` or string),
-`StableRNG(Potts._substream_seed(seed, stream))`. Both are the same on every Julia version
-(StableRNGs). Use the two-argument form for a second, independent stream drawn from the same
-seed (for example a builder's clocks next to its layout): a seed derived as `seed + 1` would
-give a shifted copy of the first stream. Throws an `ArgumentError` for a seed outside
-`0:typemax(UInt64)`.
+Return the random stream of a randomized layout layer or initial-state builder.
 
-```julia
-rng = Potts.layer_rng(seed, :clock)
-clocks = [rand(rng, 0:74) for _ in 1:n]
+The one-argument form is `StableRNG(UInt64(seed))`. The two-argument form is the named
+sub-stream, `StableRNG(Potts._substream_seed(seed, stream))`. Both are the same on every
+Julia version (StableRNGs). Use the two-argument form for a second, independent stream
+drawn from the same seed, for example a builder's clocks next to its layout. A seed
+derived as `seed + 1` would give a shifted copy of the first stream.
+
+# Arguments
+- `seed::Integer`: the top-level seed, in `0:typemax(UInt64)`. Throws an `ArgumentError`
+  otherwise.
+- `stream`: the sub-stream name, a `Symbol` or a string.
+
+# Returns
+- `StableRNG`: the stream.
+
+# Examples
+```jldoctest
+julia> using Potts
+
+julia> rand(Potts.layer_rng(1, :clock), 0:74) == rand(Potts.layer_rng(1, :clock), 0:74)
+true
 ```
+
+See also [`RandomPoints`](@ref), [`Eden`](@ref).
 """
 layer_rng(seed::Integer) = (_check_seed(seed, "layer_rng"); StableRNG(UInt64(seed)))
 function layer_rng(seed::Integer, stream::Union{Symbol, AbstractString})

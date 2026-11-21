@@ -14,24 +14,37 @@
 """
     Potts.ode_system(csys::CompiledPottsSystem, scope::Symbol)
 
-The ModelingToolkit system of the cell (`scope = :cell`) or model (`scope = :model`) ODEs of
-a compiled model: the `System` that `mtkcompile` produced from that scope's `@equations`, or
-`nothing` when the scope has none.
+Return the ModelingToolkit system of the cell or model ODEs of a compiled model: the
+`System` that `mtkcompile` produced from that scope's `@equations`.
 
 - It is complete and scheduled, as every `mtkcompile` result.
-- Its unknowns are the scope's differential variables under their declared names, and each
+- Its unknowns are the scope's differential variables under their declared names. Each
   algebraic variable (`y ~ expr` in `@equations`) is an `observed` equation.
-- Each declared parameter the equations read is a parameter under its declared name.
-- Everything else the equations read (built-ins such as `volume`, other scopes' variables,
-  neighbor gathers, folds over cells, reads of other cells `y[j]`) is an input: a further
-  parameter standing for that quantity.
+- Each declared parameter that the equations read is a parameter under its declared name.
+- Everything else that the equations read is an input: a further parameter standing for
+  that quantity. Examples are built-ins such as `volume`, other scopes' variables,
+  neighbor gathers, folds over cells, and reads of other cells `y[j]`.
 
 A cell system is the template of one cell: Potts advances it for every cell in one batched
-kernel. A system without inputs is an ordinary MTK system, which `ODEProblem` accepts.
+kernel. A system without inputs is an ordinary MTK system, which `ODEProblem` accepts. The
+equations of `@components` systems are not listed here: each component is compiled as its
+own system.
 
-The equations of `@components` systems are not listed here; each component is compiled as
-its own system. Any other scope, or a `PottsSystem` that has not been through
-`mtkcompile`, is an `ArgumentError`.
+# Arguments
+- `csys::CompiledPottsSystem`: the compiled model. A `PottsSystem` that has not been
+  through `mtkcompile` throws an `ArgumentError`.
+- `scope::Symbol`: `:cell` or `:model`. Any other scope throws an `ArgumentError`.
+
+# Returns
+- A `System`, or `nothing` when the scope has no `@equations`.
+
+# Examples
+```julia
+odes = Potts.ode_system(mtkcompile(sys), :cell)
+unknowns(odes)
+```
+
+See also [`Potts.initialization_system`](@ref), [`Potts.inner`](@ref).
 """
 function ode_system(c::CompiledPottsSystem, scope::Symbol)
     if !(scope in (:cell, :model))

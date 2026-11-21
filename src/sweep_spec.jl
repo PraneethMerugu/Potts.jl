@@ -6,28 +6,39 @@
 # fingerprint (D-137 rule 2).
 
 """
-    Potts.hamiltonian(sys) -> AbstractVector{Pair}
+    Potts.hamiltonian(sys) -> Vector{Pair{Any, Any}}
 
-The Hamiltonian of a model as written: one `domain => expr` pair per `@energy` term, in
-declaration order (`@extend`/`extend` terms merged), for a `PottsSystem` (completed or not)
-or a `CompiledPottsSystem` (the same terms as the model it was compiled from: as written,
-before `@components` are lowered).
+Return the energy ``H`` of a model as written: one `domain => expr` pair per `@energy`
+term, in declaration order.
+
+`@extend` and `extend` terms are merged. For a `CompiledPottsSystem` these are the terms
+of the model it was compiled from, as written, before `@components` are lowered.
 
 `domain` is the DSL domain value (`cells(k…)`, `clusters(k…)`, `contacts`, `contacts(r)`,
-`sites`, `edges(r)`); `expr` is the term's energy density (a number for a constant term), a
-Symbolics expression over the declared parameters and variables (the declared symbols, as
-`sys.x`) and the DSL built-ins (`volume`, `neighbor_kind`, …). The energy of a state is the
-sum of each density over its domain (cells of the term's kinds, unordered pairs of the
-relation with different owners, …), with the conventions of `total_energy`. Drives
-([`Potts.drives`](@ref)), constraints (the `PottsSweepSpec` payload's `constraints`) and the
-temperature are not terms. An algebraic variable (`y ~ expr` in `@equations`) appears by
-name; its definition is among the observed equations of
-[`Potts.inner`](@ref)`(mtkcompile(sys))` and of [`Potts.ode_system`](@ref).
+`sites`, `edges(r)`). `expr` is the term's energy density: a number for a constant term,
+or a Symbolics expression over the declared parameters and variables (the declared
+symbols, as `sys.x`) and the DSL built-ins (`volume`, `neighbor_kind`, …). The energy of a
+state is the sum of each density over its domain (cells of the term's kinds, unordered
+pairs of the relation with different owners, …), with the conventions of
+[`total_energy`](@ref). Drives ([`Potts.drives`](@ref)), constraints (the
+`PottsSweepSpec` payload's `constraints`) and the temperature are not terms. An algebraic
+variable (`y ~ expr` in `@equations`) appears by name. Its definition is among the
+observed equations of [`Potts.inner`](@ref)`(mtkcompile(sys))` and of
+[`Potts.ode_system`](@ref).
 
+# Arguments
+- `sys`: a `PottsSystem` (completed or not) or a `CompiledPottsSystem`.
+
+# Returns
+- `Vector{Pair{Any, Any}}`: the `domain => expr` terms.
+
+# Examples
 ```julia
-H = Potts.hamiltonian(GranerGlazier(; name = :gg))
+H = Potts.hamiltonian(sys)
 first(H[1]), last(H[1])        # cells(…) => λ * (volume - V₀)^2
 ```
+
+See also [`Potts.drives`](@ref), [`Potts.updates`](@ref), [`Potts.PottsSweepSpec`](@ref).
 """
 function hamiltonian(sys::PottsSystem)
     return Pair{
@@ -54,12 +65,21 @@ function _described(x)
 end
 
 """
-    Potts.drives(sys) -> AbstractVector
+    Potts.drives(sys) -> Vector{Any}
 
-The `@drive copy => expr` expressions of a model (Symbolics expressions, or a number for a
-constant, in the proposal scope: `source`, `target`, `old`, `new`, …), in declaration order;
-empty for a model without drives. Drives bias the acceptance of a copy but are not terms of
+Return the `@drive copy => expr` expressions of a model, in declaration order.
+
+Each is a Symbolics expression in the proposal scope (`source`, `target`, `old`, `new`,
+…), or a number for a constant. Drives bias the acceptance of a copy but are not terms of
 [`Potts.hamiltonian`](@ref).
+
+# Arguments
+- `sys`: a `PottsSystem` or a `CompiledPottsSystem`.
+
+# Returns
+- `Vector{Any}`: the drive expressions; empty for a model without drives.
+
+See also [`Potts.hamiltonian`](@ref).
 """
 drives(sys::PottsSystem) = Any[_wrapped(_described(d.expr)) for d in _p(sys, :drives)]
 drives(c::CompiledPottsSystem) = drives(getfield(c, :authored))
@@ -68,43 +88,53 @@ drives(c::CompiledPottsSystem) = drives(getfield(c, :authored))
 const _UpdateRule = @NamedTuple{phase::Symbol, scope::Symbol, every::Every, eq::Equation}
 
 """
-    Potts.updates(sys) -> AbstractVector
+    Potts.updates(sys) -> Vector
 
-The update rules of a model as written: one element per `@before_mcs`, `@after_mcs` and
-`@on_copy` statement, in declaration order across the three phases (`@extend`/`extend`
-statements merged), for a `PottsSystem` (completed or not) or a `CompiledPottsSystem` (the
-statements of the model it was compiled from: as written, before `@components` are lowered).
-Empty for a model without updates. Each element `u` has the properties
+Return the update rules of a model as written: one element per `@before_mcs`,
+`@after_mcs` and `@on_copy` statement, in declaration order across the three phases.
 
-- `u.phase`: `:before_mcs`, `:after_mcs` or `:on_copy`;
-- `u.scope`: `:cell`, `:site`, `:model` or `:edge`, the declared scope of the variable the
-  statement writes (for `@on_copy x[target] ~ …`, the scope of `x`; a field variable is
-  `:site`);
-- `u.every`: the cadence, a [`Potts.Every`](@ref) (`Every(1)` when none is written, and
-  always for `@on_copy`);
-- `u.eq`: the statement as a Symbolics `Equation` in ModelingToolkit's `Pre` form: the new
-  value on the left (at `target`/`new` for `@on_copy`), `Pre(x)` where it was written, and a
-  compound write `x += e` as `x ~ Pre(x) + e`. Its symbols are the declared ones (as
-  `sys.x`) and the DSL built-ins (`volume`, `new`, …).
+`@extend` and `extend` statements are merged. For a `CompiledPottsSystem` these are the
+statements of the model it was compiled from, as written, before `@components` are
+lowered. Each element `u` has the properties:
+
+- `u.phase`: `:before_mcs`, `:after_mcs` or `:on_copy`.
+- `u.scope`: `:cell`, `:site`, `:model` or `:edge`, the declared scope of the variable
+  that the statement writes. For `@on_copy x[target] ~ …` it is the scope of `x`, and a
+  field variable is `:site`.
+- `u.every`: the cadence, a [`Potts.Every`](@ref). It is `Every(1)` when none is written,
+  and always for `@on_copy`.
+- `u.eq`: the statement as a Symbolics `Equation` in ModelingToolkit's `Pre` form. The new
+  value is on the left (at `target`/`new` for `@on_copy`), `Pre(x)` stands where `x` was
+  written, and a compound write `x += e` is `x ~ Pre(x) + e`. Its symbols are the declared
+  ones (as `sys.x`) and the DSL built-ins (`volume`, `new`, …).
 
 Folds appear as Potts fold terms over their bound variable: a contact fold as
 [`Potts.count_contacts`](@ref)`(contact_partner, pred, relation)`, a population fold as
-`population(c_k, body, cond)`, a gather with its bound `n_k`; random draws appear as
+`population(c_k, body, cond)`, and a gather with its bound `n_k`. Random draws appear as
 `random_*` terms numbered in declaration order. Scope and cadence are those of a valid
-model: the statements are checked when the model is compiled (`mtkcompile`, `PottsProblem`),
-not here. An algebraic variable (`y ~ expr` in `@equations`) appears by name; its definition
-is among the observed equations of [`Potts.inner`](@ref)`(mtkcompile(sys))` and of
-[`Potts.ode_system`](@ref).
+model: the statements are checked when the model is compiled (`mtkcompile`,
+`PottsProblem`), not here. An algebraic variable (`y ~ expr` in `@equations`) appears by
+name. Its definition is among the observed equations of
+[`Potts.inner`](@ref)`(mtkcompile(sys))` and of [`Potts.ode_system`](@ref).
 
 The rules are a description: Potts compiles and runs them in its sweep, and they are not
 ModelingToolkit events (`ModelingToolkitBase.discrete_events(sys)` is empty).
 
+# Arguments
+- `sys`: a `PottsSystem` (completed or not) or a `CompiledPottsSystem`.
+
+# Returns
+- A `Vector` of `NamedTuple`s with the fields `phase`, `scope`, `every` and `eq`; empty
+  for a model without updates.
+
+# Examples
 ```julia
-u = first(Potts.updates(OpenVTGrowingMonolayer(; name = :openvt)))
+u = first(Potts.updates(sys))
 u.phase, u.scope, u.every   # (:after_mcs, :cell, Potts.Every(1))
-u.eq                        # V_target(t) ~ ifelse(volume >= (Pre(V_target(t))*β), \
-Pre(V_target(t)) + A₀ / τ, Pre(V_target(t)))
+u.eq
 ```
+
+See also [`Potts.hamiltonian`](@ref), [`Potts.Every`](@ref).
 """
 updates(sys::PottsSystem) = _UpdateRule[_update_rule(u) for u in _p(sys, :updates)]
 updates(c::CompiledPottsSystem) = updates(getfield(c, :authored))
@@ -122,31 +152,33 @@ end
     Potts.PottsSweepSpec
 
 The lattice sweep of a Potts model as typed system metadata: both the metadata key and the
-value type. It is metadata of the model's inner System (`Potts.inner(sys)`), set when the
-model is built (`Potts.wrap_system`), so generic code that holds the System detects a Potts
-model with MTK's metadata API:
+value type.
 
+It is metadata of the model's inner System (`Potts.inner(sys)`), set when the model is
+built (`Potts.wrap_system`). So generic code that holds the System detects a Potts model
+with MTK's metadata API. A `CompiledPottsSystem` answers the same keys
+(`getmetadata(mtkcompile(sys), PottsSweepSpec, nothing)`), and describes the model as
+written (before `@components` are lowered). It is a description only: MTK never runs the
+sweep (build it with `PottsProblem`). The payload shares its domain values and constraint
+entries with the model: read it, do not mutate it.
+
+# Fields
+- `hamiltonian`: [`Potts.hamiltonian`](@ref)`(sys)`, the `domain => expr` terms.
+- `drives`: [`Potts.drives`](@ref)`(sys)`.
+- `constraints`: one entry per `@constraint` (the entry type is not public).
+- `temperature`: the `@sweep` temperature as written (a declared symbol or an expression,
+  wrapped; or a number).
+- `proposal`: the `@relations proposal` relation (default `VonNeumann(1)`).
+
+# Examples
 ```julia
 using ModelingToolkitBase: getmetadata, hasmetadata
-hasmetadata(Potts.inner(sys), Potts.PottsSweepSpec)                 # true for every \
-Potts model
-spec = getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing) # `nothing` for a \
-plain `System`
+hasmetadata(Potts.inner(sys), Potts.PottsSweepSpec)  # true for every Potts model
+spec = getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing)
+spec.temperature
 ```
 
-A `CompiledPottsSystem` answers the same keys
-(`getmetadata(mtkcompile(sys), PottsSweepSpec, nothing)`), describing the model as written
-(before `@components` are lowered). It is a description only: MTK never executes the sweep
-(build it with `PottsProblem`). The payload shares its domain values and constraint entries
-with the model: read it, do not mutate it.
-
-Properties:
-- `hamiltonian`: [`Potts.hamiltonian`](@ref)`(sys)`, the `domain => expr` terms;
-- `drives`: [`Potts.drives`](@ref)`(sys)`;
-- `constraints`: one entry per `@constraint` (the entry type is not public);
-- `temperature`: the `@sweep` temperature as written (a declared symbol or an expression,
-  wrapped; or a number);
-- `proposal`: the `@relations proposal` relation (default `VonNeumann(1)`).
+See also [`Potts.hamiltonian`](@ref), [`Potts.inner`](@ref).
 """
 struct PottsSweepSpec
     hamiltonian::Vector{Pair{Any, Any}}

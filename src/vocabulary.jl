@@ -9,9 +9,13 @@
 """
     PottsEntity
 
-Metadata key `potts_entity`: what a quantity is in a Potts model, an `Entity`
-(`kind(t) [input = true, potts_entity = Builtin(:kind)]`). `LatticePDE.pdesystem` refuses a
-model's built-ins by this tag (`LatticePDE.pdesystem_refusal`).
+The metadata key `potts_entity`: what a quantity is in a Potts model.
+
+The value is an `Entity`, as in `kind(t) [input = true, potts_entity = Builtin(:kind)]`.
+`LatticePDE.pdesystem` refuses a model's built-ins by this tag
+(`LatticePDE.pdesystem_refusal`).
+
+See also [`get_potts_entity`](@ref).
 """
 struct PottsEntity end
 Symbolics.option_to_metadata_type(::Val{:potts_entity}) = PottsEntity
@@ -19,7 +23,15 @@ Symbolics.option_to_metadata_type(::Val{:potts_entity}) = PottsEntity
 """
     get_potts_entity(x)
 
-The `potts_entity` of `x` (an `Entity`), or `nothing`.
+Return the `potts_entity` metadata of `x`.
+
+# Arguments
+- `x`: a symbolic quantity, or any value.
+
+# Returns
+- The `Entity` of `x`, or `nothing` when `x` has none.
+
+See also [`PottsEntity`](@ref).
 """
 get_potts_entity(x) = info(x)
 
@@ -1172,21 +1184,32 @@ end
 # Kind classes (D-135): a named set of cell kinds, declared in `@kinds` as `name = (k, …)`
 
 """
-    KindClass
+    KindClass(name, kinds)
 
-A named set of cell kinds, declared in `@kinds` as `name = (kind, …)` (members are kinds
-or earlier classes, flattened in order). A class is usable wherever a list of kinds is:
-`cells(g)`, `clusters(g)`, `connectivity(g)`, `Volume(g; …)`, `Surface(g; …)`,
-`Chemotaxis(…; kinds = g)`, mixed with kinds (`cells(g, k)`). On a symbolic kind,
-`kind[x] ∈ g` is `(kind[x] == k₁) | … | (kind[x] == kₙ)` in member order and `kind[x] ∉ g`
-its negation, so a class costs nothing at run time. `∈ g` is meant for kind-valued
-expressions (`kind`, `neighbor_kind`, `kind[new]`, `kind[c]`, …): on any other quantity it
-compares that value with the kind numbers. `kind == g` is an error (a kind is never equal to
-a set of kinds). A class is not an index into a kind table, and operating points and layouts
-take kinds, not classes.
+A named set of cell kinds, declared in `@kinds` as `name = (kind, …)`.
 
-`PottsSystem(; kind_classes = [KindClass(:name, [k₁, …])])` declares classes
-programmatically (kind numbers: the medium is 0, then the cell kinds in order).
+Members are kinds or earlier classes, flattened in order. A class is usable wherever a list
+of kinds is: `cells(g)`, `clusters(g)`, `connectivity(g)`, `Volume(g; …)`,
+`Surface(g; …)`, `Chemotaxis(…; kinds = g)`, and mixed with kinds (`cells(g, k)`). On a
+symbolic kind, `kind[x] ∈ g` is `(kind[x] == k₁) | … | (kind[x] == kₙ)` in member order,
+and `kind[x] ∉ g` is its negation, so a class costs nothing at run time. `∈ g` is meant
+for kind-valued expressions (`kind`, `neighbor_kind`, `kind[new]`, `kind[c]`, …): on any
+other quantity it compares that value with the kind numbers. `kind == g` throws an error
+(a kind is never equal to a set of kinds). A class is not an index into a kind table, and
+operating points and layouts take kinds, not classes.
+
+A `KindClass` iterates over its kind numbers.
+
+# Fields
+- `name::Symbol`: the class name.
+- `kinds::Vector{Int}`: the kind numbers (the medium is 0, then the cell kinds in order).
+
+# Examples
+```julia
+PottsSystem(; name = :m, kinds, lattice, sweep, kind_classes = [KindClass(:tumor, [1, 2])])
+```
+
+See also [`PottsSystem`](@ref).
 """
 struct KindClass
     name::Symbol
@@ -1832,10 +1855,28 @@ end
     Every(n)
 
 The cadence of an update or rule: `@before_mcs Every(n) …`, `@after_mcs Every(n) …`,
-`@divide … Every(n)`, `@link … Every(n)`. It runs at the MCS where `mcs % n == 0`, with MCS
-numbered from 0, so `@after_mcs Every(5)` runs after MCS 0, 5, 10, … and its writes are seen
-at t = 1, 6, 11, …. The default is `Every(1)`, every MCS; `n ≥ 1`.
-[`Potts.updates`](@ref) reports each update's cadence as an `Every`.
+`@divide … Every(n)`, `@link … Every(n)`.
+
+The rule runs at the MCS where `mcs % n == 0`, with MCS numbered from 0. So
+`@after_mcs Every(5)` runs after MCS 0, 5, 10, …, and its writes are seen at t = 1, 6, 11,
+…. The default is `Every(1)`, every MCS. [`Potts.updates`](@ref) reports each update's
+cadence as an `Every`.
+
+# Arguments
+- `n::Integer`: the period in MCS, `n ≥ 1`. Throws an `ArgumentError` otherwise.
+
+# Fields
+- `n::Int`: the period.
+
+# Examples
+```jldoctest
+julia> using Potts
+
+julia> Potts.Every(5).n
+5
+```
+
+See also [`Potts.updates`](@ref).
 """
 struct Every
     n::Int
@@ -1943,8 +1984,26 @@ end
 # ---------------------------------------------------------------------------------------
 # Lattice and sweep specifications
 
-"""The lattice of a model: dims, boundaries, spacing, the contact neighborhood and an
-optional irregular domain (a Bool mask, evaluated once from a predicate `x -> …`)."""
+"""
+    LatticeSpec
+
+The lattice of a model, and the lattice that a layout is painted on.
+
+`@lattice Lattice(dims; …)` builds it. A layout reads it only through `size(lat)`,
+[`isperiodic`](@ref), [`indomain`](@ref) and [`core_lattice`](@ref).
+
+# Fields
+- `dims::NTuple{N, Int}`: the lattice size.
+- `boundary`: the boundaries, one for all axes or one per axis (`Periodic()`, `Closed()`,
+  …).
+- `spacing`: the site spacing, or `nothing`.
+- `neighborhood`: the contact relation spec (`Moore(1)`, …).
+- `domain`: an irregular domain as a `Bool` mask (evaluated once from a predicate
+  `x -> …`), or `nothing`.
+- `geometry`: `Square()` or `Hexagonal()`.
+
+See also [`Potts.lattice`](@ref), [`core_lattice`](@ref).
+"""
 struct LatticeSpec{N, B, S, R, D, G}
     dims::NTuple{N, Int}
     boundary::B
@@ -1971,8 +2030,16 @@ end
 """
     core_lattice(lat::LatticeSpec) -> CorePotts.Lattice
 
-Convert a layout [`LatticeSpec`](@ref) into a [`CorePotts.Lattice`](@ref) for
-`CorePotts.shift`, `CorePotts.relation`, and `CorePotts.embed`.
+Convert a layout [`LatticeSpec`](@ref) into a CorePotts `Lattice`, for `CorePotts.shift`,
+`CorePotts.relation` and `CorePotts.embed`.
+
+# Arguments
+- `lat::LatticeSpec`: the lattice that a layout is painted on.
+
+# Returns
+- `Lattice`: a lattice with the same size, boundaries, domain and geometry.
+
+See also [`LatticeSpec`](@ref), [`AbstractLayout`](@ref).
 """
 function core_lattice(l::LatticeSpec)
     return Lattice(l.dims; boundary = l.boundary, domain = l.domain, geometry = l.geometry)
@@ -1994,24 +2061,43 @@ end
 """
     Adaptive(alg; kwargs...)
 
-Cell and model ODEs integrated on the host by any SciML ODE algorithm (`Tsit5()`,
-`Rodas5P()`, … from OrdinaryDiffEq, loaded by the user), with `kwargs` (`reltol`, `abstol`,
-…) passed to `init`: a `PottsProblem`'s `ode_solver`, or a variable's entry in its
-`solvers` map. One integrator is created on first use and re-initialized per cell and per
-MCS over `[mcs, mcs + 1) × mcs_duration`: adaptive and stiff solvers for intracellular or
-systemic models, at host speed (a device state is copied once per MCS). If an adaptive ODE
-substep fails to reach a successful return code, the run stops and reports that integrator
-return code on the solution's `retcode` (with a warning unless `verbose = false`,
-distinguishing an ODE `ReturnCode.MaxIters` from Potts's MCS `maxiters`).
+Integrate cell and model ODEs on the host with any SciML ODE algorithm.
+
+Use it as a `PottsProblem`'s `ode_solver`, or as a variable's entry in its `solvers` map.
+The algorithm is any OrdinaryDiffEq algorithm (`Tsit5()`, `Rodas5P()`, …), loaded by the
+user. One integrator is created on first use and re-initialized per cell and per MCS over
+`[mcs, mcs + 1) × mcs_duration`. This gives adaptive and stiff solvers for intracellular
+or systemic models, at host speed (a GPU state is copied once per MCS). If an adaptive ODE
+substep does not reach a successful return code, the run stops and reports that integrator
+return code on the solution's `retcode`. It warns, unless `verbose = false`, and the
+warning tells an ODE `ReturnCode.MaxIters` apart from the MCS `maxiters` of Potts.
 
 Every keyword and algorithm field enters the problem fingerprint, so a checkpoint resumes
-only under an equal solver. Values must be at most 8 levels deep and not cyclic (deeper
-ones are an `ArgumentError` when the problem is built). An anonymous function or closure
-(`isoutofdomain = (u, p, t) -> any(<(0), u)`, `Rodas5P(step_limiter! = …)`) is accepted, but
-it has no name that survives the Julia session: its problem's checkpoints load only in the
-session that made them. To resume in a new session, pass a named function defined at the
-top level or an instance of a callable struct (or a stable wrapper such as
-`Returns(false)`).
+only under an equal solver. Values must be at most 8 levels deep and not cyclic: deeper
+values throw an `ArgumentError` when the problem is built. An anonymous function or closure
+(`isoutofdomain = (u, p, t) -> any(<(0), u)`, `Rodas5P(step_limiter! = …)`) is accepted,
+but it has no name that survives the Julia session: its problem's checkpoints load only in
+the session that made them. To resume in a new session, pass a named function defined at
+the top level, an instance of a callable struct, or a stable wrapper such as
+`Returns(false)`.
+
+# Arguments
+- `alg`: the ODE algorithm.
+
+# Keywords
+- `kwargs...`: passed to `init` (`reltol`, `abstol`, …).
+
+# Fields
+- `alg`: the algorithm.
+- `kwargs::NamedTuple`: the keywords.
+
+# Examples
+```julia
+using OrdinaryDiffEq: Rodas5P
+prob = PottsProblem(sys, op, (0, 100); ode_solver = Adaptive(Rodas5P(); reltol = 1e-6))
+```
+
+See also [`Potts.RK4`](@ref).
 """
 struct Adaptive{A, K}
     alg::A
@@ -2019,7 +2105,26 @@ struct Adaptive{A, K}
 end
 Adaptive(alg; kwargs...) = Adaptive(alg, NamedTuple(kwargs))
 
-"""Classic fourth-order Runge–Kutta for cell and model ODEs, `substeps` steps per MCS."""
+"""
+    Potts.RK4(; substeps = 1)
+
+The classic fourth-order Runge–Kutta method for cell and model ODEs, with `substeps`
+steps per MCS.
+
+Use it as a `PottsProblem`'s `ode_solver`, or as a variable's entry in its `solvers` map.
+It is explicit and fourth order. `Potts.RK4` is not exported, because OrdinaryDiffEq
+exports a different `RK4`.
+
+# Keywords
+- `substeps::Int = 1`: the number of equal steps per MCS.
+
+# Examples
+```julia
+prob = PottsProblem(sys, op, (0, 100); ode_solver = Potts.RK4(; substeps = 4))
+```
+
+See also [`Adaptive`](@ref).
+"""
 Base.@kwdef struct RK4
     substeps::Int = 1
 end

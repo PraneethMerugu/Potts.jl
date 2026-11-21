@@ -18,20 +18,48 @@ const SECTIONS = (
 
 """
     @potts_model Name begin
-        @structural_parameters begin lattice = (72, 72) end
-        @kinds medium dark light
-        @parameters begin λ = 1.0; J[kind, kind] = [0 16 16; 16 2 11; 16 11 14] end
-        @lattice Lattice(lattice; boundary = Periodic(), neighborhood = Moore(1))
-        @energy begin
-            cells(dark, light) => λ * (volume - V₀)^2
-            contacts           => J[kind, neighbor_kind]
-        end
-        @sweep Metropolis(; temperature = T)
+        sections...
     end
 
-Define a model constructor `Name(; name, kwargs...)` (`@named m = Name()` passes `name`);
-keyword arguments override structural parameters and parameter defaults. See
-`docs/design/AUTHORING.md`.
+Define a model constructor `Name(; name, kwargs...)` that builds a [`PottsSystem`](@ref).
+
+The body is a sequence of sections (`@kinds`, `@parameters`, `@lattice`, `@energy`,
+`@sweep` and the others). `@named m = Name()` passes `name`. Keyword arguments of the
+constructor override structural parameters and parameter defaults. The section reference
+is `docs/design/AUTHORING.md` and the manual.
+
+# Arguments
+- `Name`: the name of the constructor function.
+- `body`: a `begin … end` block of sections.
+
+# Returns
+- The constructor function `Name`.
+
+# Examples
+```julia
+@potts_model Sorting begin
+    @structural_parameters begin
+        dims = (72, 72)
+    end
+    @kinds medium dark light
+    @parameters begin
+        λ = 1.0
+        V₀ = 40.0
+        T = 10.0
+        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+    end
+    @lattice Lattice(dims; boundary = Periodic(), neighborhood = Moore(1))
+    @energy begin
+        cells(dark, light) => λ * (volume - V₀)^2
+        contacts => J[kind, neighbor_kind]
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+@named sorting = Sorting(; T = 20.0)
+```
+
+See also [`PottsSystem`](@ref), [`CompiledPottsSystem`](@ref).
 """
 macro potts_model(name, body)
     return esc(_potts_model(name, body, __module__))
