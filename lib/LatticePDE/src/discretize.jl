@@ -13,9 +13,16 @@ struct FiniteVolume end
 How a `PDESystem` is put on a lattice. `grid = Grid(dims)` gives only the site counts: the
 spacing is derived from the system's domain (`extent ./ dims`) and periodicity from its
 periodic bc pairs, so there is one source of truth. Periodicity is per field and axis: a
-field wraps on the axes of its own pairs and is closed on the others. `methods` maps a
-field (`c`, `c(t, x, y)` or `u`; keys are normalized by operation) to its method; a field
-without an entry is `FiniteVolume()`.
+field wraps on the axes of its own pairs and is closed on the others. A read of a field
+follows that field's conditions, whichever equation reads it: `laplacian(c)` in the rate
+of `d` wraps where `c` wraps and takes `c`'s faces where `c` is closed (as in
+MethodOfLines). An aux field wraps where the fields it reads wrap; read at a neighbor
+site on an axis where those fields differ, it is an error. An input (and the `domain`
+mask) wraps only where every field wraps; a neighbor read of it on an axis where the
+fields differ is an error, as is a `domain` with such an axis.
+
+`methods` maps a field (`c`, `c(t, x, y)` or `u`; keys are normalized by operation) to its
+method; a field without an entry is `FiniteVolume()`.
 
 `T` is the state type (P5 role model: the only number-type keyword): `Float16`, `Float32`,
 `Float64`, or `BigFloat` on the host (stored in F64 lanes that hold BigFloat). `nothing`
@@ -366,7 +373,7 @@ end
 # boundary site; a read of the state is refused (the condition would be another equation)
 function _coef_field!(
         pb, bc, v, scale, what, k, d, s, op, lv, fids, ivs,
-        ends, allops, isin, kern::K, env::E
+        ends, allops, isin, kern::K, env::E; periodic
     ) where {K, E}
     _value_reads_state(v, bc.eq, [o for o in allops if !isin[o]], "Robin coefficient")
     w = _unpin_face_reads(
@@ -375,7 +382,7 @@ function _coef_field!(
     ).value
     fk = string("face:", k, ":", d, s > 0 ? "+" : "-", ":", what)
     lane = fids[op][2]
-    ff = field!(pb, fk; storage = lane, role = :aux, levels = Int8[lv])
+    ff = field!(pb, fk; storage = lane, role = :aux, levels = Int8[lv], periodic)
     kb = kern(lv)
     e = env(false, kb, lv)
     wx = substitute(w, Dict(ivs[d + 1] => ends[d + 1][s > 0 ? 2 : 1]); fold = Val(false))
@@ -715,11 +722,58 @@ function symbolic_discretize(
         push!(seen, slot)
     end
     pairs = [(key(b.op, b.comp), b.axis) for b in bcs if b.kind == :periodic]
-    # a field wraps on the axes of its pairs; the lattice (inputs, aux fields) on every axis
-    # where some field wraps
+    # a field wraps on the axes of its pairs and is closed on the others
     fper(k) = ntuple(d -> (k, d) in pairs, N)
-    periodic = ntuple(d -> any(p -> p[2] == d, pairs), N)
     allops = collect(Base.keys(dvs))
+    # the fields with a periodicity of their own: rate and map fields, and another group's
+    # fields read here (each read of one follows its own conditions)
+    own = String[
+        k for op in allops for k in keys[op]
+            if cut[op] || (!isin[op] && haskey(eqs, k) && eqs[k][1] != :aux)
+    ]
+    # the program's flags, which a field with none of its own takes (an input, the domain
+    # mask): an axis wraps only where every field wraps, so no closed field reads wrapped
+    # values; `mixed`: the axes where the fields differ
+    periodic = if isempty(own)
+        ntuple(d -> any(p -> p[2] == d, pairs), N)
+    else
+        ntuple(d -> all(k -> fper(k)[d], own), N)
+    end
+    mixed = ntuple(d -> !allequal(fper(k)[d] for k in own), N)
+    # an aux field wraps where the fields it reads (through other aux fields too) wrap; where
+    # they differ it is ambiguous there, and a neighbor read of it on that axis is refused
+    # (`_check_mixed_reads`). An aux field that reads no such field follows its reader,
+    # as an input does
+    function auxdeps(k, seen = Set([k]))
+        out = String[]
+        for op in allops
+            (isin[op] && !cut[op]) && continue
+            _reads(eqs[k][4], (op,)) || continue
+            for kk in keys[op]
+                if !isin[op] && eqs[kk][1] == :aux
+                    kk in seen && continue
+                    push!(seen, kk)
+                    append!(out, auxdeps(kk, seen))
+                else
+                    push!(out, kk)
+                end
+            end
+        end
+        return unique!(out)
+    end
+    auxinfo = Dict{String, Tuple{NTuple{N, Bool}, NTuple{N, Bool}, Vector{String}}}()
+    for (k, v) in eqs
+        v[1] == :aux || continue
+        ds = auxdeps(k)
+        auxinfo[k] = if isempty(ds)
+            (periodic, ntuple(_ -> false, N), ds)
+        else
+            (
+                ntuple(d -> all(x -> fper(x)[d], ds), N),
+                ntuple(d -> !allequal(fper(x)[d] for x in ds), N), ds,
+            )
+        end
+    end
     for b in bcs
         b.kind == :initial || continue
         eqs[key(b.op, b.comp)][1] in (:rate, :map) ||
@@ -838,7 +892,7 @@ function symbolic_discretize(
                 field!(
                     pb, k; storage = lane, role = kind == :aux ? :aux : :state,
                     buffers = kind == :map || (kind == :rate && update !== nothing) ? 2 : 1,
-                    fixed, levels, periodic = kind == :aux ? periodic : fper(k)
+                    fixed, levels, periodic = kind == :aux ? auxinfo[k][1] : fper(k)
                 )
             end, lane,
         )
@@ -861,6 +915,16 @@ function symbolic_discretize(
         dompred = dvs[dop]
         (isin[dop] && fids[dop][2] == U8) ||
             _dverr("`domain = \"$(disc.domain)\"` must name a `Bool` input field")
+        # each field reads the mask at its neighbors with its own periodicity; one mask
+        # cannot serve fields that wrap differently
+        if any(mixed)
+            ax = findfirst(mixed)
+            how = join(("`$k` $(fper(k)[ax] ? "wraps" : "is closed")" for k in own), ", ")
+            _dverr(
+                "`domain = \"$(disc.domain)\"` needs every field to wrap on the same " *
+                    "axes; the fields differ on axis $ax ($how)"
+            )
+        end
         dom = fids[dop][1][1]
         push!(pb.masks, MaskDecl("domain", dom, STATIC))
         g = disc.grid
@@ -982,7 +1046,7 @@ function symbolic_discretize(
             af, ax = if α === nothing
                 _coef_field!(
                     pb, bc, bc.alpha, 1.0, "α", k, d, s, op, lv,
-                    fids, ivs, ends, allops, isin, kern, fenv
+                    fids, ivs, ends, allops, isin, kern, fenv; periodic = fper(k)
                 )
             else
                 (Int32(0), nothing)
@@ -990,7 +1054,7 @@ function symbolic_discretize(
             bf, bx = if β === nothing
                 _coef_field!(
                     pb, bc, bc.beta, s / hL[d], "β", k, d, s, op,
-                    lv, fids, ivs, ends, allops, isin, kern, fenv
+                    lv, fids, ivs, ends, allops, isin, kern, fenv; periodic = fper(k)
                 )
             else
                 (Int32(0), nothing)
@@ -1015,7 +1079,10 @@ function symbolic_discretize(
                     "face value"
                 )
                 gk = string("face:", k, ":", d, s > 0 ? "+" : "-")
-                gf = field!(pb, gk; storage = fids[op][2], role = :aux, levels = Int8[lv])
+                gf = field!(
+                    pb, gk; storage = fids[op][2], role = :aux, levels = Int8[lv],
+                    periodic = fper(k)
+                )
                 kb = kern(lv)
                 e = fenv(false, kb, lv)
                 # the face's own coordinate where the condition pins it
@@ -1043,7 +1110,8 @@ function symbolic_discretize(
         # (a coarse field's mask lives on its grid: its fine reads folded)
         lv = flev[b.op]
         mf = field!(
-            pb, "mask:$k"; storage = U8, role = :aux, epoch = PERSIGMA, levels = Int8[lv]
+            pb, "mask:$k"; storage = U8, role = :aux, epoch = PERSIGMA, levels = Int8[lv],
+            periodic = fper(k)
         )
         push!(pb.masks, MaskDecl("mask:$k", mf, PERSIGMA))
         mv = _coef(b.value, params)
@@ -1058,7 +1126,7 @@ function symbolic_discretize(
             )
             vf = field!(
                 pb, "maskvalue:$k"; storage = fids[b.op][2],
-                role = :aux, epoch = PERSIGMA, levels = Int8[lv]
+                role = :aux, epoch = PERSIGMA, levels = Int8[lv], periodic = fper(k)
             )
         end
         # a value that reads the time: its rate `∂v/∂t` too, the masked sites'
@@ -1069,7 +1137,7 @@ function symbolic_discretize(
         else
             field!(
                 pb, "maskrate:$k"; storage = fids[b.op][2],
-                role = :aux, epoch = PERSIGMA, levels = Int8[lv]
+                role = :aux, epoch = PERSIGMA, levels = Int8[lv], periodic = fper(k)
             )
         end
         kb = kern(lv)
@@ -1128,7 +1196,10 @@ function symbolic_discretize(
             )
             # with a domain the field lives in it: a site outside keeps its value
             if update === nothing
-                g = field!(pb, "∂$k"; storage = lane, role = :scratch, levels = Int8[lv])
+                g = field!(
+                    pb, "∂$k"; storage = lane, role = :scratch, levels = Int8[lv],
+                    periodic = fper(k)
+                )
                 v = _real(e, r)
                 dom == 0 ||
                     (v = select!(kb, _indomain(kb, dl(lv), N), v, constant!(kb, 0.0)))
@@ -1163,9 +1234,67 @@ function symbolic_discretize(
             _promoted(vec(collect(unwrap_const.(unwrap.(d)))))
         ) for p in arrays
     ]
-    return CompiledField{N}(
-        program(pb), keys, plist, defaults, tvals, initial, lin, sitecoefs, free, dompred
+    prog = program(pb)
+    any(mixed) && _check_mixed_reads(
+        prog,
+        Dict(k => (v[2], v[3]) for (k, v) in auxinfo if any(v[2])),
+        Set(
+            String[
+                k for op in allops for k in keys[op]
+                    if (isin[op] && !cut[op]) || isempty(get(auxinfo, k, (0, 0, [0]))[3])
+            ]
+        ),
+        fper
     )
+    return CompiledField{N}(
+        prog, keys, plist, defaults, tvals, initial, lin, sitecoefs, free, dompred
+    )
+end
+
+# With fields that wrap on different axes, the reads whose wrapping is not one field's own:
+# an aux field reading fields that differ on an axis (`ambig`: key => (axes, fields)) has no
+# single rule beyond that axis's edge, and an input or an aux field that reads no field
+# (`follow`) takes the program's periodicity, which a reader that wraps where other fields
+# do not would not share. A neighbor read of either on such an axis is refused (keying
+# one input per reader would cost a copy per periodicity), naming the reader and the fields
+function _check_mixed_reads(prog::Program{N}, ambig, follow, fper::F) where {N, F}
+    shifted(a, d) = a.level != 0 || a.offset.a[d] != 0 ||
+        (a.offset.cond != 0 && a.offset.b[d] != 0)
+    for kern in prog.kernels
+        readers = unique!([prog.fields[s.access.field].key for s in kern.stores])
+        rper = [fieldperiodic(prog, s.access.field) for s in kern.stores]
+        rname = split(kern.key, ":"; limit = 2)[end]
+        for a in kern.accesses, d in 1:N
+            shifted(a, d) || continue
+            K = prog.fields[a.field].key
+            K in readers && continue
+            if haskey(ambig, K) && ambig[K][1][d]
+                how = join(
+                    ("`$x` $(fper(x)[d] ? "wraps" : "is closed")" for x in ambig[K][2]), ", "
+                )
+                _dverr(
+                    "`$rname` reads the aux field `$K` at a neighbor site on axis $d, " *
+                        "where the fields its expression reads wrap differently ($how)" *
+                        ": its value beyond that edge is ambiguous. Read `$K` at its " *
+                        "own site, write the term with the fields it reads, or give " *
+                        "them the same periodicity on axis $d"
+                )
+            end
+            K in follow || continue
+            w = fieldperiodic(prog, a.field)[d]
+            bad = any(r -> r[d] != w, rper) ||
+                any(r -> haskey(ambig, r) && ambig[r][1][d], readers)
+            bad && _dverr(
+                "`$rname` reads `$K` at a neighbor site on axis $d. `$K` has no " *
+                    "periodicity of its own (an input, or an aux field that reads no " *
+                    "field): it wraps where every field wraps, and the fields differ " *
+                    "on axis $d, so its neighbor values there would not follow " *
+                    "`$rname`'s rule. Read `$K` at its own site, or give the fields " *
+                    "the same periodicity on axis $d"
+            )
+        end
+    end
+    return nothing
 end
 
 # An aux field read at a neighbor site across a closed face (`laplacian(K)`) has no
