@@ -21,8 +21,7 @@ use as a component of an MTK System (`system ∘ csys`) throw an `ArgumentError`
 to the model, then compile it. [`Potts.inner`](@ref)`(csys)` is the System of the model as
 compiled.
 
-# Fields
-None public. Read it through the MTK accessors and [`Potts.inner`](@ref).
+The fields are not public. Read it through the MTK accessors and [`Potts.inner`](@ref).
 
 # Examples
 ```julia

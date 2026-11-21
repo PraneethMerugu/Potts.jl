@@ -111,11 +111,11 @@ proposal, the acceptance law and the full ΔH, drives included. The built-in law
 with probability ½. A custom law receives temperature 0 and follows its own `accept`. A
 bias term vanishes at T = 0.
 
-Only copy attempts run. Before each MCS run the derived refreshes that the energies read
-(the model's at-init phase: integrals and population-fold energy snapshots). No other MCS
-phases, rules, updates, lifecycle events, ODE or field steps run, so every other variable
-keeps its value in `u`. An energy that reads a cell variable maintained by an update block
-sees it frozen at its value in `u`.
+Only copy attempts run. Before each MCS, Potts runs the derived refreshes that the energies
+read (the model's at-init phase: integrals and population-fold energy snapshots). No other
+MCS phases, rules, updates, lifecycle events, ODE or field steps run, so every other
+variable keeps its value in `u`. An energy that reads a cell variable maintained by an
+update block sees it frozen at its value in `u`.
 
 `u` and `prob` are not modified. The result is deterministic in
 `(prob, u, mcs, seed, alg)`. `mcs = 0` returns an equal copy of `u`. A non-finite

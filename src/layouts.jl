@@ -73,10 +73,7 @@ The paint so far, handed to `Potts.paint!(op::LayoutState, l, lat)`.
 `LayoutState` is opaque. A layer reads and writes it only through [`new_cell!`](@ref),
 [`assign!`](@ref), [`owner`](@ref), [`kindof`](@ref), [`ncells`](@ref),
 [`record!`](@ref) and [`set_column!`](@ref). [`layout`](@ref) makes it; a user never
-constructs one.
-
-# Fields
-None public. Use the functions above.
+constructs one. The fields are not public.
 
 See also [`AbstractLayout`](@ref).
 """

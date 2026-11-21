@@ -404,7 +404,8 @@ Return the test that a site's kind is `name` (or one of `name, names…`), for a
 [`Potts.couple`](@ref).
 
 One name gives `Potts.kind == Potts.lookup(model, name)`. Several names give a membership
-test, `ismember(Potts.kind, (a, b))`. The medium is a kind (`:medium`, number 0).
+test, `ismember(Potts.kind, (a, b))`. The first kind (the medium, normally `:medium`) is
+number 0.
 `Potts.kind == :A` is Julia's constant `false`; `is_kind` is the way to compare a kind by
 name.
 
