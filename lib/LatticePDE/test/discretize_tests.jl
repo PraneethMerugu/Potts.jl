@@ -752,10 +752,9 @@ end
                 ce, Ne,
             ], Num[]
         )
-        @test throws_with(
-            () -> symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4)))),
-            "periodicity is per axis"
-        )
+        # `c` wraps on y and the map field `N` is closed (base: "periodicity is per axis")
+        cf = symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4))))
+        @test cf isa CompiledField
         ok = pde(
             [D(ce) ~ laplacian(ce), Shift(t, 1)(Ne) ~ Ne],
             [c(t, x, 0) ~ c(t, x, 1), N(t, x, 0) ~ N(t, x, 1)], [ce, Ne], Num[]

@@ -1468,8 +1468,9 @@ end
 # the centers
 function _ghost_axes(cf::CompiledField{N}) where {N}
     s = cf.program
+    # (a face rule sits on an axis its field closes)
     return ntuple(
-        a -> !s.periodic[a] && any(
+        a -> any(
             r -> r isa FaceRule && Int(r.axis) == a &&
                 !(r.alpha.value == 0 && r.g.value == 0 && r.gfield == 0), s.rules
         ), N
@@ -1606,7 +1607,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     end
     function facecoef(K)
         return _face_coef_bound(
-            K, dvs, frules, params, tabs, ivars, kbox, cf.program.periodic
+            K, dvs, frules, params, tabs, ivars, kbox, N
         )
     end
     # the aux definitions `K ~ rhs`: a term that reads an aux field is bounded through its
@@ -1889,15 +1890,15 @@ end
 # magnitude is the larger, its sign the lower). A zero-flux face's ghost is the site value;
 # a face value that reads the time, the coordinates or an input (a value field) has no
 # static ghost: no bound.
-function _face_coef_bound(K, dvs, frules, params, tabs, ivars, box, periodic)
+function _face_coef_bound(K, dvs, frules, params, tabs, ivars, box, N::Int)
     c0 = _coef_bound(K, params, tabs, ivars; box)
     c0 === nothing && return nothing
     reads = [kk for (kk, v) in dvs if _reads(K, (_ref(v),))]
     isempty(reads) && return c0
     sym(c::Coef) = c.param == 0 ? c.value : c.value * params[c.param]
     out = c0
-    for a in eachindex(periodic), sd in (-1, 1)
-        periodic[a] && continue
+    # (a field that wraps on axis `a` has no face rule there)
+    for a in 1:N, sd in (-1, 1)
         reps = Dict{Any, Any}()
         gtext = String[]
         for kk in reads

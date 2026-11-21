@@ -1249,3 +1249,33 @@ end
     end
     @test rate(PDEV) == rate(KernelAbstractions.CPU())
 end
+
+@testitem "two fields of different periodicity on pgpu equal the host" setup = [
+    LP_device,
+] tags = [:latticepde, :device, :gpu_only] begin
+    # `c` wraps on both axes; `w` wraps on y and is closed on x by a Dirichlet face
+    @variables w(..)
+    we = w(t, x, y)
+    bump(x0, y0) = exp(-((x - x0)^2 + (y - y0)^2) / 0.02)
+    sys = PDESystem(
+        [D(ce) ~ 0.4 * laplacian(ce), D(we) ~ 0.3 * laplacian(we) - 0.2 * we],
+        [
+            c(t, 0, y) ~ c(t, 1, y), c(t, x, 0) ~ c(t, x, 1), w(t, x, 0) ~ w(t, x, 1),
+            w(t, 0, y) ~ 0.0, c(0, x, y) ~ bump(0.1, 0.9), w(0, x, y) ~ bump(0.85, 0.2),
+        ],
+        [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+        [t, x, y], [ce, we], Num[]; name = :perdev
+    )
+    mk(be) = discretize(
+        sys, LatticeDiscretization(Grid((16, 12)); T = Float32, backend = be)
+    )
+    for alg in (
+            ExplicitEuler(; substeps = 16),
+            BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-6, maxiters = 64)),
+        )
+        sd = solve(mk(PDEV), alg; dt = 0.05f0)
+        sh = solve(mk(KernelAbstractions.CPU()), alg; dt = 0.05f0)
+        @test isapprox(Array(sd[ce, length(sd.t)]), sh[ce, length(sh.t)]; rtol = 1.0f-4)
+        @test isapprox(Array(sd[we, length(sd.t)]), sh[we, length(sh.t)]; rtol = 1.0f-4)
+    end
+end

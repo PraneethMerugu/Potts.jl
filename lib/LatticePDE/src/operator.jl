@@ -899,6 +899,7 @@ function _jac_program(
     end
     for (k, pl) in sort!(collect(plans); by = first)
         id = fieldid_in(pb, k)
+        per = pb.fields[id].periodic                # (the row's field wraps on these axes)
         lane = pb.fields[id].storage
         L = Int(pb.fields[id].levels[1])
         dlid = domat(L)
@@ -949,7 +950,7 @@ function _jac_program(
             end
             for (a, o) in enumerate(((1, 0), (0, 1), (1, -1)))
                 w = wl
-                all(s.periodic) || (w = select!(kb, inside(o), w, zero_))
+                all(per) || (w = select!(kb, inside(o), w, zero_))
                 dlid == 0 ||
                     (
                     w = select!(
@@ -961,7 +962,7 @@ function _jac_program(
             end
             # the ghost rule's `d⁺` of face (a, side), or nothing
             function dplus(a, side)
-                s.periodic[a] && return nothing
+                per[a] && return nothing
                 r = findfirst(
                     x -> x isa FaceRule && x.field == fieldid(s, k) && x.axis == a &&
                         x.side == side,
@@ -1030,7 +1031,7 @@ function _jac_program(
                 end
                 # no face across the box (the solver's zero flux) or across the domain's
                 # edge
-                s.periodic[a] || (w = select!(kb, inside(o), w, zero_))
+                per[a] || (w = select!(kb, inside(o), w, zero_))
                 dlid == 0 ||
                     (
                     w = select!(
@@ -1040,7 +1041,7 @@ function _jac_program(
                     )
                 )
                 store!(kb, wids[a], lane, w)
-                s.periodic[a] && continue
+                per[a] && continue
                 # the face conditions of the box: the ghost rule's diagonal `w_b d⁺`
                 for (j, side) in enumerate((-1, 1))
                     r = findfirst(

@@ -696,7 +696,7 @@ function symbolic_discretize(
     for (op, ks) in keys, k in ks
         isin[op] || haskey(eqs, k) || _dverr("field `$k` has no equation")
     end
-    # boundary conditions; periodicity from the pairs, shared by every field
+    # boundary conditions; periodicity per field and axis from the pairs
     bcs = parse_bcs(
         get_bcs(sys),
         Dict{Any, Bool}(op => isin[op] && !cut[op] for op in Base.keys(isin)), ivs, ends
@@ -714,6 +714,9 @@ function symbolic_discretize(
         push!(seen, slot)
     end
     pairs = [(key(b.op, b.comp), b.axis) for b in bcs if b.kind == :periodic]
+    # a field wraps on the axes of its pairs; the lattice (inputs, aux fields) on every axis
+    # where some field wraps
+    fper(k) = ntuple(d -> (k, d) in pairs, N)
     periodic = ntuple(d -> any(p -> p[2] == d, pairs), N)
     allops = collect(Base.keys(dvs))
     for b in bcs
@@ -762,9 +765,9 @@ function symbolic_discretize(
     end
     for b in bcs
         b.kind in (:dirichlet, :neumann, :robin) || continue
-        periodic[b.axis] &&
-            _dverr("`$(b.eq)` sets a face of axis $(b.axis), which a periodic pair makes \
-                periodic")
+        fper(key(b.op, b.comp))[b.axis] &&
+            _dverr("`$(b.eq)` sets a face of axis $(b.axis), which a periodic pair of \
+                `$(key(b.op, b.comp))` makes periodic")
         # (another group's rate field: its group checked it)
         cut[b.op] && continue
         kb = eqs[key(b.op, b.comp)][1]
@@ -776,11 +779,6 @@ function symbolic_discretize(
         kb == :rate ||
             _dverr("`$(b.eq)`: face conditions apply to rate fields (a map's offset reads \
                 outside the box read 0)")
-    end
-    for (k, d) in pairs, (k2, (kind, _...)) in eqs
-        kind in (:rate, :map) && !((k2, d) in pairs) &&
-            _dverr("axis $d is periodic for `$k` but `$k2` has no periodic pair on it; \
-                periodicity is per axis")
     end
     # parameters: scalars by sorted name, spacing parameters valued from the grid; arrays →
     # tables
@@ -830,15 +828,16 @@ function symbolic_discretize(
         levels = Int8[get(lev, op, 0)]
         fids[op] = (
             map(keys[op]) do k
+                # (another group's field keeps its own periodicity)
                 isin[op] && return field!(
                     pb, k; storage = lane, role = :input,
-                    epoch = PERSIGMA, fixed, levels
+                    epoch = PERSIGMA, fixed, levels, periodic = cut[op] ? fper(k) : periodic
                 )
                 kind = eqs[k][1]
                 field!(
                     pb, k; storage = lane, role = kind == :aux ? :aux : :state,
                     buffers = kind == :map || (kind == :rate && update !== nothing) ? 2 : 1,
-                    fixed, levels
+                    fixed, levels, periodic = kind == :aux ? periodic : fper(k)
                 )
             end, lane,
         )
@@ -965,7 +964,7 @@ function symbolic_discretize(
             (m, kb, l) -> env(m, kb, l, fr, dompred)
         end
         for d in 1:N, s in (-1, 1)
-            periodic[d] && continue
+            fper(k)[d] && continue
             b = findfirst(
                 b -> b.kind in (:dirichlet, :neumann, :robin) && key(b.op, b.comp) == k &&
                     b.axis == d && b.side == s, bcs
@@ -1179,7 +1178,7 @@ function _check_aux_offsets(prog::Program{N}, sys::PDESystem) where {N}
     for kern in prog.kernels, a in kern.accesses
         K = prog.fields[a.field].key
         (a.policy == RESOLVE && K in aux && a.offset.cond == 0) || continue
-        d = findfirst(e -> a.offset.a[e] != 0 && !prog.periodic[e], 1:N)
+        d = findfirst(e -> a.offset.a[e] != 0 && !fieldperiodic(prog, a.field)[e], 1:N)
         d === nothing && continue
         kind, k = split(kern.key, ":"; limit = 2)
         ops = Any[

@@ -40,7 +40,7 @@ using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, Lattice
     VCycle
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual,
     primal
-using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims, sitecoefs
+using LatticeFields.IR: fieldid, fieldperiodic, RESOLVE, degenerate, leveldims, sitecoefs
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
     ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler,
     CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
