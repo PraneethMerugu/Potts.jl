@@ -636,10 +636,11 @@ the copy.
 The values come from the shell when the cell is one piece and the local test holds (or
 the target is isolated), else from floods over `ctx.flood`. The medium's values are `0`.
 The values are also stored for the target in `ctx.flood.after`, rows
-`4(slot − 1) + 1:4`, for [`commit_pieces!`](@ref). On the lockless checkerboard
-(a context with a `lockless` entry) they are stored as changes from the values read. A cell in one piece that
-stays in one piece then changes its largest piece by ∓1 (its volume change), not by the
-difference of two reads that a concurrent copy of the cell may separate.
+`4(slot − 1) + 1:4`, for [`commit_pieces!`](@ref). On the lockless checkerboard (a
+context with a `lockless` entry) they are stored as changes from the values read. A cell
+in one piece that stays in one piece then changes its largest piece by ∓1 (its volume
+change), not by the difference of two reads that a concurrent copy of the cell may
+separate.
 
 # Arguments
 - `σ`: the `ownership` array.
@@ -731,7 +732,8 @@ end
 Apply the after-values that [`pieces_after!`](@ref) stored for the target to the trackers
 `P` and `L`.
 
-On the lockless checkerboard (a context with a `lockless` entry), the stored changes are added atomically.
+On the lockless checkerboard (a context with a `lockless` entry), the stored changes are
+added atomically.
 Otherwise the stored values are written.
 
 # Arguments
