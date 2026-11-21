@@ -1,34 +1,106 @@
 # N-dimensional Cartesian lattices and neighborhood relations of any order.
 
-"""The supertype of a lattice axis's boundary condition (`Periodic`, `Closed`)."""
+"""
+    AbstractBoundary
+
+The supertype of the boundary condition of a lattice axis: [`Periodic`](@ref) or
+[`Closed`](@ref).
+
+See also [`Lattice`](@ref).
+"""
 abstract type AbstractBoundary end
-"""Opposite faces are identified."""
+"""
+    Periodic()
+
+The periodic boundary condition of a lattice axis: opposite faces are identified, so a
+neighbor across a face wraps to the other side.
+
+See also [`Closed`](@ref), [`Lattice`](@ref).
+"""
 struct Periodic <: AbstractBoundary end
-"""No neighbors across the face: out-of-domain directions are counted null attempts."""
+"""
+    Closed()
+
+The closed boundary condition of a lattice axis: a site has no neighbor across the face.
+
+A copy attempt whose source would lie across a closed face is a counted null attempt.
+Contacts, surfaces and field stencils stop at the face.
+
+See also [`Periodic`](@ref), [`Lattice`](@ref).
+"""
 struct Closed <: AbstractBoundary end
 
 abstract type AbstractGeometry end
-"""Square (cubic in 3D) lattice: site coordinates are positions."""
+"""
+    Square()
+
+The square lattice geometry (cubic in 3D): the coordinates of a site are its position.
+
+See also [`Hexagonal`](@ref), [`Lattice`](@ref).
+"""
 struct Square <: AbstractGeometry end
 """
-Hexagonal 2D lattice in axial coordinates: site `(q, r)` sits at `(q + r/2, r·√3/2)`, and
-its six nearest neighbors are the offsets `(±1, 0)`, `(0, ±1)`, `(1, -1)`, `(-1, 1)` — a
-subset of Moore(1), so checkerboard coloring, periodic wrapping and the integer moment
-trackers carry over. Periodic axes make a rhombic torus. Positions, distances, centroids,
-shapes and division planes use the embedding; `Moore(k)`/`VonNeumann(k)` mean `Hex(k)` here.
+    Hexagonal()
+
+The hexagonal 2D lattice geometry, in axial coordinates.
+
+Site `(q, r)` lies at the position `(q + r/2, r·√3/2)`. Its six nearest neighbors are the
+offsets `(±1, 0)`, `(0, ±1)`, `(1, -1)` and `(-1, 1)`. These are a subset of `Moore(1)`, so
+checkerboard coloring, periodic wrapping and the integer moment trackers work unchanged.
+Periodic axes make a rhombic torus. Positions, distances, centroids, shapes and division
+planes use the embedding ([`embed`](@ref)). On this geometry `Moore(k)` and
+`VonNeumann(k)` resolve to `Hex(k)`.
+
+See also [`Square`](@ref), [`Hex`](@ref), [`Lattice`](@ref).
 """
 struct Hexagonal <: AbstractGeometry end
 
 """
     Lattice(dims; boundary = Periodic(), domain = nothing, geometry = Square())
 
-A Cartesian lattice. `boundary` is one boundary for all axes or a tuple with one per axis.
-`domain` restricts it to an irregular region: a `Bool` array over the
-lattice or a predicate of the site position, `x -> …` (Cartesian: `embed`ded coordinates on
-a hexagonal lattice; wrap it in `OnIndices` to receive lattice coordinates). Sites outside
-the domain never change owner and must belong to the medium. The domain edge is closed:
-`shift` reports neighbors outside it as outside the lattice, so contacts, surfaces, gathers,
-proposals and field stencils (zero flux) all stop there.
+A Cartesian lattice of `dims` sites, with a boundary per axis and an optional domain.
+
+Sites outside the domain never change their cell number and must belong to the medium.
+The domain edge is closed: [`shift`](@ref) reports a neighbor outside the domain as
+outside the lattice, so contacts, surfaces, gathers, proposals and field stencils (zero
+flux) all stop there.
+
+# Arguments
+- `dims::NTuple{N, Integer}`: the number of sites along each axis, all positive.
+
+# Keywords
+- `boundary = Periodic()`: one [`AbstractBoundary`](@ref) for all axes, or a tuple with
+  one per axis.
+- `domain = nothing`: the region of the lattice that cells may occupy. It is a `Bool`
+  array of size `dims`, or a predicate of the site position `x -> …`. A predicate receives
+  Cartesian positions (the [`embed`](@ref)ded coordinates on a hexagonal lattice); wrap it
+  in [`OnIndices`](@ref) to receive lattice coordinates. The domain must contain at least
+  one site.
+- `geometry = Square()`: [`Square`](@ref) or [`Hexagonal`](@ref). A hexagonal lattice is
+  2D.
+
+# Fields
+- `dims::NTuple{N, Int}`: the size along each axis (also `size(lattice)`).
+- `periodic::NTuple{N, Bool}`: whether each axis is periodic.
+- `mask`: `nothing`, or the domain as a `Bool` array (`true` = inside).
+- `geometry`: the geometry.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((4, 3); boundary = (Periodic(), Closed()));
+
+julia> size(l), nsites(l), l.periodic
+((4, 3), 12, (true, false))
+
+julia> d = Lattice((5, 5); domain = x -> sum(abs2, x .- 3) <= 4);
+
+julia> count(d.mask)
+13
+```
+
+See also [`relation`](@ref), [`nsites`](@ref), [`shift`](@ref).
 """
 struct Lattice{N, M, G <: AbstractGeometry}
     dims::NTuple{N, Int}
@@ -67,8 +139,26 @@ end
 """
     OnIndices(f)
 
-A domain predicate (or relation weight) that receives lattice coordinates (axial `(q, r)`
-on a hexagonal lattice) instead of Cartesian positions.
+Wrap a domain predicate or a relation weight so that it receives lattice coordinates.
+
+By default [`Lattice`](@ref)'s `domain` and [`Weighted`](@ref)'s weight receive Cartesian
+positions or offsets. With `OnIndices(f)`, `f` receives the lattice coordinates instead:
+the axial `(q, r)` on a hexagonal lattice. On a square lattice the two are the same.
+
+# Arguments
+- `f`: a function of a coordinate tuple.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((4, 4); geometry = Hexagonal(), domain = OnIndices(x -> x[1] <= 2));
+
+julia> count(l.mask)
+8
+```
+
+See also [`Lattice`](@ref), [`Weighted`](@ref).
 """
 struct OnIndices{F}
     f::F
@@ -107,9 +197,28 @@ end
 """
     embed(lattice, v) -> NTuple
 
-Lattice-coordinate vector `v` (an offset, or a position) as a Cartesian vector: the identity
-on square lattices, `(q + r/2, r·√3/2)` on hexagonal ones. Linear, so it maps centroids,
-shifts and offsets alike.
+Map a vector `v` in lattice coordinates (an offset or a position) to Cartesian coordinates.
+
+On a square lattice it returns `v` unchanged. On a hexagonal lattice it returns
+`(q + r/2, r·√3/2)` as floats. The map is linear, so it maps centroids, shifts and offsets
+alike.
+
+# Arguments
+- `lattice::Lattice`: the lattice.
+- `v`: a tuple of lattice coordinates.
+
+# Returns
+- The Cartesian coordinates, a tuple.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> embed(Lattice((4, 4); geometry = Hexagonal()), (2, 2))
+(3.0, 1.7320508075688772)
+```
+
+See also [`embed_covariance`](@ref), [`centroid_position`](@ref).
 """
 @inline embed(::Lattice{N, M, Square}, v) where {N, M} = v
 @inline function embed(::Lattice{2, M, Hexagonal}, v) where {M}
@@ -117,7 +226,25 @@ shifts and offsets alike.
     return (T(v[1]) + T(v[2]) / 2, T(v[2]) * sqrt(T(3)) / 2)
 end
 
-"""Covariance (upper triangle) of lattice-coordinate data mapped by `embed`."""
+"""
+    embed_covariance(lattice, C) -> NTuple
+
+Map the covariance `C` of lattice-coordinate data to the covariance of the data mapped by
+[`embed`](@ref).
+
+`C` is the upper triangle, as [`covariance`](@ref) returns it. On a square lattice it is
+returned unchanged. On a hexagonal lattice, `(a, b, d) = (C_qq, C_qr, C_rr)` maps to
+`(a + b + d/4, √3/2 · (b + d/2), 3d/4)`.
+
+# Arguments
+- `lattice::Lattice`: the lattice.
+- `C`: the upper triangle of the covariance in lattice coordinates.
+
+# Returns
+- The upper triangle of the covariance in Cartesian coordinates.
+
+See also [`embed`](@ref), [`covariance`](@ref).
+"""
 @inline embed_covariance(::Lattice{N, M, Square}, C) where {N, M} = C
 @inline function embed_covariance(::Lattice{2, M, Hexagonal}, C) where {M}
     a, b, d = C
@@ -126,20 +253,69 @@ end
     return (a + b + d / 4, s * (b + d / 2), T(3) / 4 * d)
 end
 
-"""`true` if site `i` is in the lattice's domain."""
+"""
+    in_domain(lattice, i) -> Bool
+
+Return `true` if site `i` is in the domain of `lattice` (always `true` without a domain).
+
+# Arguments
+- `lattice::Lattice`: the lattice.
+- `i`: a linear site index in `1:nsites(lattice)` (not bounds-checked).
+
+# Returns
+- `Bool`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((3,); domain = Bool[1, 0, 1]);
+
+julia> in_domain(l, 2)
+false
+```
+
+See also [`Lattice`](@ref).
+"""
 @inline in_domain(::Lattice{N, Nothing}, i) where {N} = true
 # bounds: i is a site index ≤ nsites = length(l.mask)
 @inline in_domain(l::Lattice, i) = @inbounds l.mask[i]
 
-"""The lattice with its domain mask on the host (for host code given a device context). The
-mask is static: its host copy is made once per device mask and reused (read-only)."""
+"""
+    host_lattice(lattice) -> Lattice
+
+Return `lattice` with its domain mask on the host, for host code that holds a device
+context.
+
+A lattice without a mask, or with a host mask, is returned as it is. A device mask is
+copied once and the copy is reused while the device array lives. The copy is shared, so
+host code must not write it.
+
+# Arguments
+- `lattice::Lattice`: the lattice, possibly with a device mask.
+
+# Returns
+- A `Lattice` whose mask is a host array or `nothing`.
+
+See also [`to_host`](@ref).
+"""
 host_lattice(l::Lattice) = host_lattice(nothing, l)
 # `stats` counts the mask copy (D-085), or `nothing`; the copy is cached (D-092, audit
 # A4/H3)
 """
-    host_lattice(stats, l::Lattice)
+    host_lattice(stats, lattice) -> Lattice
 
-The lattice with its domain mask on the host: a counted copy (`stats`) of a device mask.
+Return `lattice` with its domain mask on the host, and count the copy in `stats`.
+
+As [`host_lattice`](@ref)`(lattice)`, but the one copy of a device mask is counted as a
+device-to-host transfer in the run statistics `stats`.
+
+# Arguments
+- `stats`: the run statistics that count transfers, or `nothing`.
+- `lattice::Lattice`: the lattice.
+
+# Returns
+- A `Lattice` whose mask is a host array or `nothing`.
 """
 host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
 host_lattice(stats, l::Lattice) = _adapt_host_cached(stats, l)
@@ -148,7 +324,23 @@ Base.ndims(::Lattice{N}) where {N} = N
 """
     nsites(lattice) -> Int
 
-Total number of sites in `lattice` (`prod(size(lattice))`).
+Return the number of sites of `lattice`, `prod(size(lattice))`.
+
+Sites outside the domain are counted.
+
+# Arguments
+- `lattice::Lattice`: the lattice.
+
+# Returns
+- `Int`: the site count.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> nsites(Lattice((10, 20)))
+200
+```
 """
 nsites(l::Lattice) = prod(l.dims)
 Base.size(l::Lattice) = l.dims
@@ -156,7 +348,24 @@ Base.size(l::Lattice) = l.dims
 """
     linear_index(lattice, x) -> Int
 
-Column-major 1-based linear site index for lattice coordinates `x`.
+Return the 1-based, column-major linear index of the site with lattice coordinates `x`.
+
+# Arguments
+- `lattice::Lattice{N}`: the lattice.
+- `x::NTuple{N, Int}`: 1-based lattice coordinates, inside the lattice (not checked).
+
+# Returns
+- `Int`: the linear site index.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.linear_index(Lattice((4, 3)), (2, 3))
+10
+```
+
+See also [`coordinates`](@ref).
 """
 @inline function linear_index(l::Lattice{N}, x::NTuple{N, Int}) where {N}
     i = 0
@@ -171,7 +380,26 @@ end
 """
     coordinates(lattice, i) -> NTuple{N, Int}
 
-Lattice coordinates of 1-based linear site index `i`.
+Return the 1-based lattice coordinates of the site with linear index `i`.
+
+The inverse of [`linear_index`](@ref).
+
+# Arguments
+- `lattice::Lattice{N}`: the lattice.
+- `i::Int`: a linear site index in `1:nsites(lattice)`.
+
+# Returns
+- `NTuple{N, Int}`: the coordinates.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.coordinates(Lattice((4, 3)), 10)
+(2, 3)
+```
+
+See also [`linear_index`](@ref).
 """
 @inline function coordinates(l::Lattice{N}, i::Int) where {N}
     # Stride of axis d is prod(dims[1:d-1]); no captured mutable state (it would be boxed).
@@ -184,8 +412,34 @@ end
 """
     shift(lattice, x, offset) -> (inside::Bool, y)
 
-Neighbor of `x` at `offset`. Periodic axes wrap; a closed axis yields `inside = false`, as
-does a pair with either site outside the lattice domain.
+Return the neighbor of site `x` at `offset`, and whether the pair interacts.
+
+A periodic axis wraps `y`. On a closed axis, `y` is clamped to the face and `inside` is
+`false`. `inside` is also `false` when `x` or `y` lies outside the domain, so a pair
+interacts only when both sites are in the domain.
+
+# Arguments
+- `lattice::Lattice{N}`: the lattice.
+- `x::NTuple{N, Int}`: the site's coordinates.
+- `offset::NTuple{N, Int32}`: the offset, for example from a relation.
+
+# Returns
+- `(inside, y)`: `inside::Bool`, and the neighbor's coordinates `y::NTuple{N, Int}`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((4, 4); boundary = (Periodic(), Closed()));
+
+julia> CorePotts.shift(l, (1, 1), (Int32(-1), Int32(0)))
+(true, (4, 1))
+
+julia> CorePotts.shift(l, (1, 1), (Int32(0), Int32(-1)))
+(false, (1, 1))
+```
+
+See also [`neighbor_index`](@ref).
 """
 @inline function shift(l::Lattice{N}, x::NTuple{N, Int}, off::NTuple{N, Int32}) where {N}
     # No captured mutable state in the closure (it would be boxed).
@@ -233,22 +487,78 @@ end
 Relation{N, K}(offsets) where {N, K} = Relation{N, K, Nothing}(offsets, nothing)
 Base.length(::Relation{N, K}) where {N, K} = K
 
-"""Weight of the `k`-th offset (`Int32(1)` when unweighted, so counts stay integers)."""
+"""
+    weight(relation, k)
+
+Return the weight of offset `k` of a resolved relation.
+
+An unweighted relation returns `Int32(1)`, so sums over it stay integers. A
+[`Weighted`](@ref) relation returns its `Float32` weight.
+
+# Arguments
+- `relation`: a relation from [`relation`](@ref).
+- `k`: the offset number, in `1:length(relation)` (not bounds-checked).
+
+# Returns
+- `Int32(1)` or a `Float32`.
+
+See also [`relation`](@ref), [`Weighted`](@ref).
+"""
 @inline weight(::Relation{N, K, Nothing}, k) where {N, K} = Int32(1)
 # bounds: k ≤ K = length(r.weights), one weight per offset
 @inline weight(r::Relation, k) = @inbounds r.weights[k]
 """
     radius(relation) -> Int
 
-Maximum Chebyshev offset magnitude (`maximum(abs, o)`) across all offsets of `relation`.
+Return the largest Chebyshev length `maximum(abs, o)` over the offsets `o` of `relation`.
+
+# Arguments
+- `relation`: a relation from [`relation`](@ref).
+
+# Returns
+- `Int`: the radius, `0` for a relation with no offsets.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.radius(relation(VonNeumann(2), Lattice((10, 10))))
+2
+```
+
+See also [`interior`](@ref).
 """
 radius(r::Relation) = maximum(o -> maximum(abs, o; init = 0), r.offsets; init = 0)
 
 """
     interior(lattice, x, relation) -> Bool
 
-Return `true` when site `x` lies at least `radius(relation)` sites from every face of a
-lattice with no domain mask.
+Return `true` when every neighbor of site `x` under `relation` lies inside the lattice
+without wrapping.
+
+That holds when `x` is more than [`radius`](@ref)`(relation)` sites from every face. A
+lattice with a domain mask always returns `false`, since the mask must be checked per
+pair.
+
+# Arguments
+- `lattice::Lattice{N}`: the lattice.
+- `x`: the site's coordinates.
+- `relation`: a relation from [`relation`](@ref).
+
+# Returns
+- `Bool`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((5, 5)); r = relation(Moore(), l);
+
+julia> CorePotts.interior(l, (3, 3), r), CorePotts.interior(l, (1, 3), r)
+(true, false)
+```
+
+See also [`neighbor_index`](@ref).
 """
 @inline function interior(l::Lattice{N, Nothing}, x, rel::Relation{N, K}) where {N, K}
     # bounds: k ≤ K offsets of rel, each with N components
@@ -266,10 +576,26 @@ end
 """
     neighbor_index(lattice, x, t, relation, k, interior) -> (inside::Bool, index::Int)
 
-Linear index of neighbor `k` of site `t` (with coordinates `x`) under `relation`. When
-`interior` is `true`, computes `t + linear_offset` directly without wrap arithmetic;
-otherwise calls [`shift`](@ref) and [`linear_index`](@ref), returning `(false, t)` if
-outside the domain.
+Return the linear index of neighbor `k` of site `t` under `relation`.
+
+When `interior` is `true`, the index is `t` plus the offset's linear stride, with no wrap
+arithmetic. Pass `true` only when [`interior`](@ref) holds for `x`. Otherwise it calls
+[`shift`](@ref) and [`linear_index`](@ref), and returns `(false, t)` when the pair does
+not interact.
+
+# Arguments
+- `lattice::Lattice{N}`: the lattice.
+- `x`: the coordinates of site `t`.
+- `t::Int`: the linear index of the site.
+- `relation`: a relation from [`relation`](@ref).
+- `k`: the offset number, in `1:length(relation)`.
+- `interior::Bool`: whether the fast path applies.
+
+# Returns
+- `(inside, index)`: whether the pair interacts, and the neighbor's linear index (`t`
+  when it does not).
+
+See also [`shift`](@ref), [`interior`](@ref).
 """
 @inline function neighbor_index(
         l::Lattice{N}, x, t::Int, rel::Relation{N}, k, inner::Bool
@@ -289,19 +615,68 @@ end
 end
 
 """
-The supertype of a relation's specification (a neighborhood or stencil before it is bound to
-a lattice).
+    AbstractRelationSpec
+
+The supertype of a relation's specification: a neighborhood or stencil before
+[`relation`](@ref) binds it to a lattice.
+
+The subtypes are [`Moore`](@ref), [`VonNeumann`](@ref), [`NeighborOrder`](@ref),
+[`EuclideanBall`](@ref), [`Hex`](@ref), [`Stencil`](@ref) and [`Weighted`](@ref).
 """
 abstract type AbstractRelationSpec end
 
-"""Chebyshev ball: all offsets with `maximum(abs, o) ≤ k` (order 1 = 8 in 2D, 26 in 3D)."""
+"""
+    Moore(k = 1; include_self = false)
+
+The Chebyshev ball: all offsets `o` with `maximum(abs, o) ≤ k`.
+
+Order 1 has 8 offsets in 2D and 26 in 3D. On a hexagonal lattice it resolves to `Hex(k)`.
+
+# Arguments
+- `k::Integer = 1`: the order.
+
+# Keywords
+- `include_self = false`: whether to include the zero offset.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> length(relation(Moore(), Lattice((10, 10)))), length(relation(Moore(2), Lattice((10, 10))))
+(8, 24)
+```
+
+See also [`VonNeumann`](@ref), [`relation`](@ref).
+"""
 struct Moore <: AbstractRelationSpec
     k::Int
     include_self::Bool
 end
 Moore(k::Integer = 1; include_self = false) = Moore(k, include_self)
 
-"""Manhattan ball: all offsets with `sum(abs, o) ≤ k` (order 1 = 4 in 2D, 6 in 3D)."""
+"""
+    VonNeumann(k = 1; include_self = false)
+
+The Manhattan ball: all offsets `o` with `sum(abs, o) ≤ k`.
+
+Order 1 has 4 offsets in 2D and 6 in 3D. On a hexagonal lattice it resolves to `Hex(k)`.
+
+# Arguments
+- `k::Integer = 1`: the order.
+
+# Keywords
+- `include_self = false`: whether to include the zero offset.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> length(relation(VonNeumann(), Lattice((10, 10, 10))))
+6
+```
+
+See also [`Moore`](@ref), [`relation`](@ref).
+"""
 struct VonNeumann <: AbstractRelationSpec
     k::Int
     include_self::Bool
@@ -309,10 +684,30 @@ end
 VonNeumann(k::Integer = 1; include_self = false) = VonNeumann(k, include_self)
 
 """
-    NeighborOrder(k)
+    NeighborOrder(k = 1; include_self = false)
 
-All offsets in the first `k` distinct Euclidean distance shells, cumulative (CompuCell3D
-`NeighborOrder`; counts 4, 8, 12, 20, 24, 28 in 2D and 6, 18, 26, 32, 56, 80 in 3D).
+All offsets in the first `k` distinct Euclidean distance shells, as CompuCell3D's
+`NeighborOrder`.
+
+The shells are cumulative. The offset counts are 4, 8, 12, 20, 24 and 28 in 2D, and 6, 18,
+26, 32, 56 and 80 in 3D, for `k = 1, …, 6`. On a hexagonal lattice the shells are those of
+the embedded distances.
+
+# Arguments
+- `k::Integer = 1`: the number of shells.
+
+# Keywords
+- `include_self = false`: whether to include the zero offset.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> length(relation(NeighborOrder(4), Lattice((10, 10))))
+20
+```
+
+See also [`Moore`](@ref), [`relation`](@ref).
 """
 struct NeighborOrder <: AbstractRelationSpec
     k::Int
@@ -320,7 +715,29 @@ struct NeighborOrder <: AbstractRelationSpec
 end
 NeighborOrder(k::Integer = 1; include_self = false) = NeighborOrder(k, include_self)
 
-"""Euclidean ball: all offsets with `‖o‖ ≤ r` (lattice units)."""
+"""
+    EuclideanBall(r; include_self = false)
+
+The Euclidean ball: all offsets `o` with `‖o‖ ≤ r`, in lattice units.
+
+On a hexagonal lattice the length is that of the embedded offset.
+
+# Arguments
+- `r::Real`: the radius.
+
+# Keywords
+- `include_self = false`: whether to include the zero offset.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> length(relation(EuclideanBall(2), Lattice((10, 10))))
+12
+```
+
+See also [`NeighborOrder`](@ref), [`relation`](@ref).
+"""
 struct EuclideanBall <: AbstractRelationSpec
     r::Float64
     include_self::Bool
@@ -330,16 +747,57 @@ EuclideanBall(r::Real; include_self = false) = EuclideanBall(r, include_self)
 """
     Weighted(spec, weight)
 
-`spec` with per-offset weights `weight(offset)` of the Cartesian offset (e.g.
-`o -> 1 / sqrt(sum(abs2, o))` for distance-weighted contact; `OnIndices(f)` receives lattice
-offsets instead). Weights are stored as `Float32`.
+The relation `spec` with a weight on each offset.
+
+`weight(o)` receives the Cartesian offset `o`, for example `o -> 1 / sqrt(sum(abs2, o))`
+for distance-weighted contact. Wrap it in [`OnIndices`](@ref) to receive lattice offsets.
+The weights are stored as `Float32` and must be finite.
+
+# Arguments
+- `spec::AbstractRelationSpec`: the offsets.
+- `weight`: a function from an offset to a real weight.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> r = relation(Weighted(Moore(), o -> 1 / sqrt(sum(abs2, o))), Lattice((10, 10)));
+
+julia> CorePotts.weight(r, 1), CorePotts.weight(r, 8)
+(1.0f0, 0.70710677f0)
+```
+
+See also [`relation`](@ref), [`weight`](@ref).
 """
 struct Weighted{S <: AbstractRelationSpec, F} <: AbstractRelationSpec
     spec::S
     weight::F
 end
 
-"""Explicit offsets."""
+"""
+    Stencil(offsets)
+
+A relation with explicit offsets.
+
+Each offset is an iterable of integers, with one entry per lattice axis. A zero offset is
+kept if it is given.
+
+# Arguments
+- `offsets`: an iterable of offsets, for example `[(1, 0), (-1, 0)]`.
+
+# Fields
+- `offsets::Vector{Vector{Int}}`: the offsets.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> length(relation(Stencil([(1, 0), (-1, 0)]), Lattice((10, 10))))
+2
+```
+
+See also [`relation`](@ref).
+"""
 struct Stencil <: AbstractRelationSpec
     offsets::Vector{Vector{Int}}
     Stencil(offsets) = new([collect(Int, o) for o in offsets])
@@ -369,10 +827,28 @@ end
 _include_self(spec::Stencil) = any(o -> all(iszero, o), spec.offsets)
 
 """
-    Hex(k)
+    Hex(k = 1; include_self = false)
 
-Hexagonal ball of hex distance ≤ `k` (order 1 = 6 neighbors, 2 = 18, 3 = 36) on a
-hexagonal lattice (axial offsets).
+The hexagonal ball: all axial offsets of hex distance `≤ k`, on a hexagonal lattice.
+
+Order 1 has 6 offsets, order 2 has 18 and order 3 has 36. A square lattice throws an
+`ArgumentError`.
+
+# Arguments
+- `k::Integer = 1`: the order.
+
+# Keywords
+- `include_self = false`: whether to include the zero offset.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> length(relation(Hex(2), Lattice((10, 10); geometry = Hexagonal())))
+18
+```
+
+See also [`Hexagonal`](@ref), [`relation`](@ref).
 """
 struct Hex <: AbstractRelationSpec
     k::Int
@@ -411,9 +887,32 @@ _include_self(spec) = spec.include_self
 """
     relation(spec, lattice) -> Relation
 
-Resolve a neighborhood for `lattice`. Offsets are canonically ordered. Stencils that alias
-under a small periodic axis (two offsets reaching the same site, or an offset reaching
-the origin) are rejected.
+Resolve the relation specification `spec` into the offsets it has on `lattice`.
+
+The offsets are sorted by squared length, then lexicographically. A relation that aliases
+under a small periodic axis throws an `ArgumentError`: two offsets that reach the same
+site, or a nonzero offset that wraps onto the site itself. A resolved relation is returned
+as it is.
+
+# Arguments
+- `spec`: an [`AbstractRelationSpec`](@ref), or an already resolved relation.
+- `lattice::Lattice`: the lattice.
+
+# Returns
+- A `Relation` with the offsets as `Int32` tuples, and `Float32` weights for a
+  [`Weighted`](@ref) spec. `length` gives the offset count.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> r = relation(VonNeumann(), Lattice((10, 10)));
+
+julia> length(r), r.offsets[1]
+(4, (-1, 0))
+```
+
+See also [`Moore`](@ref), [`VonNeumann`](@ref), [`weight`](@ref).
 """
 function relation(spec::AbstractRelationSpec, l::Lattice{N}) where {N}
     offs = _offsets(spec, l)
@@ -437,11 +936,48 @@ function _offsets(spec::AbstractRelationSpec, l::Lattice{N}) where {N}
     return offs
 end
 relation(r::Relation, ::Lattice) = r
-"""Whether relation `r` includes the origin offset (a site is its own neighbor)."""
+"""
+    has_origin(relation) -> Bool
+
+Return `true` if `relation` contains the zero offset, so a site is its own neighbor.
+
+# Arguments
+- `relation`: a relation from [`relation`](@ref).
+
+# Returns
+- `Bool`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.has_origin(relation(Moore(; include_self = true), Lattice((5, 5))))
+true
+```
+"""
 has_origin(r::Relation) = any(o -> all(iszero, o), r.offsets)
 
 """
-Whether every offset's negation is in `r` with the same weight (a symmetric pair relation).
+    is_symmetric(relation) -> Bool
+
+Return `true` if the negation of every offset is also in `relation`, with the same
+weight.
+
+A symmetric relation counts each pair of sites from both sides.
+
+# Arguments
+- `relation`: a relation from [`relation`](@ref).
+
+# Returns
+- `Bool`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.is_symmetric(relation(Stencil([(1, 0)]), Lattice((5, 5))))
+false
+```
 """
 function is_symmetric(r::Relation)
     for (k, o) in enumerate(r.offsets)
@@ -484,16 +1020,33 @@ _atomic64(backend) = true
 # Mobility: frozen sites (walls, obstacles, fixed owners) are neither copy targets nor
 # sources and are not counted in N; they still count in contact energies.
 
-"""Every site may change owner (the default; no per-attempt cost)."""
+"""
+    AllMobile()
+
+The default mobility: every site may change its cell number, at no cost per copy attempt.
+
+See also [`MaskMobility`](@ref), [`is_mobile`](@ref).
+"""
 struct AllMobile end
 
 """
-Sites with `frozen[i] = true` never change owner and never donate. On the host, `sites`
-lists the mobile sites (SequentialCPM draws its targets from them; the count is
-`length(sites)`), as `Int32` or, above 2³¹ − 1 sites, `Int64` (`site_index_type`). On a
-device `sites` is `nothing`: CheckerboardCPM reads only `frozen`, and the integrator keeps
-the mobile count on the host. A refresh (`refresh_frozen!`, `reinit!`) rewrites both in
-place, so the integrator's context stays valid.
+    MaskMobility(frozen, sites)
+
+The mobility of a run with frozen sites: a site with `frozen[i] = true` is never a target
+or a source of a copy.
+
+Frozen sites still count in contact energies. On the host, `sites` lists the mobile sites:
+[`SequentialCPM`](@ref) draws its targets from it, and the mobile count is
+`length(sites)`. Its element type is `Int32`, or `Int64` above 2³¹ − 1 sites. On a device
+`sites` is `nothing`: [`CheckerboardCPM`](@ref) reads only `frozen`, and the integrator
+keeps the mobile count on the host. A refresh ([`refresh_frozen!`](@ref), `reinit!`)
+rewrites both arrays in place, so the integrator's context stays valid.
+
+# Fields
+- `frozen`: a `Bool` array of the lattice's size.
+- `sites`: the linear indices of the mobile sites, or `nothing` on a device.
+
+See also [`AllMobile`](@ref), [`is_mobile`](@ref), [`frozen_sites`](@ref).
 """
 struct MaskMobility{M, S}
     frozen::M
@@ -576,8 +1129,16 @@ end
 """
     is_mobile(mobility, i) -> Bool
 
-Return `true` if site `i` may change owner under `mobility` ([`AllMobile`](@ref) or
-[`MaskMobility`](@ref)).
+Return `true` if site `i` may change its cell number under `mobility`.
+
+# Arguments
+- `mobility`: [`AllMobile`](@ref) or [`MaskMobility`](@ref).
+- `i`: a linear site index (not bounds-checked).
+
+# Returns
+- `Bool`: `true` for every site under `AllMobile`, `!frozen[i]` under `MaskMobility`.
+
+See also [`MaskMobility`](@ref).
 """
 @inline is_mobile(::AllMobile, i) = true
 # bounds: i is a site index ≤ nsites = length(m.frozen)

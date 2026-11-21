@@ -32,10 +32,35 @@ end
 end
 
 """
-    RNGKey
+    RNGKey(seed, replica = 0, repeat = 0)
+    RNGKey(k0::UInt32, k1::UInt32)
 
-The trajectory key: two words derived from `(seed, replica, repeat)` without collisions
-between distinct tuples.
+The key of one trajectory's random streams, for [`draw`](@ref).
+
+The integer form hashes the tuple `(seed, replica, repeat)` with one Philox4x32-10 call
+into the two key words, so distinct tuples give distinct keys. The two-word form takes the
+words as they are.
+
+# Arguments
+- `seed::Integer`: the run's seed, converted to `UInt64`.
+- `replica::Integer = 0`: the replicate number, converted to `UInt32`.
+- `repeat::Integer = 0`: the repeat number, converted to `UInt32`.
+
+# Fields
+- `k0::UInt32`, `k1::UInt32`: the two key words.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.RNGKey(1) == CorePotts.RNGKey(1, 0, 0)
+true
+
+julia> CorePotts.RNGKey(1) == CorePotts.RNGKey(1, 1)
+false
+```
+
+See also [`draw`](@ref).
 """
 struct RNGKey
     k0::UInt32
@@ -56,8 +81,27 @@ end
 """
     stream_id(name) -> UInt32
 
-Stable 32-bit identity of a random operation (FNV-1a of its namespaced name). Editing
-one operation never renumbers another.
+Return the 32-bit identity of a random operation: the FNV-1a hash of its name.
+
+Each random operation draws from its own stream, so a new or edited operation does not
+change the draws of another. Use a namespaced name (`"MyModel.noise"`) to avoid
+collisions with the solver's own streams.
+
+# Arguments
+- `name::Union{AbstractString, Symbol}`: the operation's name.
+
+# Returns
+- `UInt32`: the stream number, the same in every session.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.stream_id("MyModel.noise") == CorePotts.stream_id(:var"MyModel.noise")
+true
+```
+
+See also [`draw`](@ref).
 """
 function stream_id(name::AbstractString)
     h = 0x811c9dc5
@@ -84,12 +128,40 @@ const RESERVED_STREAMS = (
 """
     draw(key, mcs, entity, stream, local = 0) -> NTuple{4, UInt32}
 
-Four independent 32-bit words for one address. `entity` is a site index or a cell's
-`cell_entity(id, generation)`; `local` packs round/substep/draw/retry.
+Return four random 32-bit words for one address: a Philox4x32-10 call keyed by `key`.
 
-`entity` is 64-bit: its low word is the counter word, and its high word is folded into the
-key as `k0 ⊻ hi * W1` (a bijection of `hi`; `hi = 0` leaves the key as it is). An entity
-below 2³² therefore draws exactly as before, and no two entities below 2⁶⁴ share a stream.
+Each draw is a pure function of its address, so the result does not depend on thread or
+launch order. The counter is `(mcs, entity, stream, local)`, each wrapped to 32 bits,
+except `entity`. `entity` is wrapped to 64 bits: its low word is the counter word, and its
+high word `hi` is folded into the key as `k0 ⊻ hi * W1`, which is a bijection of `hi`. So
+no two entities below 2⁶⁴ share a stream. Wrapping conversions keep the call free of
+exceptions, so it runs inside kernels.
+
+# Arguments
+- `key::RNGKey`: the trajectory's key.
+- `mcs::Integer`: the MCS number.
+- `entity::Integer`: a site index, or a cell's [`cell_entity`](@ref)`(id, generation)`.
+- `stream::UInt32`: the operation, from [`stream_id`](@ref).
+- `local::Integer = 0`: the draw within the address, for example a round, substep or
+  retry number.
+
+# Returns
+- `NTuple{4, UInt32}`: four words, each uniform on `0:2³²-1`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> k = CorePotts.RNGKey(7); s = CorePotts.stream_id("MyModel.noise");
+
+julia> CorePotts.draw(k, 1, 5, s) == CorePotts.draw(k, 1, 5, s, 0)
+true
+
+julia> CorePotts.draw(k, 1, 5, s) == CorePotts.draw(k, 2, 5, s)
+false
+```
+
+See also [`uniform`](@ref), [`normal`](@ref), [`bounded_normal`](@ref).
 """
 @inline function draw(
         key::RNGKey, mcs::Integer, entity::Integer, stream::UInt32,
@@ -105,7 +177,35 @@ below 2³² therefore draws exactly as before, and no two entities below 2⁶⁴
     return philox4x32(mcs % UInt32, e % UInt32, stream, local_index % UInt32, k0, key.k1)
 end
 
-"""Uniform draw on the open interval (0, 1): grid midpoints, never 0 or 1."""
+"""
+    uniform(T, x::UInt32) -> T
+
+Map a random word `x` to a uniform value on the open interval `(0, 1)`.
+
+The values are grid midpoints, so the result is never 0 or 1. `Float32` uses the top 23
+bits of `x` (`(x >> 9 + 0.5) * 2⁻²³`), and `Float64` uses all 32 bits
+(`(x + 0.5) * 2⁻³²`). Any other float type `T` converts the `Float64` value.
+
+# Arguments
+- `T::Type{<:AbstractFloat}`: the result type.
+- `x::UInt32`: one word of a [`draw`](@ref).
+
+# Returns
+- `T`: a value strictly between 0 and 1.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.uniform(Float64, 0x00000000)
+1.1641532182693481e-10
+
+julia> CorePotts.uniform(Float32, 0xffffffff)
+0.99999994f0
+```
+
+See also [`draw`](@ref), [`normal`](@ref).
+"""
 @inline uniform(::Type{Float32}, x::UInt32) = (Float32(x >> 9) + 0.5f0) * Float32(0x1p-23)
 @inline uniform(::Type{Float64}, x::UInt32) = (Float64(x) + 0.5) * 0x1p-32
 @inline uniform(::Type{T}, x::UInt32) where {T <: AbstractFloat} = T(uniform(Float64, x))
@@ -161,20 +261,61 @@ end
 """
     cell_entity(id, generation) -> UInt64
 
-The `draw` entity of a cell: `(id << 8) | (generation & 0xff)`, 64-bit so that ids at
-or above 2²⁴ do not wrap onto smaller ids (equal to the old 32-bit value below 2²⁴).
+Return the [`draw`](@ref) entity of a cell: `(id << 8) | (generation & 0xff)`.
+
+The value is 64-bit, so cell numbers at or above 2²⁴ do not wrap onto smaller ones. Only the
+low 8 bits of `generation` are used.
+
+# Arguments
+- `id::Integer`: the cell number.
+- `generation::Integer`: the cell's generation.
+
+# Returns
+- `UInt64`: the entity for [`draw`](@ref).
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.cell_entity(3, 1)
+0x0000000000000301
+```
 """
 @inline function cell_entity(id::Integer, generation::Integer)
     return ((id % UInt64) << 8) | ((generation % UInt64) & 0xff)
 end
 
 """
-    normal(T, a::UInt32, b::UInt32)
+    normal(T, a::UInt32, b::UInt32) -> T
+    normal(T, words::NTuple{4, UInt32}) -> T
 
-A standard normal draw in float type `T` from two uniform words (Box–Muller, cosine branch:
-`√(−2 log u₁) cos(2π u₂)` with `u = uniform(T, ·)` on the open interval, so it is finite).
-The tails are cut where the smallest `u₁` puts them: `|z| ≤ 5.77` in `Float32` (`u₁ ≥ 2⁻²⁴`,
-a tail mass of about 8·10⁻⁹) and `|z| ≤ 6.76` in `Float64` (`u₁ ≥ 2⁻³³`).
+Return a standard normal value of float type `T` made from two random words.
+
+The method is the cosine branch of Box–Muller: `√(−2 log u₁) cos(2π u₂)`, with
+`u = uniform(T, ·)` on the open interval, so the value is finite. The smallest `u₁` cuts
+the tails: `|z| ≤ 5.77` in `Float32` (`u₁ ≥ 2⁻²⁴`, a tail mass of about 8·10⁻⁹) and
+`|z| ≤ 6.76` in `Float64` (`u₁ ≥ 2⁻³³`). The tuple form uses `words[1]` and `words[2]` of a
+[`draw`](@ref).
+
+# Arguments
+- `T::Type{<:AbstractFloat}`: the result type.
+- `a::UInt32`, `b::UInt32`: two words of a [`draw`](@ref).
+- `words::NTuple{4, UInt32}`: a [`draw`](@ref) result.
+
+# Returns
+- `T`: the normal value.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> w = CorePotts.draw(CorePotts.RNGKey(1), 0, 0, CorePotts.stream_id("x"));
+
+julia> CorePotts.normal(Float64, w) == CorePotts.normal(Float64, w[1], w[2])
+true
+```
+
+See also [`uniform`](@ref), [`bounded_normal`](@ref).
 """
 @inline function normal(::Type{T}, a::UInt32, b::UInt32) where {T <: AbstractFloat}
     u1 = uniform(T, a)
@@ -191,20 +332,55 @@ const STATUS_DRAW_EXHAUSTED = UInt32(2)
 """Status bit: a bounded draw was given a negative SD `σ`."""
 const STATUS_DRAW_NEGATIVE_SD = UInt32(4)
 """
-Name of a model's optional status word in `st.model` (a 1-element `UInt32` array): bits a
-model's generated code sets (e.g. `STATUS_DRAW_EXHAUSTED`); the integrator reads it at host
-read points and fails the run (`ReturnCode.Failure`) when it is nonzero.
+Name of a model's optional status word in `st.model`, the `Symbol` `Symbol("#status")`.
+
+The status word is a 1-element `UInt32` array. A model's generated code sets bits in it,
+for example when a [`bounded_normal`](@ref) draw finds no value. The integrator reads it at
+each host read point, and a nonzero word ends the run with `ReturnCode.Failure`.
 """
 const MODEL_STATUS = Symbol("#status")
 
 """
-    bounded_normal(T, key, mcs, entity, stream, μ, σ, lower, status)
+    bounded_normal(T, key, mcs, entity, stream, μ, σ, lower, status) -> T
 
-`μ + σ z` with `z` standard normal, redrawn while `≤ lower`: attempt `k = 0, 1, …` is the
-draw at local index `k` of the address `(mcs, entity, stream)`, at most `MAX_DRAW_ATTEMPTS`.
-On exhaustion the status word `status` (a 1-element `UInt32` array, or `nothing`) takes
-`STATUS_DRAW_EXHAUSTED` and the value is NaN: no throw, so it runs inside kernels. A
-negative `σ` gives NaN and `STATUS_DRAW_NEGATIVE_SD`.
+Return `μ + σ z`, with `z` standard normal, redrawn while the value is `≤ lower`.
+
+Attempt `k = 0, 1, …` uses the draw at local index `k` of the address
+`(mcs, entity, stream)`, for at most 64 attempts. The function never throws, so it runs
+inside kernels. Instead it sets a bit in `status` and returns `NaN`:
+
+- bit `2` when all 64 attempts were `≤ lower`;
+- bit `4` when `σ < 0` (no draw is made).
+
+# Arguments
+- `T`: the result type.
+- `key::RNGKey`, `mcs`, `entity`, `stream::UInt32`: the address, as for [`draw`](@ref).
+- `μ`, `σ`: the mean and the standard deviation (`σ ≥ 0`).
+- `lower`: the exclusive lower bound.
+- `status`: a 1-element `UInt32` array that takes the error bit (atomically), or
+  `nothing`.
+
+# Returns
+- `T`: a value `> lower`, or `NaN` on an error.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> k = CorePotts.RNGKey(1); s = CorePotts.stream_id("MyModel.size");
+
+julia> CorePotts.bounded_normal(Float64, k, 0, 1, s, 10.0, 2.0, 5.0, nothing) > 5
+true
+
+julia> st = UInt32[0]; isnan(CorePotts.bounded_normal(Float64, k, 0, 1, s, 1.0, -1.0, 0.0, st))
+true
+
+julia> st
+1-element Vector{UInt32}:
+ 0x00000004
+```
+
+See also [`normal`](@ref), [`MODEL_STATUS`](@ref CorePotts.MODEL_STATUS).
 """
 @inline function bounded_normal(
         ::Type{T}, key::RNGKey, mcs, entity, stream::UInt32, μ, σ, lower, status
@@ -222,17 +398,53 @@ end
 # status has 1 entry
 @inline _set_status!(status, bit) = (Atomix.@atomic status[1] |= bit; nothing)
 """
-    bump!(cnt, j)
+    bump!(cnt, j) -> nothing
 
-A diagnostic counter (`Potts`' `track = (:references,)`): entry `j` of `cnt` (in range by
-construction) incremented atomically, on the host or the device.
+Add one to entry `j` of the counter array `cnt`, atomically, on the host or a device.
+
+Potts' generated code calls it for its diagnostic counters (`track = (:references,)`).
+The caller passes an index in range.
+
+# Arguments
+- `cnt::AbstractArray`: the counter array.
+- `j`: the entry to increment.
+
+# Returns
+- `nothing`.
+
+See also [`atomic_add!`](@ref).
 """
 @inline bump!(cnt, j) = (Atomix.@atomic cnt[j] += one(eltype(cnt)); nothing)
 """
-    atomic_add!(a, j, v)
+    atomic_add!(a, j, v) -> nothing
 
-`a[j] += v` atomically, for `j` in `1:length(a)` (0, the medium, and a stale index are
-skipped): `@convert` transfers and writes.
+Add `v`, converted to `eltype(a)`, to `a[j]` atomically.
+
+An index outside `1:length(a)` is skipped: `0` (the medium) and stale indices write
+nothing. Generated `@convert` transfers and writes use it.
+
+# Arguments
+- `a::AbstractVector`: the target array, on the host or a device.
+- `j`: the entry.
+- `v`: the amount to add.
+
+# Returns
+- `nothing`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> a = zeros(3); CorePotts.atomic_add!(a, 2, 1.5); CorePotts.atomic_add!(a, 0, 9.0);
+
+julia> a
+3-element Vector{Float64}:
+ 0.0
+ 1.5
+ 0.0
+```
+
+See also [`bump!`](@ref).
 """
 @inline function atomic_add!(a, j, v)
     # bound checked here
@@ -248,7 +460,6 @@ function _model_status(stats, model::NamedTuple)
     end
 end
 _model_status(stats, model) = UInt32(0)
-"""`normal(T, words)`: `normal(T, words[1], words[2])` of a `draw`."""
 @inline function normal(::Type{T}, w::NTuple{4, UInt32}) where {T <: AbstractFloat}
     return normal(
         T, w[1],
