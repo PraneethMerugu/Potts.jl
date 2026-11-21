@@ -15,8 +15,10 @@ end
 
 """
     explore_potts(frames; title="Potts model", inspector=true, kwargs...)
+    explore_potts(solution; request=RenderRequest(), kwargs...)
 
-Build the experimental reference explorer from already materialized frames.
+Build the experimental reference explorer from already materialized frames, or from the
+states of `solution` (a `PottsSolution` or `CorePotts.PottsFrames`).
 Call `close(explorer)` to release its slider subscription and optional
 `DataInspector`; closing is idempotent.
 """
@@ -51,7 +53,7 @@ function explore_potts(
 end
 
 function explore_potts(
-        solution::CorePotts.PottsSolution;
+        solution::SavedRun;
         request::RenderRequest = RenderRequest(), kwargs...
     )
     return explore_potts(renderframes(solution, request); kwargs...)

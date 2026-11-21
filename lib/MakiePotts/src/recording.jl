@@ -60,9 +60,11 @@ end
 
 """
     record_potts(filename, frames; framerate=30, kwargs...)
+    record_potts(filename, solution; request=RenderRequest(), kwargs...)
 
 Thin recording wrapper over `Makie.record`. All frames are validated before the
-first output frame is written.
+first output frame is written. `solution` is a `PottsSolution` or the frames a run wrote
+to disk (`CorePotts.PottsFrames`); its states are rendered first (`renderframes`).
 """
 function record_potts(
         filename::AbstractString,
@@ -84,7 +86,7 @@ end
 
 function record_potts(
         filename::AbstractString,
-        solution::CorePotts.PottsSolution;
+        solution::SavedRun;
         request::RenderRequest = RenderRequest(), kwargs...
     )
     return record_potts(filename, renderframes(solution, request); kwargs...)

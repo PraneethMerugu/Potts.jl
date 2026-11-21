@@ -6,6 +6,7 @@ using MakiePotts
 using Random
 import Makie
 import CorePotts
+import JLD2
 include("shared/makiepotts.jl")
 function _site_slice_oracle(values, axis, index)
     retained_axes = Tuple(filter(!=(axis), ntuple(identity, ndims(values))))
@@ -243,5 +244,68 @@ end
         vacated = count((σ .== 2) .& (CorePotts.ownership(sol.u[end]) .== 0))
         @test vacated > 0
         @test obstacles(renderframe(sol.u[end]; frozen = sol.prob.frozen)) == vacated
+    end
+end
+
+@testitem "written frames render and record like the solution" setup = [
+    MP_test_saved_state_channels,
+] tags = [
+    :makiepotts, :saved_state_channels,
+] begin
+    @testset "written frames render and record like the solution" begin
+        kindidx(st, c) = c == 0 ? 1 : Int(@inbounds st.cell.kind[c]) + 1
+        function dH(st, p, prop, ctx)
+            J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+            return CorePotts.contact_delta(st.ownership, ctx, prop, J) +
+                CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
+        end
+        lat = CorePotts.Lattice((30, 30))
+        σ = zeros(Int32, 30, 30)
+        σ[5:10, 5:10] .= 1
+        σ[18:23, 18:23] .= 2
+        st = CorePotts.with_capacity(
+            CorePotts.initial_state(
+                σ, Int32[1, 2]; cell = CorePotts.init_moments(σ, lat, 2)
+            ),
+            2
+        )
+        release = CorePotts.Lifecycle(
+            (st, p, ctx, key, mcs, c) -> if mcs == 5 && c == 2
+                CorePotts.EVENT_TRANSITION
+            else
+                CorePotts.EVENT_NONE
+            end;
+            kind = (st, p, ctx, key, mcs, c) -> Int32(1)
+        )
+        f = CorePotts.CPMFunction(
+            dH; temperature = (st, p, prop, ctx) -> p.T,
+            lifecycle = release, sys = _ReleasedFrozenKind(2)
+        )
+        p = (; J = [0.0 16 16; 16 2 11; 16 11 14], λ = 1.0, V0 = 40.0, T = 10.0)
+        prob = CorePotts.PottsProblem(f, st, lat, (0, 40), p; frozen = σ .== 2)
+        path = tempname() * ".jld2"
+        cb = CorePotts.FrameWritingCallback(CorePotts.FrameFile(path); saveat = 10)
+        sol = CorePotts.solve(prob, CorePotts.SequentialCPM(); saveat = 10, callback = cb)
+        frames = CorePotts.PottsFrames(path; prob)
+        obstacles(fr) = count(o -> o.kind === MakiePotts.ObstacleSite, fr.owners)
+        @test frames.t == sol.t
+        for i in eachindex(sol.t)
+            a, b = renderframe(frames; index = i), renderframe(sol; index = i)
+            @test a.owners == b.owners
+            @test frame_mcs(a) == frame_mcs(b)
+        end
+        # the last frame draws its own mask: the released cell left no obstacle
+        @test obstacles(renderframe(frames)) == 0
+        @test length(renderframes(frames)) == length(sol.t)
+        output = tempname() * ".gif"
+        @test record_potts(
+            output, frames; framerate = 2, figure = (; size = (180, 140))
+        ) == output
+        @test filesize(output) > 1_000
+        # negative control: the problem's t0 mask draws the vacated medium sites
+        vacated = count((σ .== 2) .& (CorePotts.ownership(frames[end]) .== 0))
+        @test vacated > 0
+        @test obstacles(renderframe(frames[end]; frozen = prob.frozen)) == vacated
+        close(frames)
     end
 end
