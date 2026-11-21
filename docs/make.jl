@@ -152,6 +152,10 @@ const LATTICEPDE_DISCRETIZATION = [
     :CompiledField, :discretize, :symbolic_discretize,
 ]
 const LATTICEPDE_REPORTS = [:stability_bound, :StabilityBound, :bound_parts]
+# the SciML names LatticePDE re-exports; the page names each in its "Re-exported names"
+const LATTICEPDE_REEXPORTS = [
+    :solve, :solve!, :init, :step!, :remake, :getp, :getu, :setp, :Interval,
+]
 
 function latticepde_section(x)
     for n in names(LatticePDE)
@@ -162,6 +166,38 @@ function latticepde_section(x)
         return Base.isexported(LatticePDE, n) ? :unsorted : :interface
     end
     return :unsorted
+end
+
+# Every exported LatticePDE name must be on the fields API page: in a section list above
+# (shown by that section's `@autodocs`), in a `@docs` block of the page, or (a re-exported
+# SciML name) written as code on the page. A new export in none of these would drop out of
+# the page silently, so the build stops.
+function missing_from_fields_api(page::AbstractString)
+    listed = Set(
+        strip(line) for m in eachmatch(r"```@docs\s*\n(.*?)```"s, page)
+            for line in split(m[1], '\n')
+    )
+    sections = vcat(LATTICEPDE_VOCABULARY, LATTICEPDE_DISCRETIZATION, LATTICEPDE_REPORTS)
+    return filter(names(LatticePDE)) do n
+        Base.isexported(LatticePDE, n) && n !== :LatticePDE || return false
+        n in sections && return false
+        "LatticePDE.$n" in listed && return false
+        return !(n in LATTICEPDE_REEXPORTS && occursin("`$n`", page))
+    end
+end
+let page = read(joinpath(@__DIR__, "src", "fields", "api.md"), String)
+    missing = missing_from_fields_api(page)
+    isempty(missing) || error(
+        "fields/api.md: exported LatticePDE names not on the page: $(join(missing, ", ")); \
+        add each to a section list in make.jl or to a `@docs` block of the page"
+    )
+    # negative control: a page without one `@docs` entry is caught
+    cut = replace(page, "LatticePDE.field_report\n" => "")
+    missing_from_fields_api(cut) == [:field_report] ||
+        error("the fields API check missed a removed entry")
+    cut = replace(page, "`remake`" => "")
+    missing_from_fields_api(cut) == [:remake] ||
+        error("the fields API check missed a removed re-export")
 end
 
 # the LatticeFields names that LatticePDE re-exports, shown in its sections
@@ -260,6 +296,7 @@ fields = [
     "Coupling to a Potts model" => "fields/coupling.md",
     "How it works" => "fields/how_it_works.md",
     "API" => "fields/api.md",
+    "Developer reference" => "fields/developer.md",
 ]
 
 # `models/index.md` and `published/index.md` (the old section index pages) are built at
