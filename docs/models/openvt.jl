@@ -126,7 +126,7 @@ guards = CallbackSet(
     PottsModels.stop_at_cells(64)
 )
 sol_ref = solve(prob_ref, SequentialCPM(); saveat = 0:15:(3 * 775), callback = guards)
-(retcode = sol_ref.retcode, cells = count(>(0), sol_ref.u[end].cell.volume))
+(retcode = sol_ref.retcode, cells = count(>(0), volumes(sol_ref.u[end])))
 
 # The colony, colored by cell:
 
@@ -341,7 +341,7 @@ slope = sum((sol.t[half] .- tm) .* log2.(ncells[half])) / sum(abs2, sol.t[half] 
 
 using PottsModels.Analysis: centroids, concave_hull
 R = sqrt(25 / π)
-cs = filter(c -> !isnan(c[1]), centroids(sol.u[end].ownership))
+cs = filter(c -> !isnan(c[1]), centroids(ownership(sol.u[end])))
 x = [(c[1] - 200) / R for c in cs]
 y = [(c[2] - 200) / R for c in cs]
 m = openvt_metrics(x, y, ones(Int, length(cs)))   # β = 0: every cell grows

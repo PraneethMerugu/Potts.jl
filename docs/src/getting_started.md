@@ -232,13 +232,13 @@ using Statistics: mean
 mean(volumes[end][kinds .== 1])
 ```
 
-A saved state also holds the raw arrays. `u.ownership` is the matrix of cell numbers, and `u.cell`
-holds the per-cell arrays. The function below counts the dark–light contacts between
+A saved state `u` also has accessors. `ownership(u)` is the matrix of cell numbers, and
+`cell_kinds(u)` holds the kind of each cell. The function below counts the dark–light contacts between
 neighboring sites. This count measures how mixed the aggregate is:
 
 ```@example start
 function mixed_contacts(u)
-    σ, k = u.ownership, u.cell.kind
+    σ, k = ownership(u), cell_kinds(u)
     n = 0
     for x in CartesianIndices(σ), step in ((1, 0), (0, 1))
         y = CartesianIndex(mod1.(Tuple(x) .+ step, size(σ)))   # neighbor, wrapping around

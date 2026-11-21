@@ -836,9 +836,9 @@ function ensemble(point, seeds; tmax = 701, saves = SAVES)
         kinds0 = layout(akeeb_layout(; seed = seeds[i]), (500, 300))[2].second
         u0, u1 = sol.u[findfirst(==(0), sol.t)], sol.u[end]
         L = findall(==(:leader), kinds0)
-        lc = u0.cell.kind[first(L)]
-        alive1 = falses(length(u1.cell.kind))
-        for c in u1.ownership
+        lc = cell_kinds(u0)[first(L)]
+        alive1 = falses(length(cell_kinds(u1)))
+        for c in ownership(u1)
             c > 0 && (alive1[c] = true)
         end
         (;
@@ -847,10 +847,10 @@ function ensemble(point, seeds; tmax = 701, saves = SAVES)
                     for t in saves
             ),
             divisions = sol.stats.lifecycle.divisions,
-            live0 = length(unique(filter(>(0), vec(u0.ownership)))),
+            live0 = length(unique(filter(>(0), vec(ownership(u0))))),
             live1 = count(alive1), ncells0 = length(kinds0), painted = length(L),
-            leaders_kept = all(c -> u0.cell.kind[c] == lc && alive1[c], L) &&
-                count(c -> alive1[c] && u1.cell.kind[c] == lc, eachindex(alive1)) ==
+            leaders_kept = all(c -> cell_kinds(u0)[c] == lc && alive1[c], L) &&
+                count(c -> alive1[c] && cell_kinds(u1)[c] == lc, eachindex(alive1)) ==
                 length(L),
             final = i == 1 ? ownership(u1) : nothing,
         )        # replicate 1, for the video check

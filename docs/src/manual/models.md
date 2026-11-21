@@ -26,6 +26,7 @@ ModelingToolkit's `@mtkmodel` defines a constructor for a system.
 | `@observed` | derived quantities | [Observables](@ref manual-observables) |
 | `@sweep` | acceptance rule, temperature, MCS duration | [Sweep](@ref manual-sweep) |
 | `@extend` | build on another model | this page |
+| `@description`, `@metadata` | a description and metadata of the model, as in `@mtkmodel` | this page |
 
 `@lattice` and `@sweep` are required (an extension may inherit them). Other lines in the
 block are ordinary Julia, evaluated when the model is built; use them for helper functions.
@@ -136,6 +137,36 @@ updates, and so on) as Julia expressions, for the curious.
 ```@example models
 Potts.declared_parameters(sticky)
 ```
+
+## Description and metadata
+
+`@description` and `@metadata` work as in ModelingToolkit's `@mtkmodel`:
+
+1. Give `@description` one string.
+2. Give `@metadata` entries `Key = value`. Each key is a type.
+3. Read them with ModelingToolkit's `description` and `getmetadata`.
+
+```@example models
+struct Source end      # a metadata key is a type
+
+@potts_model Described begin
+    @description "One cell kind held near a target volume."
+    @metadata begin
+        Source = "the Models manual"
+    end
+    @kinds medium host
+    @lattice Lattice((8, 8))
+    @energy cells(host) => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@named described = Described()
+MTK = Potts.ModelingToolkitBase
+(MTK.description(described), MTK.getmetadata(described, Source, nothing))
+```
+
+A key that is not a type is an `ArgumentError` when the model is built. The compiled model
+keeps the description of the model it was compiled from.
 
 ## Names
 

@@ -206,12 +206,12 @@ nothing #hide
 # ## Measuring sorting
 #
 # The paper measures sorting by the share of cell–cell boundary that is heterotypic
-# (dark–light). Each saved state `u` holds the owner array `u.ownership`, and `u.cell.kind`
-# gives each cell's kind (1 dark, 2 light). We count every Moore bond once, through the
-# periodic edges:
+# (dark–light). For each saved state `u`, `ownership(u)` gives the owner array, and
+# `cell_kinds(u)` gives each cell's kind (1 dark, 2 light). We count every Moore bond once,
+# through the periodic edges:
 
 function heterotypic_fraction(u)
-    σ, k = u.ownership, u.cell.kind
+    σ, k = ownership(u), cell_kinds(u)
     nx, ny = size(σ)
     hetero = homo = 0
     for y in 1:ny, x in 1:nx, (dx, dy) in ((1, 0), (0, 1), (1, 1), (1, -1))

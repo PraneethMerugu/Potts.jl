@@ -618,7 +618,7 @@ where the mask *set* changes, which no rate can carry:
   by `discretize` or `remake` (they hold the masked values already);
 - when the mask kernels read the time or the clock (`moving`), after each accepted step, the
   sites that became masked since the last write (released sites keep their values); and at
-  each located switch, every masked site ([`MaskEvent`](@ref));
+  each located switch, every masked site (`MaskEvent`);
 - at every discrete event, at every masked site (a value that reads a parameter, a table, an
   input or `step_index(t)` jumps there, which its rate cannot carry): a new step index
   ([`ClockTick`](@ref)), and any write of a parameter, a table or an input through `setp` or
@@ -627,7 +627,7 @@ A step that writes nothing is no discontinuity (the solver keeps its FSAL deriva
 
 **Moving sets.** A predicate that reads the time switches where one of its comparisons
 changes sign. A comparison whose sides read only `t`, scalar parameters and constants
-(`t > t0`, `sin(ω t) < 0.5`) is located exactly: a continuous callback ([`MaskEvent`](@ref))
+(`t > t0`, `sin(ω t) < 0.5`) is located exactly: a continuous callback (`MaskEvent`)
 finds its root and every masked site takes its value there, so a set that switches on over a
 quiet state (where an adaptive solver takes long steps) switches at the right time. A read
 of `step_index(t)` switches at the clock's boundaries, which [`ClockTick`](@ref) lands on.

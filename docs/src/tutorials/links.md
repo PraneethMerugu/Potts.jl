@@ -89,7 +89,7 @@ To draw the links, connect the centroids of linked cells. `centroids` from
 ```@example links
 function draw_links!(ax, u, name)
     store = CorePotts.link_store(u.cell, name)
-    xy = centroids(u.ownership)
+    xy = centroids(ownership(u))
     for a in eachindex(xy), b in (a + 1):length(xy)
         CorePotts.linked(store, a, b) || continue
         lines!(ax, [xy[a][1], xy[b][1]] .- 0.5, [xy[a][2], xy[b][2]] .- 0.5; color = :white, linewidth = 2)
@@ -151,7 +151,7 @@ Without the links these cells would not stick. Their contact energy with each ot
 is higher than with the medium (10). The links hold the clusters together:
 
 ```@example links
-nlinks(u) = (s = CorePotts.link_store(u.cell, :bond); sum(c -> CorePotts.link_count(s, c), eachindex(u.cell.volume)) ÷ 2)
+nlinks(u) = (s = CorePotts.link_store(u.cell, :bond); sum(c -> CorePotts.link_count(s, c), eachindex(volumes(u))) ÷ 2)
 fig = Figure(size = (600, 300))
 ax = Axis(fig[1, 1]; xlabel = "MCS", ylabel = "links")
 lines!(ax, sol.t, nlinks.(sol.u))

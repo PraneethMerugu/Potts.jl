@@ -72,7 +72,7 @@ end
 op = layout(Tiling((5, 5); region = (16:35, 16:35), kinds = [:leader, :follower, :follower]), tethers)
 sol = solve(PottsProblem(tethers, op, (0, 100); seed = 1), SequentialCPM(); save_everystep = false)
 u = sol.u[end]
-count_links(u, name) = sum(c -> CorePotts.link_count(CorePotts.link_store(u.cell, name), c), eachindex(u.cell.volume)) ÷ 2
+count_links(u, name) = sum(c -> CorePotts.link_count(CorePotts.link_store(u.cell, name), c), eachindex(volumes(u))) ÷ 2
 (tether = count_links(u, :tether), touch = count_links(u, :touch))
 ```
 

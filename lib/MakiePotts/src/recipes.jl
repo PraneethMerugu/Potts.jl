@@ -80,6 +80,11 @@ end
     pottsboundaries(frame; color=:black, linewidth=1)
 
 Composable semantic boundary overlay for a two-dimensional frame.
+
+Every attribute is live: setting one after the plot is made (`plt.color = :red`)
+redraws it. The frame and attributes given at creation are checked at once and throw their
+own error; an invalid value set later throws when the plot next resolves, wrapped in
+Makie's `ResolveException`.
 """
 Makie.@recipe(PottsBoundaries, frame) do scene
     Makie.Attributes(
@@ -94,11 +99,27 @@ end
 @doc "Add a [`PottsBoundaries`](@ref) overlay to an existing Makie scene or \
     axis." pottsboundaries!
 
+# The recipes compute their children's inputs with `map!` on the plot's compute graph, so a
+# change of any attribute (not only of the frame) reaches the children and the screen. The
+# graph is lazy, so the first frame and attributes are checked at once here: a bad input
+# throws its own error when the plot is made, not a wrapped one at the first draw.
+function _check_first_inputs(plot; colors = true)
+    frame = assert_render_frame_conformance(plot.frame[])
+    colors || return nothing
+    encoded = encode_frame(frame, plot.encoding[])
+    _resolved_colormap(
+        encoded, plot.colormap[], plot.category_palette[], plot.medium_color[]
+    )
+    _plot_colorrange(encoded, plot.colorrange[])
+    return nothing
+end
+
 function Makie.plot!(plot::PottsBoundaries)
-    validated_frame = Makie.lift(assert_render_frame_conformance, plot.frame)
-    segments = Makie.lift(_boundary_segments, validated_frame)
+    _check_first_inputs(plot; colors = false)
+    map!(assert_render_frame_conformance, plot, :frame, :validated_frame)
+    map!(_boundary_segments, plot, :validated_frame, :segments)
     Makie.linesegments!(
-        plot, segments;
+        plot, plot.segments;
         color = plot.color, linewidth = plot.linewidth,
         linestyle = plot.linestyle, visible = plot.visible,
         inspectable = plot.inspectable
@@ -110,6 +131,11 @@ end
     pottsplot(frame; encoding=CellTypeEncoding(), kwargs...)
 
 Native Makie recipe for validated two-dimensional Potts render frames.
+
+Every attribute is live: setting one after the plot is made (`plt.medium_color = :red`)
+redraws it. The frame and attributes given at creation are checked at once and throw their
+own error; an invalid value set later throws when the plot next resolves, wrapped in
+Makie's `ResolveException`.
 """
 Makie.@recipe(PottsPlot, frame) do scene
     Makie.Attributes(
@@ -137,50 +163,53 @@ end
 @doc "Add a [`PottsPlot`](@ref) to an existing Makie scene or axis." pottsplot!
 
 function Makie.plot!(plot::PottsPlot)
-    validated_frame = Makie.lift(assert_render_frame_conformance, plot.frame)
-    encoded = Makie.lift(encode_frame, validated_frame, plot.encoding)
-    coordinates = Makie.lift(_image_extents ∘ frame_geometry, validated_frame)
-    image_xs = Makie.lift(first, coordinates)
-    image_ys = Makie.lift(last, coordinates)
-    edges = Makie.lift(_heatmap_edges ∘ frame_geometry, validated_frame)
-    heatmap_xs = Makie.lift(first, edges)
-    heatmap_ys = Makie.lift(last, edges)
-    values = Makie.lift(item -> item.values, encoded)
-    colormap = Makie.lift(
-        _resolved_colormap, encoded, plot.colormap,
-        plot.category_palette, plot.medium_color
+    _check_first_inputs(plot)
+    map!(assert_render_frame_conformance, plot, :frame, :validated_frame)
+    map!(encode_frame, plot, [:validated_frame, :encoding], :encoded)
+    map!(plot, :validated_frame, [:image_xs, :image_ys]) do frame
+        extents = _image_extents(frame_geometry(frame))
+        return (first(extents), last(extents))
+    end
+    map!(plot, :validated_frame, [:heatmap_xs, :heatmap_ys]) do frame
+        edges = _heatmap_edges(frame_geometry(frame))
+        return (first(edges), last(edges))
+    end
+    map!(item -> item.values, plot, :encoded, :encoded_values)
+    map!(
+        _resolved_colormap, plot,
+        [:encoded, :colormap, :category_palette, :medium_color], :resolved_colormap
     )
-    colorrange = Makie.lift(_plot_colorrange, encoded, plot.colorrange)
-    labeler = Makie.lift(
-        plot.inspector_label, validated_frame, plot.encoding
-    ) do custom, frame, enc
+    map!(_plot_colorrange, plot, [:encoded, :colorrange], :resolved_colorrange)
+    labeler_inputs = [:inspector_label, :validated_frame, :encoding]
+    map!(plot, labeler_inputs, :labeler) do custom, frame, enc
         if custom === Makie.automatic
-            (child, index, position) -> inspection_label(frame, enc, index)
+            return (child, index, position) -> inspection_label(frame, enc, index)
         else
-            custom
+            return custom
         end
     end
 
     Makie.heatmap!(
-        plot, heatmap_xs, heatmap_ys, values;
-        colormap, colorrange, colorscale = plot.colorscale,
+        plot, plot.heatmap_xs, plot.heatmap_ys, plot.encoded_values;
+        colormap = plot.resolved_colormap, colorrange = plot.resolved_colorrange,
+        colorscale = plot.colorscale,
         nan_color = plot.nan_color, lowclip = plot.lowclip,
         highclip = plot.highclip, interpolate = plot.interpolate,
         visible = plot.visible, alpha = plot.alpha,
-        inspectable = plot.inspectable, inspector_label = labeler
+        inspectable = plot.inspectable, inspector_label = plot.labeler
     )
 
-    semantic_overlay = Makie.lift(
-        _semantic_overlay, validated_frame, plot.encoding,
-        plot.medium_color, plot.obstacle_color
+    map!(
+        _semantic_overlay, plot,
+        [:validated_frame, :encoding, :medium_color, :obstacle_color], :semantic_overlay
     )
     Makie.image!(
-        plot, image_xs, image_ys, semantic_overlay;
+        plot, plot.image_xs, plot.image_ys, plot.semantic_overlay;
         interpolate = false, visible = plot.visible, inspectable = false
     )
 
     pottsboundaries!(
-        plot, validated_frame;
+        plot, plot.validated_frame;
         color = plot.boundary_color, linewidth = plot.boundary_width,
         visible = plot.boundaries, inspectable = false
     )
@@ -278,6 +307,11 @@ end
 """
 Experimental true-three-dimensional volume recipe. Orthogonal slices should use
 the stable `PottsPlot` recipe.
+
+Every attribute is live: setting one after the plot is made (`plt.medium_color = :red`)
+redraws it. The frame and attributes given at creation are checked at once and throw their
+own error; an invalid value set later throws when the plot next resolves, wrapped in
+Makie's `ResolveException`.
 """
 Makie.@recipe(PottsVolume, frame) do scene
     Makie.Attributes(
@@ -296,17 +330,19 @@ end
 @doc "Add a [`PottsVolume`](@ref) to an existing Makie scene." pottsvolume!
 
 function Makie.plot!(plot::PottsVolume)
-    validated_frame = Makie.lift(assert_render_frame_conformance, plot.frame)
-    encoded = Makie.lift(encode_frame, validated_frame, plot.encoding)
-    values = Makie.lift(item -> item.values, encoded)
-    colormap = Makie.lift(
-        _resolved_colormap, encoded, plot.colormap,
-        plot.category_palette, plot.medium_color
+    _check_first_inputs(plot)
+    map!(assert_render_frame_conformance, plot, :frame, :validated_frame)
+    map!(encode_frame, plot, [:validated_frame, :encoding], :encoded)
+    map!(item -> item.values, plot, :encoded, :encoded_values)
+    map!(
+        _resolved_colormap, plot,
+        [:encoded, :colormap, :category_palette, :medium_color], :resolved_colormap
     )
-    colorrange = Makie.lift(_plot_colorrange, encoded, plot.colorrange)
+    map!(_plot_colorrange, plot, [:encoded, :colorrange], :resolved_colorrange)
     Makie.volume!(
-        plot, values;
-        colormap, colorrange, nan_color = plot.nan_color,
+        plot, plot.encoded_values;
+        colormap = plot.resolved_colormap, colorrange = plot.resolved_colorrange,
+        nan_color = plot.nan_color,
         algorithm = plot.algorithm, absorption = plot.absorption,
         visible = plot.visible
     )

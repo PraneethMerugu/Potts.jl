@@ -501,3 +501,17 @@ function Base.hash(s::LatticeStats, h::UInt)
         init = hash(:LatticeStats, h)
     )
 end
+
+"""
+    site_centers(sol::Union{FieldSolution, LatticeSolution}) -> Tuple or nothing
+
+The coordinates of the site centers on each spatial axis of a lattice solution, in axis
+order (one range per axis, as `sol[x]` reads one axis), or `nothing` when the solution
+carries no coordinates (a `FieldSolution` of a `FieldProblem` built without a system).
+"""
+function site_centers(sol::Union{FieldSolution, LatticeSolution})
+    ix = _lindex(sol)
+    ix isa LatticeIndex || return nothing
+    isempty(ix.coordsyms) && return nothing
+    return Tuple(ix.coords[ix.key(c)] for c in ix.coordsyms)
+end

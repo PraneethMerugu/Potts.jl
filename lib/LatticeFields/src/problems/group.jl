@@ -2183,7 +2183,7 @@ launches, the mask launches, the clamp of each masked field and the slot-1 copie
 (`Exec.compile!`: compile-only launches, which write nothing), and an implicit runtime's
 launches (the operator program, the residuals, the shift, update, status and Newton-check
 bodies, the right sides and history copies, and the solver's rebuild, lift and solve plans,
-by [`compile_cache!`](@ref) in compile mode). Nothing on the host executor.
+by `compile_cache!` in compile mode). Nothing on the host executor.
 """
 function compile!(backend, rt::GroupRuntime)
     Exec.ishost(backend) && return nothing

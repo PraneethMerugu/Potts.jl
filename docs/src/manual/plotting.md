@@ -12,6 +12,9 @@ backend: CairoMakie for files and notebooks, GLMakie for interactive windows.
 | `record_potts(file, sol)` | a video of every saved state of a solution (or of a vector of frames) |
 | `potts_legend(position, plot)` | a legend of the kinds |
 
+The fields of a LatticePDE solution have their own recipe, `fieldplot`, and video,
+`record_field`; [Getting started](@ref fields-getting-started) shows both.
+
 `pottsplot` attributes: `encoding` (`CellTypeEncoding()`, the default, colors by kind;
 `CellIdentityEncoding()` by cell; `ChannelEncoding(key)` by a channel), `boundaries`
 (cell outlines; off by default, and never used in these docs), `medium_color`,
@@ -49,7 +52,7 @@ sol = solve(PottsProblem(mix, op, (0, 300); field_solver = ExplicitEuler(substep
 
 u = sol.u[end]
 key = SiteChannelKey(:c, Float64)
-frame = renderframe(u; channels = (RenderChannel(key, u.site.c; label = "c"),))
+frame = renderframe(u; channels = (RenderChannel(key, sol[:c][end]; label = "c"),))
 fig = Figure(size = (900, 300))
 for (i, enc) in enumerate((CellTypeEncoding(), CellIdentityEncoding(), ChannelEncoding(key)))
     ax = Axis(fig[1, i]; aspect = DataAspect())
@@ -58,7 +61,7 @@ for (i, enc) in enumerate((CellTypeEncoding(), CellIdentityEncoding(), ChannelEn
     if enc isa ChannelEncoding       # show the cells over the field as a translucent fill, not outlines
         nx, ny = frame_size(frame)
         ox, oy = frame_geometry(frame).origin
-        heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), [c != 0 ? 1.0 : NaN for c in Array(u.ownership)];
+        heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), [c != 0 ? 1.0 : NaN for c in Array(ownership(u))];
             colormap = [(:white, 0.35), (:white, 0.35)], colorrange = (0, 1), nan_color = :transparent)
     end
 end

@@ -22,6 +22,8 @@ The stable API centers on:
 - data-only spatial `RenderRequest` values and explicit typed render channels;
 - open encoding and frame-accessor protocols;
 - `PottsPlot` for 2D domains and orthogonal 3D slices;
+- `fieldplot` and `record_field` for the fields of a LatticePDE or LatticeFields
+  solution (a heatmap in 2D, a volume in 3D, and a video over the saves);
 - normal Makie composition, themes, `Observable`s, `DataInspector`, `Legend`,
   `Colorbar`, `save`, and `record`.
 

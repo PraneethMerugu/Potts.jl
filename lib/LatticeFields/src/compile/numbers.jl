@@ -85,8 +85,8 @@ use it.
     npartials(T) -> Int
 
 The derivative parts of number type `T`: 0 for a plain number, `N` for `Dual{tag, V, N}`
-(extension). With [`dvalue`](@ref), [`dpartial`](@ref), [`dsetpartial`](@ref) and
-[`dreplace`](@ref) it is what the implicit solve's tangent steps read and write: one
+(extension). With [`dvalue`](@ref), `dpartial`, `dsetpartial` and
+`dreplace` it is what the implicit solve's tangent steps read and write: one
 level of derivative parts, each a value of the value type.
 """
 npartials(::Type) = 0

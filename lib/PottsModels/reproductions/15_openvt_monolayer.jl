@@ -149,7 +149,7 @@ nothing #hide
 prob = PottsProblem(ref, openvt_reference_state(; lattice = (120, 120)), (0, 3 * 775); seed = 1, capacity = 256)
 guards = CallbackSet(PottsModels.edge_guard(5; terminate = true), PottsModels.stop_at_cells(64))
 sol = solve(prob, SequentialCPM(); saveat = 0:15:(3 * 775), callback = guards)
-(retcode = sol.retcode, mcs = sol.t[end], cells = count(>(0), sol.u[end].cell.volume))
+(retcode = sol.retcode, mcs = sol.t[end], cells = count(>(0), volumes(sol.u[end])))
 
 # The colony at the stop, one color per cell, and its O2 rows (M's per-cell output: the
 # free-surface fraction f and the area fraction a):

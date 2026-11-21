@@ -77,7 +77,7 @@ function _tcload_body!(i, b, off, res, j, mask, dom)
 end
 
 """
-One row of a [`TangentCache`](@ref): the residual launches on the Dual store (per slot
+One row of a `TangentCache`: the residual launches on the Dual store (per slot
 parity, at the stage's iterate), the row's Dual state slots, its Dual residual, its mask
 with the Dual value, its clip, and Crank–Nicolson's and BDF2's Dual right side and history.
 """
@@ -560,7 +560,7 @@ end
     advance_shared!(rt, trt, clock, n, window) -> ReturnCode.T
 
 One window of a coupled `PottsProblem` implicit group `rt` with derivative parts: `trt` is
-the group bound to the Dual store with a [`TangentCache`](@ref) on `rt`'s own cache
+the group bound to the Dual store with a `TangentCache` on `rt`'s own cache
 (`bind_group(…; shared = (rt.cache,
 rt.store))`, the stores sharing their slot parity). The masks and clamps of both stores,
 then each stage's primal solve (once, on `rt`'s store) and its tangent step, then the slot-1

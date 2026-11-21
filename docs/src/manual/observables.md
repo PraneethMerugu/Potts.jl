@@ -62,7 +62,7 @@ and chains of cells along a periodic axis with their relaxation curves (`chain_c
 
 ```@example observables
 using PottsModels.Analysis: centroids, cell_graph, components
-σ = sol.u[end].ownership
+σ = ownership(sol.u[end])
 g = cell_graph(σ)
 length(centroids(σ)), length(components(g, findall(==(1), sol[:kind][end])))   # dark cells' clusters
 ```

@@ -572,8 +572,8 @@ advances one window of `dt` ([`advance!`](@ref) of each group, in group order);
 of the current state.
 
 **Windows off the grid.** The window `dt` is fixed: the windows end at `t₀ + k dt` (the
-grid). A time off the grid that the run must land on (a `tstop`: [`add_tstop!`](@ref
-SciMLBase.add_tstop!), `step!(integ, dt, true)`; the end of the time span) is reached by one
+grid). A time off the grid that the run must land on (a `tstop`: `add_tstop!`,
+`step!(integ, dt, true)`; the end of the time span) is reached by one
 shortened window, and the next window is shortened to land back on the grid. In a shortened
 window of length `w` each group takes `⌈n w / dt⌉` substeps of its count `n` (so no substep
 is longer than in a full window); an implicit group rebuilds its operator for that step and

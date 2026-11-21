@@ -38,12 +38,14 @@ start = sheared_foam_state(; lattice = L)
 prob = PottsProblem(foam, start, (0, 10); seed = 1)
 shaken = solve(remake(prob; p = [:T => 3.0]), alg; save_everystep = false).u[end]
 relaxed = solve(
-    remake(prob; u0 = [ownership => Array(shaken.ownership); start[2:3]], tspan = (0, 300)),
+    remake(
+        prob; u0 = [ownership => Array(ownership(shaken)); start[2:3]], tspan = (0, 300)
+    ),
     alg; save_everystep = false
 ).u[end]
 sheared = solve(
     remake(
-        prob; u0 = [ownership => Array(relaxed.ownership); start[2:3]],
+        prob; u0 = [ownership => Array(ownership(relaxed)); start[2:3]],
         p = [:γ0 => 36.0], tspan = (0, 4000)
     ),
     alg; saveat = 0:20:4000
@@ -78,8 +80,8 @@ nothing #hide
 using PottsModels.Analysis: stored_energy, cell_graph, t1_events
 CairoMakie.activate!(type = "png")
 lat = Lattice(L; boundary = (Periodic(), Closed()))
-φ = [stored_energy(Array(u.ownership), lat) for u in sheared.u]
-graphs = [cell_graph(Array(u.ownership), lat) for u in sheared.u]
+φ = [stored_energy(Array(ownership(u)), lat) for u in sheared.u]
+graphs = [cell_graph(Array(ownership(u)), lat) for u in sheared.u]
 t1 = cumsum(
     [
         0.0; [
@@ -162,7 +164,7 @@ fig
 
 bulk = solve(
     remake(
-        prob; u0 = [ownership => Array(relaxed.ownership); start[2:3]],
+        prob; u0 = [ownership => Array(ownership(relaxed)); start[2:3]],
         p = [:β => 0.2, :bulk => 1.0],
         tspan = (0, 1500)
     ), alg; saveat = 0:20:1500

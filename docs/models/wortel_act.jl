@@ -163,7 +163,7 @@ still = solve(remake(prob; p = [:λ_act => 0.0]), SequentialCPM(); saveat = 0:10
 
 using Statistics: mean
 function centre(u)
-    sites = findall(==(1), u.ownership)
+    sites = findall(==(1), ownership(u))
     return map(1:2) do d
         θ = [2π * (I[d] - 1) / L for I in sites]
         mod(atan(mean(sin.(θ)), mean(cos.(θ))) * L / 2π, L)
@@ -171,7 +171,7 @@ function centre(u)
 end
 acts = sol[:act]
 function act_window(i)            # activity inside the cell, centered on it, 80 × 80 sites
-    a = [s == 1 ? x : NaN for (x, s) in zip(acts[i], sol.u[i].ownership)]
+    a = [s == 1 ? x : NaN for (x, s) in zip(acts[i], ownership(sol.u[i]))]
     c = round.(Int, centre(sol.u[i]))
     return circshift(a, (L ÷ 2 - c[1], L ÷ 2 - c[2]))[61:140, 61:140]
 end

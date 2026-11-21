@@ -396,3 +396,29 @@ end
         qa_jet_package(MakiePotts)
     end
 end
+
+@testitem "recipes redraw when a non-argument attribute changes" setup = [
+    MP_makiepotts,
+] tags = [
+    :makiepotts, :core,
+] begin
+    CairoMakie.activate!(type = "png")
+    # PottsPlot: the medium color reaches the heatmap's colormap and the overlay
+    frame = renderframe(render_fixture().state)
+    figure, axis, plot = Makie.plot(frame)
+    before = copy(CairoMakie.colorbuffer(figure))
+    # control: the attribute changes the image when given at the start
+    red, _, _ = Makie.plot(frame; medium_color = :red)
+    @test CairoMakie.colorbuffer(red) != before
+    plot.medium_color = :red
+    @test CairoMakie.colorbuffer(figure) == CairoMakie.colorbuffer(red)
+    # PottsVolume: the same attribute reaches the volume's colormap (CairoMakie draws no
+    # volume, so the child's colormap is compared)
+    frame3 = renderframe(render_fixture(dimensions = 3).state)
+    figure3, scene3, volume = Makie.plot(frame3)
+    @test volume isa PottsVolume
+    colors = copy(Makie.to_colormap(volume.plots[1].colormap[]))
+    volume.medium_color = :red
+    @test Makie.to_colormap(volume.plots[1].colormap[]) != colors
+    @test Makie.to_color(:red) in Makie.to_colormap(volume.plots[1].colormap[])
+end

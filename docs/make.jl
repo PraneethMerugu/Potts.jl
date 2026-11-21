@@ -14,7 +14,7 @@
 # `[…](@ref model-merks)` reaches the paper's page in both builds.
 # `POTTS_FULL_REPRODUCTION=true` makes the reproduction pages run their full-size ensembles.
 using Documenter, Literate, TOML
-using Potts, CorePotts, PottsModels, MakiePotts
+using Potts, CorePotts, PottsModels, MakiePotts, LatticePDE, LatticeFields
 
 const SRC = joinpath(@__DIR__, "src")
 const REPRODUCTIONS = joinpath(dirname(@__DIR__), "lib", "PottsModels", "reproductions")
@@ -138,6 +138,76 @@ function corepotts_interface(x)
     return any(n -> getfield(CorePotts, n) === x, CorePotts.MODEL_COMPILER_INTERFACE)
 end
 
+# The sections of LatticePDE's names on the fields API page (`fields/api.md`): the exported
+# names by topic; the public, unexported names are the interface for front ends.
+const LATTICEPDE_VOCABULARY = [
+    :laplacian, :Δ, :Advect, :DivKGrad, :Upwind1, :AbstractAdvectionScheme, :masked,
+    :ismember, :value_at, :step_index, :Coarse, :LatticeSpacing, :LatticeStorage,
+    :LatticeLevel, :LatticePlacement, :LatticeInputName, :get_lattice_spacing,
+    :get_lattice_storage, :get_lattice_level, :get_lattice_placement,
+    :get_lattice_input_name, :check_vocabulary, :vocabulary_issues,
+]
+const LATTICEPDE_DISCRETIZATION = [
+    :LatticeDiscretization, :FiniteVolume, :lattice_domain, :parse_bcs, :linearity,
+    :CompiledField, :discretize, :symbolic_discretize,
+]
+const LATTICEPDE_REPORTS = [:stability_bound, :StabilityBound, :bound_parts]
+# the SciML names LatticePDE re-exports; the page names each in its "Re-exported names"
+const LATTICEPDE_REEXPORTS = [
+    :solve, :solve!, :init, :step!, :remake, :getp, :getu, :setp, :Interval,
+]
+
+function latticepde_section(x)
+    for n in names(LatticePDE)
+        isdefined(LatticePDE, n) && getfield(LatticePDE, n) === x || continue
+        n in LATTICEPDE_VOCABULARY && return :vocabulary
+        n in LATTICEPDE_DISCRETIZATION && return :discretization
+        n in LATTICEPDE_REPORTS && return :reports
+        return Base.isexported(LatticePDE, n) ? :unsorted : :interface
+    end
+    return :unsorted
+end
+
+# Every exported LatticePDE name must be on the fields API page: in a section list above
+# (shown by that section's `@autodocs`), in a `@docs` block of the page, or (a re-exported
+# SciML name) written as code on the page. A new export in none of these would drop out of
+# the page silently, so the build stops.
+function missing_from_fields_api(page::AbstractString)
+    listed = Set(
+        strip(line) for m in eachmatch(r"```@docs\s*\n(.*?)```"s, page)
+            for line in split(m[1], '\n')
+    )
+    sections = vcat(LATTICEPDE_VOCABULARY, LATTICEPDE_DISCRETIZATION, LATTICEPDE_REPORTS)
+    return filter(names(LatticePDE)) do n
+        Base.isexported(LatticePDE, n) && n !== :LatticePDE || return false
+        n in sections && return false
+        "LatticePDE.$n" in listed && return false
+        return !(n in LATTICEPDE_REEXPORTS && occursin("`$n`", page))
+    end
+end
+let page = read(joinpath(@__DIR__, "src", "fields", "api.md"), String)
+    missing = missing_from_fields_api(page)
+    isempty(missing) || error(
+        "fields/api.md: exported LatticePDE names not on the page: $(join(missing, ", ")); \
+        add each to a section list in make.jl or to a `@docs` block of the page"
+    )
+    # negative control: a page without one `@docs` entry is caught
+    cut = replace(page, "LatticePDE.field_report\n" => "")
+    missing_from_fields_api(cut) == [:field_report] ||
+        error("the fields API check missed a removed entry")
+    cut = replace(page, "`remake`" => "")
+    missing_from_fields_api(cut) == [:remake] ||
+        error("the fields API check missed a removed re-export")
+end
+
+# the LatticeFields names that LatticePDE re-exports, shown in its sections
+function shown_by_latticepde(x)
+    return any(names(LatticePDE)) do n
+        isdefined(LatticePDE, n) && getfield(LatticePDE, n) === x &&
+            Base.binding_module(LatticePDE, n) !== LatticePDE
+    end
+end
+
 const PAPER_RUNS = joinpath(SRC, "assets", "paper_runs")
 
 # The "Paper models: status" page, generated from the committed verdict records at build
@@ -214,6 +284,21 @@ manual = [
     "manual/plotting.md",
 ]
 
+# The fields section: LatticePDE on its own, in the order of a SciML package's docs
+fields = [
+    "Getting started" => "fields/getting_started.md",
+    "Boundary conditions" => "fields/boundaries.md",
+    "Solvers" => "fields/solvers.md",
+    "Grids" => "fields/grids.md",
+    "Number types" => "fields/types.md",
+    "Maps" => "fields/maps.md",
+    "SciML interop" => "fields/sciml.md",
+    "Coupling to a Potts model" => "fields/coupling.md",
+    "How it works" => "fields/how_it_works.md",
+    "API" => "fields/api.md",
+    "Developer reference" => "fields/developer.md",
+]
+
 # `models/index.md` and `published/index.md` (the old section index pages) are built at
 # their old URLs but are not in the navigation.
 pages = Any[
@@ -223,6 +308,7 @@ pages = Any[
     "Paper models" => Any["Paper models: status" => STATUS_PAGE; paper_pages],
     "Workshop" => "workshop.md",
     "Manual" => manual,
+    "Fields (LatticePDE)" => fields,
 ]
 append!(
     pages, Any[
@@ -237,7 +323,8 @@ append!(
 makedocs(;
     sitename = "Potts.jl",
     modules = [
-        Potts, CorePotts, Potts.LatticePDE, PottsModels, PottsModels.Analysis, MakiePotts,
+        Potts, CorePotts, LatticePDE, LatticeFields, PottsModels, PottsModels.Analysis,
+        MakiePotts,
     ],
     remotes = nothing,
     format = Documenter.HTML(;

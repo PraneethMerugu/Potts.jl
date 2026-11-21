@@ -52,7 +52,7 @@ Main.paper_run("graner_glazier", "../") # hide
 
     ```@example workshop
     function heterotypic_fraction(u)
-        σ, k = u.ownership, u.cell.kind
+        σ, k = ownership(u), cell_kinds(u)
         mixed = total = 0
         for x in CartesianIndices(σ), step in ((1, 0), (0, 1), (1, 1), (1, -1))
             y = CartesianIndex(mod1.(Tuple(x) .+ step, size(σ)))
@@ -139,7 +139,7 @@ nothing # hide
     op = layout(Scattered(12, (5, 5); region = (10:30, 1:40), kinds = [:leader, :follower], seed = 1), twochemo)
     c0 = [x / 80 for x in 1:80, y in 1:40]
     function mean_x(u, k)
-        xs = [x[1] for x in CartesianIndices(u.ownership) if u.ownership[x] != 0 && u.cell.kind[u.ownership[x]] == k]
+        xs = [x[1] for x in CartesianIndices(ownership(u)) if ownership(u)[x] != 0 && cell_kinds(u)[ownership(u)[x]] == k]
         return mean(xs)
     end
     chemo = PottsProblem(twochemo, [op; :c => c0; :χ => 400.0], (0, 600); seed = 1)

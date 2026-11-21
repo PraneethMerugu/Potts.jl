@@ -183,7 +183,8 @@ end
 @named initialized = Initialized()
 σ = zeros(Int32, 30, 30); σ[5:8, 5:8] .= 1; σ[15:17, 15:17] .= 2
 prob = PottsProblem(initialized, [ownership => σ, kind => [:cell, :cell]], (0, 10))
-(V_target = prob.u0.cell.V_target, p = prob.u0.cell.p, r = prob.u0.cell.r)
+integ = init(prob, SequentialCPM(); save_everystep = false)
+(V_target = integ[:V_target], p = integ[:p], r = integ[:r])
 ```
 
 Each scope's equations are a ModelingToolkit system:

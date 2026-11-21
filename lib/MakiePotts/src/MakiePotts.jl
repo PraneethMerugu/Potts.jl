@@ -5,6 +5,7 @@ Potts solutions.
 module MakiePotts
 
 using CorePotts: CorePotts, isfatal
+using LatticeFields.Problems: FieldSolution, LatticeSolution, field_series, site_centers
 using Makie: Makie
 using PrecompileTools: PrecompileTools
 
@@ -16,6 +17,7 @@ include("potts_saved_state.jl")
 include("recipes.jl")
 include("inspection.jl")
 include("recording.jl")
+include("fields.jl")
 include("explorer.jl")
 include("precompile.jl")
 
@@ -46,5 +48,8 @@ export potts_theme, potts_legend
 export inspection_label, record_potts
 
 export PottsExplorer, explore_potts
+
+export FieldPlot, fieldplot, fieldplot!, record_field
+public FieldFrames, field_frames
 
 end

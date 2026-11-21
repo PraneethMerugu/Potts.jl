@@ -114,7 +114,7 @@ annealed = solve(remake(prob; p = [:T => 3.0]), alg; save_everystep = false).u[e
 relaxed = solve(
     remake(
         prob; u0 = [
-            ownership => Array(annealed.ownership), kind => fill(:bubble, nb),
+            ownership => Array(ownership(annealed)), kind => fill(:bubble, nb),
             :A => fill(256.0, nb),
         ],
         tspan = (0, 1000)
@@ -122,8 +122,8 @@ relaxed = solve(
 ).u[end]                                                 # 1000 MCS at T → 0⁺
 lat = Lattice(L; boundary = (Periodic(), Closed()))
 (
-    hexagons = count(==(6), side_counts(Array(relaxed.ownership), lat)),
-    μ2_n = topology_moments(Array(relaxed.ownership), lat).mu2_n,
+    hexagons = count(==(6), side_counts(Array(ownership(relaxed)), lat)),
+    μ2_n = topology_moments(Array(ownership(relaxed)), lat).mu2_n,
 )
 
 # `side_counts` gives each bubble's number of sides n. The closed wall is not a side (A-2),
@@ -163,11 +163,11 @@ mu2n(σ) = topology_moments(σ, foam_lat(size(σ))).mu2_n
 Run `prob` for `tend` MCS, keeping σ every `every` MCS (and at the start) for the video.
 """
 function frames!(integ, tend, every; each = (m, σ) -> nothing)
-    F = [copy(Array(current_state(integ).ownership))]
+    F = [copy(Array(ownership(current_state(integ))))]
     for m in 1:tend
         step!(integ)
-        each(m, current_state(integ).ownership)
-        m % every == 0 && push!(F, copy(Array(current_state(integ).ownership)))
+        each(m, ownership(current_state(integ)))
+        m % every == 0 && push!(F, copy(Array(ownership(current_state(integ)))))
     end
     return F
 end
@@ -179,12 +179,12 @@ function ordered(seed; video = false)
     i1 = init(foam_problem(brick(L), A, 10; seed, T = 3.0), alg; save_everystep = false)
     F1 = frames!(i1, 10, 1)
     i2 = init(
-        foam_problem(Array(i1.u.ownership), A, 1000; seed), alg;
+        foam_problem(Array(ownership(i1.u)), A, 1000; seed), alg;
         save_everystep = false
     )
     F2 = frames!(i2, 1000, video ? 10 : 1000)
     return (;
-        ownership = Array(i2.u.ownership), A,
+        ownership = Array(ownership(i2.u)), A,
         frames = video ? [F1; F2[2:end]] : nothing,
     )
 end
@@ -201,14 +201,14 @@ function disordered(o, target, seed)
             step!(integ)
         end
         m += 10
-        push!(F, copy(Array(current_state(integ).ownership)))
-        push!(trace, (m, mu2n(Array(current_state(integ).ownership))))
+        push!(F, copy(Array(ownership(current_state(integ)))))
+        push!(trace, (m, mu2n(Array(ownership(current_state(integ))))))
         last(trace)[2] >= target && break
     end
-    σc = Array(current_state(integ).ownership)
-    A = Float64.(current_state(integ).cell.volume[1:Int(maximum(σc))])
+    σc = Array(ownership(current_state(integ)))
+    A = Float64.(volumes(current_state(integ))[1:Int(maximum(σc))])
     relaxed = solve(foam_problem(σc, A, 1000; seed), alg; save_everystep = false).u[end]
-    return (; ownership = Array(relaxed.ownership), A, stop = m, frames = F, trace)
+    return (; ownership = Array(ownership(relaxed)), A, stop = m, frames = F, trace)
 end
 t_ord = @elapsed foams = [ordered(9_400_000 + k; video = k == 1) for k in 1:2]
 # the test's first d081 try
@@ -232,7 +232,7 @@ function sheared(f, βm, tend, seed; γ0 = 0.0)
         return m % 10 == 0 && push!(φ, stored_energy(σ, fl) / φ0)
     end
     t = @elapsed F = frames!(integ, tend, 30; each)
-    return (; frames = F, φ, t1, wall = t, σ = Array(current_state(integ).ownership))
+    return (; frames = F, φ, t1, wall = t, σ = Array(ownership(current_state(integ))))
 end
 const SHEAR_MCS = 3000
 sh_ord = sheared(foams[1], 0.05, SHEAR_MCS, 9_400_021)
