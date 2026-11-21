@@ -841,7 +841,7 @@ end
          tstops = [], maxiters = typemax(Int), callback = nothing, checkpoint = nothing,
          seed = nothing, rng = nothing, verbose = true, progress = false,
          progress_steps = 1000, progress_name = "CPM", progress_id = :CorePotts,
-         alias = nothing, dense = false)
+         alias = nothing, dense = false, abstol = nothing, reltol = nothing)
     solve(prob::PottsProblem, alg::AbstractCPMAlgorithm; kwargs...)
 
 The integrator (or the solution) of a Potts run, with SciML's common keywords on the MCS
@@ -867,6 +867,8 @@ clock:
 - `dense`: only `false` (no interpolation between MCS).
 - `backend`: the KernelAbstractions backend the run executes on; `checkpoint`: a
   [`PottsCheckpoint`](@ref) to continue.
+- `abstol`, `reltol`: only for a problem whose field phases use `LatticeNewton` (defaults
+  `1//10^6` and `1//10^3`; both zero is an `ArgumentError`).
 
 Any other keyword is an `ArgumentError` listing these (`SOLVE_KEYWORDS`). The
 problem's `kwargs` are merged in first (except the problem's `initializealg`, which its
