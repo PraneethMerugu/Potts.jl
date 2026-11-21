@@ -12,9 +12,10 @@ struct FiniteVolume end
 
 How a `PDESystem` is put on a lattice. `grid = Grid(dims)` gives only the site counts: the
 spacing is derived from the system's domain (`extent ./ dims`) and periodicity from its
-periodic bc pairs, so there is one source of truth. `methods` maps a field (`c`,
-`c(t, x, y)` or `u`; keys are normalized by operation) to its method; a field without an
-entry is `FiniteVolume()`.
+periodic bc pairs, so there is one source of truth. Periodicity is per field and axis: a
+field wraps on the axes of its own pairs and is closed on the others. `methods` maps a
+field (`c`, `c(t, x, y)` or `u`; keys are normalized by operation) to its method; a field
+without an entry is `FiniteVolume()`.
 
 `T` is the state type (P5 role model: the only number-type keyword): `Float16`, `Float32`,
 `Float64`, or `BigFloat` on the host (stored in F64 lanes that hold BigFloat). `nothing`
