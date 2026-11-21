@@ -123,8 +123,8 @@ end
     @testset "a PDESystem's condition is named in its refusal" begin
         op = [ownership => zeros(Int32, 12, 12), kind => Symbol[]]
         for m in (
-                CePeriodic(; name = :m),
-                Potts.couple(CePeriodicHost(; name = :m), CeB.face()),
+                CeNoLap(; name = :m),
+                Potts.couple(CeNoLapHost(; name = :m), CeB.nolap()),
             )
             e = cp_compile_msg(() -> PottsProblem(m, op, (0, 1)))
             @test !startswith(e, "wrong exception") && occursin("faced", e) ||

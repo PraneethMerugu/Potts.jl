@@ -1425,13 +1425,17 @@ function _nonfinite_text(text, w, cv; warning::Bool = false)
     combos, more = w
     all(isempty, combos) &&
         return string(t, " is not finite; give its parameters values that make it finite")
+    # `i`: the read's indices, one (a kind table) or two (a pair table)
+    kindname(k) = k == 1 ? "the medium (kind 0)" : "kind $(k - 1)"
     function ent(tb, i)
-        if i == 0
+        if any(iszero, i)
             return "index 0 of `$tb` (which reads 0)"
-        elseif i == 1
+        elseif length(i) == 2
+            return "the entry of $(kindname(i[1])) and $(kindname(i[2])) of `$tb`"
+        elseif only(i) == 1
             return "the medium's entry of `$tb` (kind 0)"
         else
-            return "the entry of kind $(i - 1) of `$tb`"
+            return "the entry of kind $(only(i) - 1) of `$tb`"
         end
     end
     # the route by cause: a zero under a division, a negative value under `sqrt` or `log`
@@ -1449,7 +1453,10 @@ function _nonfinite_text(text, w, cv; warning::Bool = false)
         t, " is not finite at ",
         join((join((ent(tb, i) for (tb, i, _) in c), " with ") for c in combos), ", at "),
         more > 0 ? " (and $more more)" : "", "; ",
-        join(("$(ent(tb, i)) is $v: $(fix(v))" for (tb, i, v) in rd if i != 0), "; "),
+        join(
+            ("$(ent(tb, i)) is $v: $(fix(v))" for (tb, i, v) in rd if !any(iszero, i)),
+            "; "
+        ),
         " (every kind's entry is read, the medium's too)"
     )
 end

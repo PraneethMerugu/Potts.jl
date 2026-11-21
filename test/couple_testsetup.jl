@@ -549,9 +549,11 @@ module CeB
     @parameters Dc = 0.2
     @variables c(..) = 0.0
     const C = c(t, x, y)
-    function face()
+    # a face condition on a field with no spatial operator: refused (it would do
+    # nothing), and the refusal names this PDESystem
+    function nolap()
         return pdesystem(
-            [Differential(t)(C) ~ Dc * laplacian(C)], [c(t, 0, y) ~ 1.0];
+            [Differential(t)(C) ~ -Dc * C], [c(t, 0, y) ~ 1.0];
             name = :faced
         )
     end
@@ -563,13 +565,13 @@ end
     @lattice Lattice((12, 12); boundary = Periodic())
     @energy cells => (volume - 16.0)^2
     if with_field
-        @fields CeB.face()
+        @fields CeB.nolap()
     end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-CePeriodic(; name = :CePeriodic, kw...) = _CePer12(; with_field = true, name, kw...)
-function CePeriodicHost(; name = :CePeriodicHost, kw...)
+CeNoLap(; name = :CeNoLap, kw...) = _CePer12(; with_field = true, name, kw...)
+function CeNoLapHost(; name = :CeNoLapHost, kw...)
     return _CePer12(;
         with_field = false, name,
         kw...
