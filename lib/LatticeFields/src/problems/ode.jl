@@ -570,6 +570,9 @@ only what the functions return.
 
 # Arguments
 - `integ`: an OrdinaryDiffEq integrator of a lattice problem.
+
+# Returns
+- `true`.
 """
 function refresh_inputs!(integ)
     p = integ.p::LatticeParameters
@@ -848,6 +851,9 @@ value changed. A no-op on a problem with no masks.
 
 # Arguments
 - `integ`: an OrdinaryDiffEq integrator of a lattice problem.
+
+# Returns
+- Whether a masked value changed (`false` on a problem with no masks).
 """
 function sync_masks!(integ)
     m = lattice_metadata(integ.sol.prob)

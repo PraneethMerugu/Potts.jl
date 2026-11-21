@@ -75,6 +75,9 @@ A steady field with no initial value starts at 0 (the steady solve's cold start)
 reads no free field is refused with an `ArgumentError`, naming the fields that have no
 equation.
 
+# Arguments
+- `sys::PDESystem`: the system.
+
 # Returns
 - `(sys, steady)`: the rewritten system and the keys of the steady fields.
 """
@@ -219,6 +222,10 @@ coefficients are judged at 1 for every parameter, coordinate and other field; a 
 this does not settle is left as written (then the steady refusals judge the row at its
 values).
 
+# Arguments
+- `rhs`: the right side of the steady row.
+- `c`: the field it determines.
+
 # Returns
 - `1` or `-1`.
 """
@@ -287,6 +294,10 @@ The lowering's form of `sys` on an `N`-axis grid: a system whose variables are t
 (no time) gains the time `t` over `(0, 0)` in every read (a time-free system),
 and its steady rows become rates (`steady_rows`). A time-free system has only steady
 rows and aux fields (`K ~ rhs`).
+
+# Arguments
+- `sys::PDESystem`: the system.
+- `N::Int`: the number of axes of the grid.
 
 # Returns
 - `(sys, steady, timefree)`: the rewritten system, the keys of its steady fields, and

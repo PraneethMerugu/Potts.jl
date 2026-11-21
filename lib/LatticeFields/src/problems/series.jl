@@ -12,11 +12,11 @@ A field's values over the saves of a solution, time first (MethodOfLines' shape)
 
 It is an `AbstractArray` of size `(nt, dims...)` whose entries are read from the saved
 states when indexed, with no copy of the series ([`field_series`](@ref) gives it; `sol[c]`
-is a vector of grids). `s[i, :, :]` (or `sol[c, i]`, `sol[c][i]`) is the grid at save `i`, `Array(s)`
-copies the whole series. An aux field (`K ~ rhs`) is evaluated from the saved state at each
-save time when that save is read. An owned solve saves host vectors; an OrdinaryDiffEq solve
-on a device saves device arrays: there read whole grids (`s[i, :, :]`, `Array(s)`), not
-single entries.
+is a vector of grids). `s[i, :, :]` (or `sol[c, i]`, `sol[c][i]`) is the grid at save `i`,
+`Array(s)` copies the whole series. An aux field (`K ~ rhs`) is evaluated from the saved
+state at each save time when that save is read. An owned solve saves host vectors; an
+OrdinaryDiffEq solve on a device saves device arrays: there read whole grids (`s[i, :, :]`,
+`Array(s)`), not single entries.
 
 # Fields
 - `size::NTuple{N, Int}`: `(nt, dims...)`.
@@ -555,6 +555,12 @@ end
 The coordinates of the site centers on each spatial axis of a lattice solution, in axis
 order (one range per axis, as `sol[x]` reads one axis), or `nothing` when the solution
 carries no coordinates (a `FieldSolution` of a `FieldProblem` built without a system).
+
+# Arguments
+- `sol`: a `FieldSolution` or a `LatticeSolution`.
+
+# Returns
+- A tuple of one range per axis, or `nothing` when the solution carries no coordinates.
 """
 function site_centers(sol::Union{FieldSolution, LatticeSolution})
     ix = _lindex(sol)

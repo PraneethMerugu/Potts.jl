@@ -153,6 +153,10 @@ Why [`pdesystem`](@ref) refuses the variable `x`, which carries the metadata val
 A front end that tags its own quantities defines a method for the type of its tag, so that
 a quantity a PDESystem cannot read (a CPM's cell quantities) is named with the route.
 
+# Arguments
+- `value`: a metadata value of `x`.
+- `x`: the variable.
+
 # Returns
 - The reason, or `nothing` (the default: accepted).
 """

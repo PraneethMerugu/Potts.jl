@@ -250,6 +250,9 @@ const CLOCK_KEY = "clock__tick"
 
 The parameter slot of the clock in group `spec` ([`CLOCK_KEY`](@ref)).
 
+# Arguments
+- `spec::GroupSpec`: the group's description.
+
 # Returns
 - The slot's index, or 0 when the group's kernels do not read the step index.
 """
@@ -260,6 +263,10 @@ clock_slot(spec::GroupSpec) = something(findfirst(q -> q.name == CLOCK_KEY, spec
 
 The semantic program of group `g` stepped by `alg`. It is made once per `update_key(alg)`
 and is thread-safe.
+
+# Arguments
+- `g::FieldGroup`: the group.
+- `alg`: the algorithm.
 
 # Returns
 - The group's rate program with the update of `alg` fused into it.
@@ -352,6 +359,10 @@ The stability bound of the rows `keys` alone, for a group of those fields: a fro
 bound defines it (LatticePDE's `StabilityBound` drops the cross terms that read fields
 outside the group, which the group reads from their arrays).
 
+# Arguments
+- `stability`: the stability bound.
+- `keys`: the keys of the group's rows.
+
 # Returns
 - The front end's restricted bound. Any other bound is returned whole (conservative: the
   bound of every row).
@@ -409,6 +420,13 @@ decay and no face anchor, `(:robin, k, _)` a Robin face with a negative diagonal
 term the bound cannot see, `(:coef, k, o)` a coefficient with no finite bound,
 `(:steady_only, _, _)` a loop of steady groups only.
 
+# Arguments
+- `stability`: the stability bound.
+- `groups`: the groups' state keys, in stepping order.
+- `p`: the raw parameters.
+- `steady`: `steady[g]`, whether group `g` is solved by `QuasiSteady`.
+- `loops`: the loops of the read graph ([`group_loops`](@ref)).
+
 # Returns
 - A vector of the named tuples above, one per group, or `nothing` (the default method):
   the bound does not know the gain, and every such loop is refused.
@@ -423,6 +441,10 @@ reads group `h` when a term of `g` that the bound sees reads a field of `h`; a g
 term the bound cannot see that reads another field (`unseen`) reads every other group.
 Groups outside every loop are block triangular to the others: each is stable under its own
 count, and the lag between groups only adds an O(window) source error.
+
+# Arguments
+- `parts`: per group, a named tuple with the fields `reads` and `unseen`, as
+  [`lagged_coupling`](@ref) gives them.
 
 # Returns
 - Per group, the groups of its strongly connected component, itself included, when that
@@ -612,6 +634,16 @@ past it), and a loop whose gain the rule does not bound is refused (`steady_loop
 `rows0` are the steady rows `0 ~ rhs` (written as rates first on a `BackwardEuler` route);
 the refusal names them.
 
+# Arguments
+- `stability`: the stability bound. of the whole field system.
+- `groups`: the groups' state keys, in stepping order.
+- `explicit`: `explicit[g]`, whether group `g` has an explicit count.
+- `pp`: the raw parameters.
+- `dt`: the window.
+
+# Keywords
+- `check`, `key`, `texts`, `span`, `steady`, `rows0`: as above.
+
 # Returns
 - `nothing`. A refusal throws an `ArgumentError`.
 """
@@ -711,6 +743,9 @@ end
 Each term the bound cannot see, with the state fields it reads, structurally. A front end's
 bound defines it (LatticePDE's `StabilityBound`).
 
+# Arguments
+- `stability`: the stability bound.
+
 # Returns
 - One `(row key, "key: term", state keys)` per term: its own field included, and an aux
   field read through its definition.
@@ -730,6 +765,13 @@ every group), or `:none` (the loop is closed by seen reads and its unseen terms 
 it, or only their own field). `terms` the unseen terms that read another field, as the user
 wrote them; `fields` the state fields they read (the fields whose declared intervals let the
 bound see them).
+
+# Arguments
+- `stability`: the stability bound.
+- `pp`: the raw parameters.
+- `keys`: the groups' state keys.
+- `parts`: the result of [`lagged_coupling`](@ref).
+- `loop`: the loop, a vector of group indices.
 
 # Returns
 - `(; kind, terms, fields)`, as above.
@@ -787,6 +829,12 @@ _termtext(t) = replace(string(t), r"\(t(, \w+)*\)" => "", "LatticePDE." => "")
 
 What κ covers when a loop of groups meets the unseen terms `terms`, in words. The coupling
 warning and [`field_report`](@ref) use the same text.
+
+# Arguments
+- `terms`: the unseen terms, as the user wrote them.
+
+# Returns
+- The text.
 """
 function cover_text(terms)
     return string(
@@ -804,6 +852,10 @@ the loop is checked as one only because an unseen term counts as reading every g
 names the loop's fields, the unseen terms (`c.terms`), what κ covers, and the routes (the
 loop's fields in one group; declared intervals for the state fields the terms read,
 `c.fields`). One text for both routes (an `AbstractPolicyTexts` may define its own).
+
+# Arguments
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `c`: the loop's facts: `(; kind, terms, fields)` with the loop's fields `lf` and `κ`.
 
 # Returns
 - The warning text.
@@ -896,6 +948,13 @@ _num(x) = round(x; sigdigits = 6)                  # a value in a message (`dt =
 The refusal of an automatic substep count when the stability bound is unknown, naming why
 and how to give an explicit count, in the words of `texts`. `c` is the decision's context
 ([`substeps`](@ref)).
+
+# Arguments
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `c`: the decision's context, a `NamedTuple` of its facts.
+
+# Returns
+- The message text.
 """
 function unbounded_text(t::ProblemTexts, c)
     why = something(
@@ -918,6 +977,13 @@ end
 
 The warning of an explicit substep count when the full stability bound is unknown: what
 the bound does not cover. `c` is the decision's context ([`substeps`](@ref)).
+
+# Arguments
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `c`: the decision's context, a `NamedTuple` of its facts.
+
+# Returns
+- The message text.
 """
 function uncovered_text(::ProblemTexts, c)
     return string(
@@ -937,6 +1003,13 @@ Run the bound's parameter check ([`check_parameters`](@ref)) and refuse the para
 the words of `texts`: a negative diffusion coefficient, or a coefficient that is not finite
 where the inputs reach. `c` is the decision's context (`stability`, `pp`, `fields` and the
 check's result `r`). Throws an `ArgumentError`.
+
+# Arguments
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `c`: the decision's context, a `NamedTuple` of its facts.
+
+# Returns
+- Nothing: it throws an `ArgumentError` with the refusal.
 """
 function refuse_parameters(::ProblemTexts, c)
     check_parameters(c.stability, c.pp)
@@ -960,6 +1033,16 @@ end
 The message for a bound that does not see the terms that couple the groups. With
 `refuse = true`, the refusal with its routes; else the warning that the counts are the
 user's. `c` is the decision's context ([`check_coupling`](@ref)).
+
+# Arguments
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `c`: the decision's context, a `NamedTuple` of its facts.
+
+# Keywords
+- `refuse::Bool`: the refusal (`true`) or the warning (`false`).
+
+# Returns
+- The message text.
 """
 function coupling_unknown_text(t::ProblemTexts, c; refuse::Bool)
     if refuse
@@ -984,6 +1067,16 @@ end
 The message for a group in a loop whose cross coefficient has no finite bound. With
 `refuse = true`, the refusal of an automatic count with its routes; else the warning of an
 explicit count. `c` is the decision's context ([`check_coupling`](@ref)).
+
+# Arguments
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `c`: the decision's context, a `NamedTuple` of its facts.
+
+# Keywords
+- `refuse::Bool`: the refusal (`true`) or the warning (`false`).
+
+# Returns
+- The message text.
 """
 function coupling_unbounded_text(t::ProblemTexts, c; refuse::Bool)
     ks, q, lf = c.keys[c.g], c.q, c.lf
@@ -1013,6 +1106,12 @@ end
 
 Why the coupling rule has no bound for a loop with a `QuasiSteady` group, in words both
 routes share. `why` is the `why` of [`steady_loop_rates`](@ref).
+
+# Arguments
+- `why`: the `(kind, key, other)` tuple of [`steady_loop_rates`](@ref).
+
+# Returns
+- The text.
 """
 function steady_why_text(why)
     w, k, o = why
@@ -1063,6 +1162,13 @@ end
 The refusal of a loop with a `QuasiSteady` group whose gain the coupling rule does not
 bound, with its routes, in the words of `texts`. `c.why` is from
 [`steady_loop_rates`](@ref).
+
+# Arguments
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `c`: the decision's context, a `NamedTuple` of its facts.
+
+# Returns
+- The message text.
 """
 function steady_loop_text(t::ProblemTexts, c)
     w = c.why[1]
@@ -1101,7 +1207,14 @@ end
 
 The extra route of a `BackwardEuler` refusal when steady fields of the loop (`c.qs`) have
 steady rows `0 ~ rhs` (`c.rows0`): write them as rates `D(c) ~ rhs` first, since a steady
-row takes only `QuasiSteady`. Returns `""` when no such row is in the loop.
+row takes only `QuasiSteady`.
+
+# Arguments
+- `c`: the decision's context, with the steady fields `qs` and, when given, the steady
+  rows `rows0`.
+
+# Returns
+- The route text, or `""` when no steady row is in the loop.
 """
 function rows0_route(c)
     z = [k for k in c.qs if k in (hasproperty(c, :rows0) ? c.rows0 : String[])]
@@ -1123,6 +1236,12 @@ end
 
 The gain of a loop with a `QuasiSteady` group in words: the worst term and the gain it
 reads through ([`steady_loop_rates`](@ref)).
+
+# Arguments
+- `c`: the decision's context, with the worst term `x`.
+
+# Returns
+- The text.
 """
 function steady_gain_words(c)
     x = c.x
@@ -1149,6 +1268,13 @@ end
 
 The refusal of a loop with a `QuasiSteady` group past the coupling limit, with its routes,
 in the words of `texts`. `c` is the decision's context ([`check_coupling`](@ref)).
+
+# Arguments
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `c`: the decision's context, a `NamedTuple` of its facts.
+
+# Returns
+- The message text.
 """
 function steady_gain_text(t::ProblemTexts, c)
     lim = floor(1 / c.x.rate; sigdigits = 4)
@@ -1179,6 +1305,13 @@ end
 
 The refusal of a loop of groups past the coupling limit `κ ≤ 1`, with its routes, in the
 words of `texts`. `c` is the decision's context ([`check_coupling`](@ref)).
+
+# Arguments
+- `texts::AbstractPolicyTexts`: the words of the messages.
+- `c`: the decision's context, a `NamedTuple` of its facts.
+
+# Returns
+- The message text.
 """
 function loop_text(t::ProblemTexts, c)
     q, κ, lf, dt, pp = c.q, c.κ, c.lf, c.dt, c.pp
@@ -1324,6 +1457,9 @@ const STATUS_CAUSES = (
 
 The device status word of an algorithm's cache ([`STATUS_CODE`](@ref)).
 
+# Arguments
+- `cache`: the algorithm's cache ([`alg_cache`](@ref)).
+
 # Returns
 - The word, or `nothing` for an algorithm with no solve (`ExplicitEuler`, `ExplicitMap`).
   Then [`check_status!`](@ref) reads nothing and costs nothing.
@@ -1342,6 +1478,14 @@ more substeps or a larger linear budget; a Newton divergence or a residual that 
 finite takes more substeps only (a smaller step brings the iteration into its contraction;
 neither more iterations nor a larger linear budget does). `coupled`: the group is solved
 together (a `QuasiSteady` group only), so its linear budget is the `LatticeGMRES`'s.
+
+# Arguments
+- `alg`: the algorithm.
+- `which::Symbol`: `:budget`, `:newton_budget` or `:failure`.
+- `cause::Integer = 0`: the cause bits, for `:failure`.
+
+# Keywords
+- `coupled::Bool = false`: the group is solved together.
 
 # Returns
 - The route text.
@@ -1392,17 +1536,27 @@ function status_route(
 end
 
 """
-    StatusTotals
+    StatusTotals(; kwargs...)
 
-The host totals of a runtime's status word: `solves`, `budget` (linear
-budget hits), `floor` (rounding floors), `newton_budget` (Newton budget hits), the first
-failing `window` (0: none), the `cause` bits seen so far (a failure's, and the shift
-clamp's, which is not one), and whether the budget warning was given (once per runtime).
-`windows` counts the windows [`advance!`](@ref) has run since the bind or the last
-[`clear_status!`](@ref) (a window of length 0, the at-init clamp, is not counted), and `t1`
-is the first one's start time: entry [2] of the word is a window of this count, so window
-`w` starts at `t1 + (w - 1) dt`. `where` words a window in a front end's terms
-(`(w, t) -> "the field step of MCS n (t = …)"` in Potts), or `nothing`: "window w (t = …)".
+The host totals of a runtime's status word. Every field is a keyword with a zero default
+(`t1 = NaN`, `where = nothing`).
+
+# Fields
+- `solves`, `budget`, `floor`, `newton_budget`: the solves, the linear budget hits, the
+  rounding floors and the Newton budget hits.
+- `window`: the first failing window (0: none).
+- `cause::UInt32`: the cause bits seen so far (a failure's, and the shift clamp's, which is
+  not one).
+- `warned`, `clamped`: whether the budget warning and the shift clamp's warning were given
+  (once per runtime).
+- `leaked`: a field left its declared bounds ([`check_declared!`](@ref)).
+- `windows`: the windows [`advance!`](@ref) has run since the bind or the last
+  [`clear_status!`](@ref) (a window of length 0, the at-init clamp, is not counted).
+- `t1::Float64`: the first window's start time. Entry [2] of the word is a window of this
+  count, so window `w` starts at `t1 + (w - 1) dt`.
+- `where`: words a window in a front end's terms
+  (`(w, t) -> "the field step of MCS n (t = …)"` in Potts), or `nothing`:
+  "window w (t = …)".
 """
 Base.@kwdef mutable struct StatusTotals
     solves::Int64 = 0
@@ -1587,6 +1741,15 @@ of Float64, or a field of its program declared `lattice_storage = Float64` (the 
 or one it reads). Without the check the kernel compiler would refuse it in its own group's
 own terms. A Float64 state type `V` is the caller's own check.
 
+# Arguments
+- `prog`: the group's program.
+- `alg`: its algorithm.
+- `backend`: the backend.
+- `V::Type`: the state type.
+
+# Keywords
+- `fields = String[]`: the group's fields, named in the refusal.
+
 # Returns
 - `nothing`. A refusal throws an `ArgumentError`.
 """
@@ -1672,6 +1835,12 @@ converge (a budget hit, warned and counted in `field_stats`) or a divergence
 records a growth above `1/(2h)` in the status word and warns. Its warning leads with
 `lower_bound = lo`, since CrankNicolson and BDF2 undershoot by a few percent near a bound. A
 value that is not finite stops every group. Returns `rt.status`.
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+
+# Returns
+- `rt.status`, a `ReturnCode.T`.
 """
 function check_declared!(rt::GroupRuntime)
     (isempty(rt.declared) || rt.totals.leaked) && return rt.status
@@ -1759,6 +1928,13 @@ Bind the runtime's launches to the parameter values `p` (the derived parameters 
 arguments; nothing recompiles), and drop the algorithm's history ([`reset!`](@ref)). In two
 parts for an atomic update of several groups: `rebind_launches(rt, p)` binds (and may
 throw), `install_launches!(rt, launches)` installs.
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+- `p`: the parameter values.
+
+# Returns
+- `rt`.
 """
 rebind!(rt::GroupRuntime, p) = install_launches!(rt, rebind_launches(rt, p))
 
@@ -1768,6 +1944,10 @@ rebind!(rt::GroupRuntime, p) = install_launches!(rt, rebind_launches(rt, p))
 The first part of [`rebind!`](@ref): the runtime's launches bound to the parameter values
 `p`, returned and not installed. It may throw (a parameter refused); the runtime is then
 unchanged. Install the result with [`install_launches!`](@ref).
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+- `p`: the parameter values.
 
 # Returns
 - The `(step launches, mask launches)` pair.
@@ -1789,6 +1969,13 @@ end
 The second part of [`rebind!`](@ref): installs `launches` from [`rebind_launches`](@ref)
 and drops the algorithm's history. It does not throw, so several groups can be updated
 together after all of their `rebind_launches` calls succeeded.
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+- `launches`: the result of [`rebind_launches`](@ref).
+
+# Returns
+- `rt`.
 """
 function install_launches!(rt::GroupRuntime, (steps, masks))
     rt.steps, rt.masks = steps, masks
@@ -1803,6 +1990,12 @@ Drop the algorithm's history ([`reset_cache!`](@ref) of its cache): called after
 write (`integ[c] = values`, an input or table write, `reinit!`) and after a rebind. A stored
 status (`rt.status`, the word) is kept: a failure ends the run; `reinit!` clears it
 ([`clear_status!`](@ref)).
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+
+# Returns
+- `nothing`.
 """
 reset!(rt::GroupRuntime) = (reset_cache!(rt.cache); nothing)
 
@@ -1813,6 +2006,12 @@ Start a new run of runtime `rt` (`reinit!`): its status word is zeroed, its tota
 (counters, the failing window and causes, the warning flag, the window count) and
 `rt.status` cleared. A [`reset!`](@ref) (a write, a rebind) keeps them: a failure ends its
 run.
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+
+# Returns
+- `nothing`.
 """
 function clear_status!(rt::GroupRuntime)
     w = status_word(rt.cache)
@@ -1831,6 +2030,12 @@ _parity(rt::GroupRuntime) = isempty(rt.swaps) ? 1 : rt.store.cur[rt.swaps[1]]
 
 Write the masked values of runtime `rt`'s masked fields now, at the parameters its launches
 are bound to. Returns `nothing`.
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+
+# Returns
+- `nothing`.
 """
 clamp_now!(rt::GroupRuntime) = (_clamp!(rt.clamps, rt.store, rt.p); nothing)
 
@@ -1955,13 +2160,31 @@ function _check_span(stability, pp, dt::Float64, span, texts, ctx)
 end
 
 """
-    bound_params!(stability, pp), bound_params(stability)
+    bound_params!(stability, pp)
 
-The parameters (with their tables and inputs) a bound that [`reads_time`](@ref) was last
-counted at, for the count of each window; a front end's bound keeps them (nothing by
-default).
+Keep the parameters `pp` (with their tables and inputs) that a bound that
+[`reads_time`](@ref) was counted at, for the count of each window. A front end's bound
+keeps them; the default method keeps nothing.
+
+# Arguments
+- `stability`: the stability bound.
+- `pp`: the raw parameters.
+
+# Returns
+- `nothing`.
 """
 bound_params!(stability, pp) = nothing
+"""
+    bound_params(stability)
+
+The parameters that [`bound_params!`](@ref) last kept for `stability`.
+
+# Arguments
+- `stability`: the stability bound.
+
+# Returns
+- The parameters, or `nothing` (the default method keeps none).
+"""
 bound_params(stability) = nothing
 # the time span a bound is taken over now, `(t0, t1)`, or nothing (a front end's bound
 # defines it)
@@ -1970,6 +2193,12 @@ bound_params(stability) = nothing
 
 The time span `(t0, t1)` a bound that [`reads_time`](@ref) is taken over now, set by
 [`bound_window!`](@ref). A front end's bound defines it; `nothing` by default.
+
+# Arguments
+- `stability`: the stability bound.
+
+# Returns
+- The span `(t0, t1)`, or `nothing` (the default method).
 """
 bound_window(stability) = nothing
 
@@ -1979,6 +2208,12 @@ bound_window(stability) = nothing
 Whether a stability bound depends on the time (a Robin coefficient of the time): an
 explicit group then takes its count again at each window, over the window's span
 ([`bound_window!`](@ref)). A front end's bound defines it; `false` by default.
+
+# Arguments
+- `stability`: the stability bound.
+
+# Returns
+- `true` when the bound depends on the time; `false` for the default method.
 """
 reads_time(stability) = false
 """
@@ -1986,6 +2221,13 @@ reads_time(stability) = false
 
 Set the time span a bound that [`reads_time`](@ref) is taken over (a front end's bound
 defines it; nothing by default).
+
+# Arguments
+- `stability`: the stability bound.
+- `t0`, `t1`: the span's start and end times.
+
+# Returns
+- `nothing`.
 """
 bound_window!(stability, t0, t1) = nothing
 
@@ -2001,6 +2243,10 @@ to `acc`, a front end's counters with the same fields, when given) and are zeroe
 device; a linear or Newton budget hit warns once per runtime, naming the fields, the count
 and the route, and stays `Success`. An algorithm with no word reads nothing (no launch, no
 copy).
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+- `acc = nothing`: a front end's counters, with the fields of `rt.totals`.
 
 # Returns
 - The worst `ReturnCode.T` so far.
@@ -2151,6 +2397,10 @@ Window `w` of runtime `rt` (the status word's entry [2]: the `w`-th window since
 the last [`clear_status!`](@ref)) in words: `rt.totals.where(w, t1)` when the front end set
 it (`t1` the start time of the first window), else "window w (t = …)", `t` the window's
 start time.
+
+# Arguments
+- `rt::GroupRuntime`: the bound group.
+- `w::Integer`: the window's number.
 
 # Returns
 - The window's text.

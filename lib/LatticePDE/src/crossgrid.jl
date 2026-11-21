@@ -17,6 +17,12 @@ Whether the field key `k` is an aux field that the cross-grid pass added (`lapla
 `DivKGrad(c)`: a call, which no field of a model is). Callers that manage their fields
 separately keep such a field as scratch of the binding, not as state.
 
+# Arguments
+- `k::AbstractString`: a field key.
+
+# Returns
+- `true` when `k` holds a call (`(`).
+
 # Examples
 ```jldoctest
 julia> using LatticePDE

@@ -12,6 +12,10 @@
 The operator of a group, not built yet: the lowered system that `build_operator` extracts
 the `OperatorSpec` from at the group's first implicit use (once: the result is kept).
 [`OPERATOR_BUILDS`](@ref LatticePDE.OPERATOR_BUILDS) counts the builds of this session.
+
+# Fields
+- `cf`, `sys`, `disc`: the lowered field system, its `PDESystem` and its discretization.
+- `built`: the built `OperatorSpec`, or `nothing` before the first build.
 """
 mutable struct DeferredOperator
     cf::Any

@@ -265,6 +265,12 @@ array literal), `Advect(Upwind1())` (not `LatticePDE.Advect{LatticePDE.Upwind1}(
 `laplacian(K)` (not `LatticePDE.laplacian(K)`). For a front end that prints lowered terms in
 its messages (Potts); LatticePDE's own messages print through it too.
 
+# Arguments
+- `text::AbstractString`: the lowered term's text.
+
+# Returns
+- The text as the user wrote it.
+
 # Examples
 ```jldoctest
 julia> using LatticePDE

@@ -44,6 +44,12 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 
 Compile the function expression `ex` into a `RuntimeGeneratedFunction` of this module,
 with its expression dropped (`drop_expr`), so it does not hold the expression.
+
+# Arguments
+- `ex::Expr`: a function expression.
+
+# Returns
+- The compiled function.
 """
 rgf(ex::Expr) = drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
 

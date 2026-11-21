@@ -91,6 +91,9 @@ end
 
 Build the stability bound of a group lowered with `lower_group(…; bound = false)`.
 
+# Arguments
+- `spec::GroupSpec`: the group's description.
+
 # Returns
 - `spec` with its stability bound built and the terms the bound cannot see in
   `texts.terms`, when its bound is a [`DeferredBound`](@ref). Else `spec` itself.

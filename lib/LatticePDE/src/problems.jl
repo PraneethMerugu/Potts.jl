@@ -10,6 +10,11 @@
 The explicit Euler update `c + dt · r` of the owned stepper, built in the kernel builder
 `kb`. `dt` is the launch's step length, the runtime slot `G.rt[2]`.
 
+# Arguments
+- `kb`: the kernel builder.
+- `c`: the field's value.
+- `r`: its rate.
+
 # Returns
 - The IR expression of `c + dt · r`.
 """
@@ -1193,6 +1198,10 @@ combinations `[(table, index, value), …]` with a value that is not finite, ind
 advection, the reaction terms of the row's own field, the terms that read other fields; they
 sum to `ρ`), or `nothing` with no row. `b(p) == ρ` when `b.unbounded` and `coupled` are
 empty.
+
+# Arguments
+- `b::StabilityBound`: the bound.
+- `p`: the raw parameters.
 
 # Returns
 - The named tuple `(; ρ, seen, coupled, negative, nonfinite, worst)`.

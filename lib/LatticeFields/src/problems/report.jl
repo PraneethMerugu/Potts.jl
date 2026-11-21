@@ -746,6 +746,9 @@ bound at its raw parameters. It prints nothing for one group.
 - `algs`: the groups' algorithms.
 - `pp`: the raw parameters.
 - `dt::Real`: the window.
+
+# Returns
+- `nothing`. The lines go to `io`.
 """
 function coupling_report(
         io::IO, stability, keys::Vector{Vector{String}}, algs, pp, dt::Real

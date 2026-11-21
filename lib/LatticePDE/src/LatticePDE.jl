@@ -238,6 +238,11 @@ ModelingToolkitBase `complete` (MTKBase 1.77): it requires the inputs in its own
 parameter order, which is hash order and so depends on the names and the machine. Give the
 inputs in the reverse order (`inputs = [b, a]`).
 
+# Arguments
+- `T`: a kind table (a vector), or a field for the site form.
+- `k`: the index, symbolic or a number.
+- `J`, `a`, `b`: a pair table (a matrix) and its two indices.
+
 # Returns
 - A symbolic read for symbolic arguments; the entry itself for numeric ones.
 
@@ -307,6 +312,10 @@ The `∈` forms do not work in a symbolic expression: `kind ∈ Set(…)` evalua
 `false` before any term exists (a product with it vanishes), `kind ∈ (a, b)` builds an
 interval domain pairing and `kind ∈ [a, b]` builds an `in` term that LatticePDE refuses.
 
+# Arguments
+- `k`: a kind, symbolic or a number.
+- `s::Tuple`: the integer codes.
+
 # Returns
 - A symbolic `Bool` term for a symbolic `k`; a `Bool` for a number.
 
@@ -333,6 +342,9 @@ not a symbolic term throws an `ArgumentError`.
 # Arguments
 - `pred`: a symbolic `Bool` term, such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`.
 - `v`: the held value.
+
+# Returns
+- The symbolic marker term, for the right side of a boundary condition.
 
 See also [`ismember`](@ref).
 """
@@ -362,6 +374,13 @@ so `k` does not depend on `dt` or on the save times. A gate such as
 `ExplicitEuler(; substeps = n)`). Refused without a declared clock. An OrdinaryDiffEq solver
 lands on every boundary of the clock (a `tstop` at each, where the step index changes).
 
+# Arguments
+- `t`: the time variable.
+
+# Returns
+- The symbolic step index. A numeric call throws an `ArgumentError`.
+
+# Examples
 ```julia
 @parameters x y
 @variables c(..)
@@ -559,6 +578,9 @@ _meta(x, key) = Symbolics.getmetadata(Symbolics.unwrap(x), key, nothing)
 
 The `lattice_placement` metadata of the symbolic variable `x`.
 
+# Arguments
+- `x`: a symbolic variable.
+
 # Returns
 - The placement, or `nothing` when `x` has none.
 """
@@ -567,6 +589,9 @@ get_lattice_placement(x) = _meta(x, LatticePlacement)
     get_lattice_storage(x)
 
 The `lattice_storage` metadata of the symbolic variable `x`.
+
+# Arguments
+- `x`: a symbolic variable.
 
 # Returns
 - The storage, or `nothing` when `x` has none.
@@ -577,6 +602,9 @@ get_lattice_storage(x) = _meta(x, LatticeStorage)
 
 The `lattice_level` metadata of the symbolic variable `x`.
 
+# Arguments
+- `x`: a symbolic variable.
+
 # Returns
 - The level, a [`Coarse`](@ref), or `nothing` when `x` has none.
 """
@@ -586,6 +614,9 @@ get_lattice_level(x) = _meta(x, LatticeLevel)
 
 The `lattice_spacing` metadata of the parameter `x`.
 
+# Arguments
+- `x`: a symbolic parameter.
+
 # Returns
 - The axis of the spacing parameter `x`, or `nothing` when `x` is not one.
 """
@@ -594,6 +625,9 @@ get_lattice_spacing(x) = _meta(x, LatticeSpacing)
     get_lattice_input_name(x)
 
 The `lattice_input_name` metadata of the input `x`, or of its operation.
+
+# Arguments
+- `x`: a symbolic input, or its applied form.
 
 # Returns
 - The name as a `String`, or `nothing` when neither has one.
