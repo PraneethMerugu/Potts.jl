@@ -81,7 +81,7 @@ end
 
 Composable semantic boundary overlay for a two-dimensional frame.
 
-Every attribute is live: setting one after the plot is made (`plt.medium_color = :red`)
+Every attribute is live: setting one after the plot is made (`plt.color = :red`)
 redraws it. The frame and attributes given at creation are checked at once and throw their
 own error; an invalid value set later throws when the plot next resolves, wrapped in
 Makie's `ResolveException`.

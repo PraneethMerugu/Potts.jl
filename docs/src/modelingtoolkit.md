@@ -212,7 +212,8 @@ A discretization of the second kind is refused, with an `ArgumentError`, in thes
 
 A `LatticeDiscretization` of the first kind is checked too: its grid must be the lattice's,
 its methods `FiniteVolume`, `backend` and `domain` left out, and `T` and `clock` left out
-or equal to what the problem sets. The keywords of the window's solve (`reltol`, …) are not exposed yet.
+or equal to what the problem sets. The keywords of the window's solve (`reltol`, …) are
+not exposed yet.
 
 ## The Hamiltonian as Symbolics expressions [C3]
 
