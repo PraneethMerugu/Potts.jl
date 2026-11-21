@@ -642,7 +642,9 @@ Order 1 has 8 offsets in 2D and 26 in 3D. On a hexagonal lattice it resolves to 
 ```jldoctest
 julia> using CorePotts
 
-julia> length(relation(Moore(), Lattice((10, 10)))), length(relation(Moore(2), Lattice((10, 10))))
+julia> l = Lattice((10, 10));
+
+julia> length(relation(Moore(), l)), length(relation(Moore(2), l))
 (8, 24)
 ```
 

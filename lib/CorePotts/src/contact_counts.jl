@@ -14,13 +14,37 @@
 # (a `ContactCounts`, passed among a problem's `relations`). Models without one pay nothing.
 
 """
-    ContactCount(column, relation, mask)
+    ContactCount(column, relation, mask; kinds = 64)
 
-One contact-count tracker: the cell column `column` (an `Int32` vector of the cell state),
-its relation (a symmetric relation without the origin, e.g. `Moore(1)`) and the kind set
-`mask` (bit `k` set: a partner of kind `k` counts; the medium is kind 0). Pairs are counted
-once each, whatever the relation's weights. The mask holds kinds 0–63: pass the number of
-kinds of the model, medium included, as `kinds` (at most 64) to have that checked here.
+One contact-count tracker: for each cell, the number of its neighbor pairs, over
+`relation`, with a site of another cell whose kind is in `mask`.
+
+For cell `c` the count is the number of pairs `(s, s′)` with `σ(s) = c`, `s′` a neighbor
+of `s` inside the lattice, `σ(s′) ≠ c` and the kind of `σ(s′)` in `mask`. The medium has
+kind 0. Each pair counts once, whatever the relation's weights. With every kind in `mask`
+it is the unweighted surface over `relation`. Pass the trackers to a problem in a
+[`ContactCounts`](@ref).
+
+# Arguments
+- `column::Symbol`: the cell column that holds the counts, an `Int32` vector in
+  `st.cell`.
+- `relation`: a symmetric relation without the zero offset, for example `Moore(1)`.
+- `mask::Integer`: the kind set: bit `k` set means a partner of kind `k` counts. It holds
+  kinds 0 to 63.
+
+# Keywords
+- `kinds::Integer = 64`: the number of kinds of the model, medium included, at most 64.
+  A mask with a bit at or above `kinds` throws an `ArgumentError`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> ContactCount(:n_medium, Moore(1), 0b1; kinds = 3).mask
+0x0000000000000001
+```
+
+See also [`ContactCounts`](@ref), [`commit_contact_count!`](@ref).
 """
 struct ContactCount{P <: Part, R}
     column::P
@@ -46,11 +70,22 @@ end
 """
     ContactCounts(counts::Tuple)
 
-The contact-count trackers of a model, as one entry of a problem's `relations`
-(`relations = (; contact_counts =
-ContactCounts((ContactCount(:n_medium, Moore(1), 0b1),)))`):
-it is resolved on the lattice like a relation and exposed as `ctx.contact_counts`, from
-which the lifecycle (host and device) recomputes the counts after events.
+The contact-count trackers of a model, passed as one entry of a problem's `relations`.
+
+It is resolved on the lattice like a relation and is exposed to the model's functions as
+`ctx.contact_counts`. The lifecycle, on the host and on a device, recomputes the counts
+from it after divisions, removals and transitions. A model without one pays nothing.
+
+# Arguments
+- `counts::Tuple`: the [`ContactCount`](@ref) trackers.
+
+# Examples
+```julia
+relations = (; contact_counts = ContactCounts((ContactCount(:n_medium, Moore(1), 0b1),)))
+prob = PottsProblem(f, st, lattice, p, (0, 100); relations)
+```
+
+See also [`ContactCount`](@ref), [`PottsProblem`](@ref).
 """
 struct ContactCounts{C <: Tuple}
     counts::C
@@ -75,12 +110,28 @@ end   # kind ≥ 64: never
 @inline _owner_kind(kind, q) = q == 0 ? Int32(0) : Int32(@inbounds kind[q])
 
 """
-    commit_contact_count!(count, σ, kind, relation, mask, lattice, prop)
+    commit_contact_count!(count, σ, kind, relation, mask, lattice, prop) -> nothing
 
-Apply accepted copy `prop` to the contact count `count` (one `Int32` per cell): the target
-leaves `old` and joins `new`, and every other cell next to the target swaps its partner
-`old` for `new`. Valid before or after the ownership write (the relation excludes the
-origin). Atomic, so concurrent checkerboard copies may share third cells.
+Apply an accepted copy to a contact count.
+
+The target leaves the losing cell and joins the gaining cell, and every other cell next to
+the target swaps its partner from the losing to the gaining cell. It may run before or
+after the `ownership` write, because the relation excludes the zero offset. The adds are
+atomic, so concurrent checkerboard copies may share a third cell.
+
+# Arguments
+- `count::AbstractVector{Int32}`: the tracker, one entry per cell.
+- `σ`: the `ownership` array.
+- `kind`: the kind of every cell (`st.cell.kind`).
+- `relation`: the resolved relation.
+- `mask::UInt64`: the kind set.
+- `lattice::Lattice`: the lattice.
+- `prop::Proposal`: the accepted copy.
+
+# Returns
+- `nothing`.
+
+See also [`recompute_contact_count`](@ref), [`ContactCount`](@ref).
 """
 @inline function commit_contact_count!(count, σ, kind, rel, mask::UInt64, lat, prop)
     o, n = prop.old, prop.new
@@ -125,7 +176,34 @@ end
 """
     recompute_contact_count(σ, kind, lattice, relation, mask, ncell; T = Int32) -> Vector{T}
 
-A contact count from scratch (initialization, lifecycle rebuilds and checks).
+Compute a contact count from scratch: for initialization, lifecycle rebuilds and checks.
+
+# Arguments
+- `σ`: the `ownership` array, on the host.
+- `kind`: the kind of every cell.
+- `lattice::Lattice`: the lattice.
+- `relation`: a relation specification or a resolved relation.
+- `mask::Integer`: the kind set (bit `k`: kind `k` counts; the medium is kind 0).
+- `ncell::Integer`: the number of cell slots.
+
+# Keywords
+- `T::Type = Int32`: the element type.
+
+# Returns
+- `Vector{T}`: one count per cell slot.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((4, 4)); σ = zeros(Int32, 4, 4); σ[2:3, 2:3] .= 1;
+
+julia> recompute_contact_count(σ, Int32[1], l, Moore(1), 0b1, 1)
+1-element Vector{Int32}:
+ 20
+```
+
+See also [`commit_contact_count!`](@ref), [`ContactCount`](@ref).
 """
 function recompute_contact_count(
         σ, kind, lat::Lattice, r, mask::Integer, ncell::Integer; T::Type = Int32

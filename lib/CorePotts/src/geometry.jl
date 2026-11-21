@@ -13,7 +13,31 @@ const RECENTER = 2
 npairs(N) = N * (N + 1) ÷ 2
 @inline _pair(N, d, e) = (d - 1) * N - (d - 1) * (d - 2) ÷ 2 + (e - d + 1)   # d ≤ e
 
-"""Minimum-image offset of `x` from `a` (ties at half a periodic box resolve to +)."""
+"""
+    min_image(lattice, x, a) -> NTuple{N, Int}
+
+Return the minimum-image offset of site `x` from site `a`.
+
+On a periodic axis of length `n` the offset is wrapped into `(-n/2, n/2]`, so a tie at
+half the axis resolves to the positive side. On a closed axis it is `x - a`.
+
+# Arguments
+- `lattice::Lattice{N}`: the lattice.
+- `x::NTuple{N, Int}`, `a::NTuple{N, Int}`: lattice coordinates.
+
+# Returns
+- `NTuple{N, Int}`: the offset.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((10,));
+
+julia> min_image(l, (9,), (1,)), min_image(l, (6,), (1,))
+((-2,), (5,))
+```
+"""
 @inline function min_image(l::Lattice{N}, x::NTuple{N, Int}, a::NTuple{N, Int}) where {N}
     return ntuple(Val(N)) do d
         δ = x[d] - a[d]
@@ -33,9 +57,37 @@ end
 """
     init_moments(σ, lattice, ncell) -> (; anchor, m1, m2)
 
-Moment trackers from scratch. Each cell is anchored at the rounded per-axis center of its
-sites (the circular mean on periodic axes), so the minimum-image offsets are valid while
-the cell spans less than the whole axis about its center.
+Compute the moment trackers of every cell from scratch.
+
+Each cell keeps an integer anchor site and integer sums over its sites of the
+minimum-image offset `δ = x − anchor`: `m1[d, c] = Σ δ_d` and `m2[p, c] = Σ δ_d δ_e`, with
+`p` running over the pairs `d ≤ e`. Integer sums do not drift. Each anchor starts at the
+rounded per-axis center of the cell's sites (the circular mean on a periodic axis). The
+trackers stay valid while every cell spans less than half of each periodic axis.
+
+# Arguments
+- `σ`: the `ownership` array, on the host.
+- `lattice::Lattice{N}`: the lattice.
+- `ncell::Integer`: the number of cell slots.
+
+# Returns
+- A `NamedTuple` `(; anchor, m1, m2)`: `anchor::Matrix{Int32}` (`N × ncell`),
+  `m1::Matrix{Int64}` (`N × ncell`) and `m2::Matrix{Int64}` (`N(N+1)/2 × ncell`). Merge it
+  with the volumes into `st.cell`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((10, 10); boundary = Closed()); σ = zeros(Int32, 10, 10);
+
+julia> σ[3:6, 4:5] .= 1; cell = merge((; volume = Int32[8]), init_moments(σ, l, 1));
+
+julia> centroid(cell, l, 1)
+(4.5, 4.5)
+```
+
+See also [`commit_moments!`](@ref), [`centroid`](@ref), [`covariance`](@ref).
 """
 function init_moments(σ, l::Lattice{N}, ncell::Integer) where {N}
     S = zeros(N, ncell)
@@ -110,14 +162,30 @@ end
 end
 
 """
-    commit_moments!(cell, ctx, prop)
-    commit_moments!(cell, lattice, prop)
+    commit_moments!(cell, ctx, prop) -> nothing
+    commit_moments!(cell, lattice, prop) -> nothing
 
-Move the target site from `prop.old` to `prop.new` in the moment trackers. Call after
-`commit_volume!` (re-centering uses the updated volumes). In a `commit!`, pass the context
-`ctx`: on `CheckerboardCPM` the sums then move by atomic adds and re-center once per MCS,
-since another copy of the cell may be in flight; the `lattice` form re-centers at every
-copy.
+Move the target site of an accepted copy from the losing to the gaining cell in the moment
+trackers.
+
+Call it after [`commit_volume!`](@ref), because re-centering reads the updated volumes. A
+cell's anchor moves to the nearest site of its mean when the mean offset reaches 2 sites,
+and the sums shift exactly. A cell that gains its first site is anchored there.
+
+In a `commit!`, pass the context `ctx`. On the lockless checkerboard the sums then move by
+atomic adds and the anchors re-center once per MCS, since another copy of the cell may be
+in flight. The `lattice` form re-centers at every copy.
+
+# Arguments
+- `cell`: the cell columns, with `volume`, `anchor`, `m1` and `m2` (`st.cell`).
+- `ctx::NamedTuple`: the copy-step context.
+- `lattice::Lattice{N}`: the lattice.
+- `prop::Proposal{N}`: the accepted copy.
+
+# Returns
+- `nothing`.
+
+See also [`init_moments`](@ref).
 """
 @inline function commit_moments!(cell, l::Lattice{N}, prop::Proposal{N}) where {N}
     if prop.old != 0
@@ -188,8 +256,38 @@ end
 # Queries (host or device). `T` is the float type of the result.
 
 # bounds: c is a cell id ≤ capacity (callers pass ids from σ or a proposal)
-"""Centroid of cell `c` in lattice coordinates, wrapped into `[1, n + 1)` on periodic \
-axes."""
+"""
+    centroid(T, cell, lattice, c) -> NTuple{N, T}
+    centroid(cell, lattice, c) -> NTuple{N, Float64}
+
+Return the centroid of cell `c` in lattice coordinates.
+
+On a periodic axis of length `n` the centroid is wrapped into `[1, n + 1)`. The cell must
+not be empty.
+
+# Arguments
+- `T`: the float type of the result (`Float64` when left out).
+- `cell`: the cell columns, with `volume`, `anchor` and `m1`.
+- `lattice::Lattice`: the lattice.
+- `c`: the cell number, in `1:capacity`.
+
+# Returns
+- `NTuple{N, T}`: the centroid.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((10, 10)); σ = zeros(Int32, 10, 10); σ[[1, 10], 1] .= 1;
+
+julia> cell = merge((; volume = Int32[2]), init_moments(σ, l, 1));
+
+julia> centroid(Float32, cell, l, 1)
+(10.5f0, 1.0f0)
+```
+
+See also [`centroid_position`](@ref), [`init_moments`](@ref).
+"""
 @inline function centroid(::Type{T}, cell, l::Lattice, c) where {T}
     return _centroid(
         T, cell, l, c, @inbounds cell.volume[c]
@@ -207,8 +305,23 @@ end
 centroid(cell, l::Lattice, c) = centroid(Float64, cell, l, c)
 
 """
-Centroid of cell `c` as a Cartesian position (`embed` of `centroid`; equal on square
-lattices).
+    centroid_position(T, cell, lattice, c) -> NTuple{N, T}
+
+Return the centroid of cell `c` as a Cartesian position: [`embed`](@ref) of
+[`centroid`](@ref).
+
+On a square lattice it equals the centroid.
+
+# Arguments
+- `T`: the float type of the result.
+- `cell`: the cell columns, with `volume`, `anchor` and `m1`.
+- `lattice::Lattice`: the lattice.
+- `c`: the cell number.
+
+# Returns
+- `NTuple{N, T}`: the position.
+
+See also [`centroid`](@ref), [`embed`](@ref).
 """
 @inline function centroid_position(::Type{T}, cell, l::Lattice, c) where {T}
     return embed(
@@ -220,8 +333,25 @@ end
 """
     centroid_shift(T, cell, lattice, c, x, s) -> NTuple{N, T}
 
-Centroid displacement of cell `c` if site `x` is added (`s = +1`) or removed (`s = -1`):
-`δcentroid` for drives.
+Return the displacement of the centroid of cell `c` if site `x` is added (`s = +1`) or
+removed (`s = -1`), without changing the trackers.
+
+Drives use it as the centroid change of a copy. A copy that would leave the cell empty
+returns zeros. For a cell with no sites that gains `x`, it returns the minimum-image offset
+of `x` from the cell's stored anchor.
+
+# Arguments
+- `T`: the float type of the result.
+- `cell`: the cell columns, with `volume`, `anchor` and `m1`.
+- `lattice::Lattice{N}`: the lattice.
+- `c`: the cell number.
+- `x::NTuple{N, Int}`: the site's coordinates.
+- `s::Int`: `+1` to add the site, `-1` to remove it.
+
+# Returns
+- `NTuple{N, T}`: the displacement, in lattice coordinates.
+
+See also [`centroid`](@ref), [`chemotaxis_delta`](@ref).
 """
 @inline function centroid_shift(
         ::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
@@ -237,7 +367,38 @@ Centroid displacement of cell `c` if site `x` is added (`s = +1`) or removed (`s
     end
 end
 
-"""Covariance of cell `c`'s site coordinates, as the `npairs(N)` upper-triangle entries."""
+"""
+    covariance(T, cell, c, Val(N)) -> NTuple{N(N+1)/2, T}
+
+Return the covariance of the site coordinates of cell `c`, as its upper triangle.
+
+The entries are in row order over the pairs `d ≤ e`: `(xx, xy, yy)` in 2D, and
+`(xx, xy, xz, yy, yz, zz)` in 3D. The coordinates are lattice coordinates; use
+[`embed_covariance`](@ref) for Cartesian ones on a hexagonal lattice.
+
+# Arguments
+- `T`: the float type of the result.
+- `cell`: the cell columns, with `volume`, `m1` and `m2`.
+- `c`: the cell number; the cell must not be empty.
+- `Val(N)`: the lattice dimension.
+
+# Returns
+- The upper triangle, a tuple of `T`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((10, 10); boundary = Closed()); σ = zeros(Int32, 10, 10);
+
+julia> σ[3:6, 4:5] .= 1; cell = merge((; volume = Int32[8]), init_moments(σ, l, 1));
+
+julia> covariance(Float64, cell, 1, Val(2))
+(1.25, 0.0, 0.25)
+```
+
+See also [`principal_moments`](@ref), [`cell_shape`](@ref).
+"""
 @inline function covariance(::Type{T}, cell, c, ::Val{N}) where {T, N}
     # bounds: c is a cell id ≤ capacity; p ≤ npairs(N) rows of m2
     V = T(@inbounds cell.volume[c])
@@ -256,7 +417,28 @@ end
     return d, d + p - 1
 end
 
-"""Eigenvalues of a symmetric 2×2 or 3×3 matrix given by its upper triangle, descending."""
+"""
+    principal_moments(C) -> NTuple
+
+Return the eigenvalues of a symmetric 2 × 2 or 3 × 3 matrix, in descending order.
+
+# Arguments
+- `C`: the upper triangle, `(a, b, d)` for `[a b; b d]` or `(a, b, c, d, e, f)` for
+  `[a b c; b d e; c e f]`, as [`covariance`](@ref) returns it.
+
+# Returns
+- The eigenvalues, a 2-tuple or a 3-tuple.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> principal_moments((2.0, 0.0, 1.0))
+(2.0, 1.0)
+```
+
+See also [`covariance`](@ref), [`cell_shape`](@ref).
+"""
 @inline function principal_moments(C::NTuple{3, T}) where {T}
     a, b, d = C                                   # [a b; b d]
     m = (a + d) / 2
@@ -287,15 +469,45 @@ end
 end
 
 """
-    cell_shape(T, cell, lattice, c)
+    cell_shape(T, cell, lattice, c) -> NamedTuple
+    cell_shape(cell, lattice, c) -> NamedTuple
 
-CompuCell3D shape descriptors of cell `c` from the covariance eigenvalues `λ₁ ≥ λ₂ (≥ λ₃)`:
+Return CompuCell3D's shape descriptors of cell `c`, from the eigenvalues `λ₁ ≥ λ₂ (≥ λ₃)`
+of its covariance.
 
-- 2D: `major_length = 4√λ₁`, `minor_length = 4√λ₂` (full axes of the equivalent uniform
-  ellipse), `eccentricity = √(1 − λ₂/λ₁)`, `orientation` = angle of the major axis to x.
-- 3D: `semiaxes = √(5λᵢ)` (uniform ellipsoid), `major_length = 2√(5λ₁)`,
-  `minor_length = 2√(5λ₃)`, `eccentricity = √(1 − λ₃/λ₁)`.
-- `elongation = major_length / minor_length`.
+- 2D: `major_length = 4√λ₁` and `minor_length = 4√λ₂`, the full axes of the uniform
+  ellipse with that covariance. `eccentricity = √(1 − λ₂/λ₁)`, and `orientation` is the
+  angle of the major axis to the x axis, in radians. The covariance is in Cartesian
+  coordinates ([`embed_covariance`](@ref)).
+- 3D: `semiaxes = √(5λᵢ)` (the uniform ellipsoid), `major_length = 2√(5λ₁)`,
+  `minor_length = 2√(5λ₃)` and `eccentricity = √(1 − λ₃/λ₁)`.
+- Both: `elongation = major_length / minor_length`.
+
+Negative eigenvalues from rounding are clamped to 0. `eccentricity` is 0 when `λ₁ = 0`.
+
+# Arguments
+- `T`: the float type of the result (`Float64` when left out).
+- `cell`: the cell columns, with `volume`, `m1` and `m2`.
+- `lattice::Lattice`: a 2D or 3D lattice.
+- `c`: the cell number; the cell must not be empty.
+
+# Returns
+- 2D: `(; major_length, minor_length, elongation, eccentricity, orientation)`.
+- 3D: `(; major_length, minor_length, semiaxes, elongation, eccentricity)`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((10, 10); boundary = Closed()); σ = zeros(Int32, 10, 10);
+
+julia> σ[3:6, 4:5] .= 1; cell = merge((; volume = Int32[8]), init_moments(σ, l, 1));
+
+julia> s = cell_shape(cell, l, 1); s.minor_length, s.orientation
+(2.0, 0.0)
+```
+
+See also [`major_length`](@ref), [`covariance`](@ref).
 """
 @inline function cell_shape(::Type{T}, cell, l::Lattice{2}, c) where {T}
     C = embed_covariance(l, covariance(T, cell, c, Val(2)))
@@ -332,10 +544,24 @@ end
 end
 
 """
-    major_length(T, cell, lattice, c)
+    major_length(T, cell, lattice, c) -> T
 
-`cell_shape(T, cell, lattice, c).major_length` alone: `4√λ₁` of the covariance in 2D (Merks
-et al. 2006, Eq. 5: `4√(λ_max(I)/a)`), `2√(5λ₁)` in 3D. Zero for an empty cell.
+Return the major length of cell `c`: `cell_shape(T, cell, lattice, c).major_length`
+alone.
+
+It is `4√λ₁` of the covariance in 2D and `2√(5λ₁)` in 3D, with `λ₁` its largest
+eigenvalue. An empty cell returns zero.
+
+# Arguments
+- `T`: the float type of the result.
+- `cell`: the cell columns, with `volume`, `m1` and `m2`.
+- `lattice::Lattice`: a 2D or 3D lattice.
+- `c`: the cell number.
+
+# Returns
+- `T`: the major length, in lattice units.
+
+See also [`major_length_after`](@ref), [`cell_shape`](@ref).
 """
 @inline function major_length(::Type{T}, cell, l::Lattice{N}, c) where {T, N}
     # bounds: c is a cell id ≤ capacity
@@ -344,10 +570,26 @@ et al. 2006, Eq. 5: `4√(λ_max(I)/a)`), `2√(5λ₁)` in 3D. Zero for an empt
 end
 
 """
-    major_length_after(T, cell, lattice, c, x, s)
+    major_length_after(T, cell, lattice, c, x, s) -> T
 
-[`major_length`](@ref) of cell `c` if site `x` is added (`s = +1`) or removed (`s = -1`),
-from the moment sums without committing: the ΔH of a length constraint.
+Return the [`major_length`](@ref) of cell `c` if site `x` is added (`s = +1`) or removed
+(`s = -1`), without changing the trackers.
+
+A length constraint computes its energy change from it. A copy that would leave the cell
+empty returns zero.
+
+# Arguments
+- `T`: the float type of the result.
+- `cell`: the cell columns, with `volume`, `anchor`, `m1` and `m2`.
+- `lattice::Lattice{N}`: a 2D or 3D lattice.
+- `c`: the cell number.
+- `x::NTuple{N, Int}`: the site's coordinates.
+- `s::Int`: `+1` to add the site, `-1` to remove it.
+
+# Returns
+- `T`: the major length after the change.
+
+See also [`major_length`](@ref).
 """
 @inline function major_length_after(
         ::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},

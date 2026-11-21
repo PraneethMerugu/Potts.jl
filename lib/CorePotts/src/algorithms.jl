@@ -5,10 +5,26 @@ abstract type AbstractAcceptanceLaw end
 """
     Metropolis(; offset = 0)
 
-Accept if `ΔH ≤ offset`, otherwise with probability `exp(-(ΔH - offset)/T)`. At `T ≤ 0`
-ties (`ΔH == offset`) are accepted with probability ½ (CompuCell3D convention). The
-Morpheus yield `Y` corresponds to `offset = -Y`. On GPU backends without Float64 (Metal)
-a floating-point offset is stored as `Float32`.
+The Metropolis rule: accept a copy attempt with probability
+`min(1, exp(-(ΔH - offset)/T))`.
+
+At `T ≤ 0` a copy is accepted if `ΔH < offset`, and a tie (`ΔH == offset`) with
+probability ½, as in CompuCell3D. Morpheus's yield `Y` corresponds to `offset = -Y`. When
+the backend's default float type is not `Float64` (on a device), a `Float64` offset is
+stored as `Float32`.
+
+# Keywords
+- `offset = 0`: the shift of the energy change.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> Metropolis(; offset = 2.0).offset
+2.0
+```
+
+See also [`Barker`](@ref), [`CPMFunction`](@ref).
 """
 struct Metropolis{T} <: AbstractAcceptanceLaw
     offset::T
@@ -28,10 +44,25 @@ end
 """
     Barker(; offset = 0)
 
-Barker (heat-bath) acceptance: probability `1 / (1 + exp((ΔH - offset)/T))`. The offset
-shifts ΔH exactly as in `Metropolis`, so at `T ≤ 0` the two laws coincide: accept
-if `ΔH < offset`, and ties (`ΔH == offset`) with probability ½. On GPU backends without
-Float64 (Metal) a floating-point offset is stored as `Float32`.
+The Barker (heat-bath) rule: accept a copy attempt with probability
+`1 / (1 + exp((ΔH - offset)/T))`.
+
+The offset shifts ΔH as in [`Metropolis`](@ref), so at `T ≤ 0` the two rules agree: a copy
+is accepted if `ΔH < offset`, and a tie with probability ½. When the backend's default
+float type is not `Float64` (on a device), a `Float64` offset is stored as `Float32`.
+
+# Keywords
+- `offset = 0`: the shift of the energy change.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> Barker().offset
+0
+```
+
+See also [`Metropolis`](@ref), [`CPMFunction`](@ref).
 """
 struct Barker{T} <: AbstractAcceptanceLaw
     offset::T
@@ -66,22 +97,40 @@ SciMLBase.isdiscrete(::AbstractCPMAlgorithm) = true
 """
     SequentialCPM(; acceptance = nothing, proposal = nothing, skip_interior = false)
 
-Random-site sequential dynamics on the host: one MCS is `N` copy attempts with
-replacement over the mobile (not frozen) lattice sites, so `N` is the number of mobile
-sites, which can change during a run when the frozen mask follows the state. The
-fidelity reference. `acceptance = nothing` uses the
-model's law (`CPMFunction(…; acceptance)`), else `Metropolis()`; `proposal = nothing` uses
-the problem's copy neighborhood (`PottsProblem(…; proposal)`, default `VonNeumann(1)`).
+Random-site sequential dynamics on the host: the reference algorithm for kinetics.
 
-`skip_interior = true` draws only boundary sites: mobile sites with a mobile
-proposal neighbor of another owner. Every other pick would propose a copy of its own owner
-(a null move), so the run of such picks between two boundary picks is drawn at once,
-geometric in the boundary fraction. One MCS is still `N` attempts over all mobile sites
-(`stats.attempts`), and a skip run ends at the MCS end, so the law of the state after every
-MCS is the same as with `skip_interior = false`; the random stream differs, so results are
-equal in distribution, not bitwise. Fast on mostly-medium lattices; each MCS also pays one
-O(N) pass comparing the state with the boundary set's shadow copy (a few percent of the
-sweep at typical cover, more on nearly empty lattices).
+One MCS is `N` copy attempts at mobile sites drawn with replacement. `N` is the number of
+mobile (not frozen) sites, which can change during a run when the frozen mask follows the
+state. Each attempt draws a source among the target's proposal neighbors and commits an
+accepted copy at once.
+
+With `skip_interior = true`, only boundary sites are drawn: mobile sites with a mobile
+proposal neighbor in another cell. Every other pick would propose a copy of its own cell
+number (a null attempt), so the run of such picks between two boundary picks is drawn at
+once, from a geometric law in the boundary fraction. One MCS is still `N` attempts
+(`stats.attempts`), and a skip run ends at the MCS end. So the law of the state after every
+MCS is the same as with `skip_interior = false`, but the random stream differs: the results
+are equal in distribution, not bitwise. It is fastest on lattices that are mostly medium.
+Each MCS also pays one pass over all sites that compares the state with the boundary set's
+copy.
+
+# Keywords
+- `acceptance = nothing`: the acceptance rule ([`Metropolis`](@ref) or [`Barker`](@ref)).
+  `nothing` uses the model's (`CPMFunction(…; acceptance)`), else `Metropolis()`.
+- `proposal = nothing`: the proposal relation. `nothing` uses the problem's
+  (`PottsProblem(…; proposal)`, default `VonNeumann(1)`).
+- `skip_interior = false`: draw only boundary sites, as above. It accepts no
+  [`Repeat`](@ref) with `n > 1`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> SequentialCPM(; skip_interior = true)
+SequentialCPM(; skip_interior = true)
+```
+
+See also [`CheckerboardCPM`](@ref), [`PottsProblem`](@ref).
 """
 struct SequentialCPM{A, R, S} <: AbstractCPMAlgorithm
     acceptance::A
@@ -116,83 +165,78 @@ end
 
 """
     CheckerboardCPM(; acceptance = nothing, proposal = nothing, parts = nothing,
-        region = nothing,
-        switches = 1, threads = :auto, inline_max_blocks = 512,
-            fused_lifecycle_max_sites = 65536,
-        fused_lifecycle_max_cells = 8192)
+                    region = nothing, switches = 1, threads = :auto,
+                    inline_max_blocks = 512, fused_lifecycle_max_sites = 65536,
+                    fused_lifecycle_max_cells = 8192)
 
-Parallel dynamics on the CPU or a GPU (KernelAbstractions), lockless (after Sultan et al.,
-arXiv 2312.09317). The lattice is cut into blocks; each block has `parts` sub-regions along
-each axis, each `region` sites wide. A phase activates the same sub-region in every block,
-and one work item per block makes its attempts there one after another, each against the
-current state, and commits an accepted copy at once. Nothing is claimed: per-cell totals
-change by atomic adds and are read as they are. Each MCS draws `parts^d · switches` phases
-at random, so every site is attempted once per MCS on average, as with `SequentialCPM`.
-`acceptance` and `proposal` default to the model's, as for `SequentialCPM`.
+Lockless parallel block dynamics on the CPU or a GPU (KernelAbstractions), after Sultan et
+al.
 
-- `parts`: sub-regions per block along each axis (default: about 64 phases per MCS, 8 in 2D
-  and 4 in 3D). More parts mean fewer copies in flight at once.
-- `region`: the side of a sub-region in sites (default: the smallest with
-  `(parts - 1) · region` at least the distance a copy reads and writes around its target,
-  including the window of a windowed `Global` search).
-- `switches`: phases per sub-region per MCS (default 1); each phase makes 1/`switches` of
-  the sub-region's attempts.
-- `threads` (CPU only): `:auto` runs a phase with one Julia thread, or with at most
-  `inline_max_blocks` blocks, or as a trajectory of a threaded ensemble,
-  inline, else threaded; `false` always inline;
-  `true` always threaded. `integ.cache.inline` says which.
-- `inline_max_blocks` (CPU only, default 512): with `threads = :auto`, a phase with at most
-  this many blocks runs inline (`0` threads every phase).
-- `fused_lifecycle_max_sites`, `fused_lifecycle_max_cells` (devices only, defaults 65536 and
-  8192): up to this many sites and cell slots the device lifecycle runs as one launch; a
-  larger problem launches one kernel per stage (`0` always does).
+The lattice is cut into blocks, and each block into `parts` sub-regions along each axis,
+each `region` sites wide. A phase activates the same sub-region in every block. One work
+item per block makes its attempts there one after another, each against the current state,
+and commits an accepted copy at once. Nothing is locked: per-cell totals change by atomic
+adds and are read as they are. Each MCS draws `parts^d · switches` phases at random, so
+every site is attempted once per MCS on average, as with [`SequentialCPM`](@ref).
 
-`stats.accepted` and `stats.committed` count the copies (equal: a copy commits when it is
-accepted), brought up to date at the host read points.
+Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces
+trackers add their changes, and an `@on_copy` write that reads its own cell value adds the
+difference. A float-valued column summed by concurrent commits can differ in its last bits
+with the thread count; an integer column is exact. `stats.accepted` and `stats.committed`
+count the copies (they are equal) and are brought up to date at the host read points. A
+copy whose decision needs a whole-cell search (a `Global` veto without a window, or pieces
+off their local fast path) is decided after its phase by one work item, with no copy in
+flight.
 
-Reproducibility. Every phase is checked before it runs. One whose work items would share a
-cell (possible when a cell is wider than the block spacing) runs inline, one work item after
-another, so its decisions are exact and order-free; every other phase is a colouring, whose
-items share no cell (of those a copy's decision or commit touches: its target's, its
-source's, or a neighbour's), so it reaches the same decisions inline or threaded. A CPU run
-is therefore reproducible from its seed at any thread count: the same seed gives the same
-trajectory at one thread and at four. Device runs depend on the timing of the work items and
-are not (user ruling 2026-11-04).
+Every phase is checked before it runs. A phase whose work items would share a cell (when a
+cell is wider than `(parts - 1) · region + 1`) runs inline, one item after another. Every
+other phase is a coloring: its items share no cell that a decision or commit touches, so it
+reaches the same decisions inline or threaded. A CPU run is therefore reproducible from its
+seed at any thread count. A device run depends on the timing of the work items and is not
+reproducible. Because shared-cell phases run inline, cells wider than the spacing gain
+nothing from threads: with the default 2D layout (spacing 8 sites), a lattice tiled by
+10 × 10 cells runs every phase inline, and one tiled by 5 × 5 cells runs none inline.
 
-Threading. A phase whose items share a cell runs inline, so a geometry whose cells are wider
-than `(parts - 1) * region + 1` across serialises every phase that contains two of them, and
-gains nothing from threads. Measured on the PC, 2026-11-12, on a 200 × 200 and a 400 × 400
-lattice tiled by 10 × 10 cells and on 30 × 30 lattices tiled by 5 × 5 cells; the serialised
-count is a property of the layout and the state, the times were taken on a loaded lane:
+The kinetics match `SequentialCPM` within the statistical resolution of the project's
+checkerboard kinetics checks (foam, cell sorting, the OpenVT chain and monolayer, Akeeb
+invasion, a 3D RPE sheet and the Act cell's persistence). The Act cell moves up to 6 %
+faster at weak activity.
 
-| geometry | items per phase | cell side | spacing | serialised phases |
-| --- | --- | --- | --- | --- |
-| 30 × 30, 5 × 5 cells, `region = 1, parts = 3` | 100 | 5 | 3 | 9 / 9 |
-| 30 × 30, 5 × 5 cells, `parts = 2` | 225 | 5 | 2 | 4 / 4 |
-| 30 × 30, 5 × 5 cells, default | 9 | 5 | 8 | 0 / 64 |
-| 200 × 200, 10 × 10 cells, default | 625 | 10 | 8 | 64 / 64 |
-| 400 × 400, 10 × 10 cells, default | 2500 | 10 | 8 | 64 / 64 |
+# Keywords
+- `acceptance = nothing`: the acceptance rule; `nothing` uses the model's, as for
+  `SequentialCPM`.
+- `proposal = nothing`: the proposal relation; `nothing` uses the problem's.
+- `parts = nothing`: sub-regions per block along each axis, at least 2. The default gives
+  about 64 phases per MCS: 8 in 2D and 4 in 3D. More parts mean fewer copies in flight at
+  once.
+- `region = nothing`: the side of a sub-region, in sites. The default is the smallest with
+  `(parts - 1) · region` at least the distance that a copy reads and writes around its
+  target, including the window of a windowed `Global` search. A smaller value throws an
+  `ArgumentError`.
+- `switches = 1`: phases per sub-region per MCS, at least 1. Each phase makes
+  `1/switches` of the sub-region's attempts.
+- `threads = :auto`: CPU only. `:auto` runs a phase inline with one Julia thread, with at
+  most `inline_max_blocks` blocks, or inside a threaded ensemble, and threaded otherwise.
+  `false` always runs inline and `true` always threaded. `integ.cache.inline` tells which.
+- `inline_max_blocks = 512`: CPU only. With `threads = :auto`, a phase with at most this
+  many blocks runs inline; `0` threads every phase.
+- `fused_lifecycle_max_sites = 65536`, `fused_lifecycle_max_cells = 8192`: devices only.
+  Up to this many sites and cell slots, the device lifecycle runs as one launch. A larger
+  problem launches one kernel per stage, and `0` always does.
 
-So threading survives on small-cell geometries and is gone on the wide-cell ones, which are
-the ones the default layout produces: 10 × 10 cells are wider than the 8-site spacing the
-default `parts = 8, region = 1` gives. The trade at 400 × 400 with 1600 cells is the
-four-thread gain such a geometry had before this rule, about 1.4× (2.76 ms to 1.96 ms per
-MCS); the 3.3–3.7× recorded for `inline_max_blocks` is a 5000-block measurement and does not
-describe it.
+# Examples
+```jldoctest
+julia> using CorePotts
 
-Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers
-add their changes, and an `@on_copy` write that reads its own cell value adds the
-difference. (A float-valued column accumulated by concurrent commits can differ in its last
-bits by thread count: an integer column is exact.) `stats.accepted_energy_change` sums the
-accepted copies' ΔH and reconciles with the trajectory's energy change, since no two work
-items act on one cell unless they run one after another. A copy whose decision needs a
-whole-cell search (a `Global` veto without window, pieces off their local fast path) is
-decided after its phase by one work item, with no copy in flight.
+julia> CheckerboardCPM(; parts = 4, threads = false)
+CheckerboardCPM(; parts = 4, threads = false)
+```
 
-The kinetics match `SequentialCPM` within the statistical resolution of the checkerboard
-kinetics checks (foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D
-RPE sheet, the Act cell's persistence); the Act cell moves up to 6 % faster at weak
-activity. See `docs/design/research/checkerboard-kinetics.md`.
+# References
+- Sultan, Devi, Mueller and Textor, "A parallelized cellular Potts model that enables
+  simulations at tissue scale", arXiv:2312.09317 (2023).
+
+See also [`SequentialCPM`](@ref), [`Footprint`](@ref).
 """
 Base.@kwdef struct CheckerboardCPM{A, R} <: AbstractCPMAlgorithm
     acceptance::A = nothing

@@ -372,7 +372,9 @@ julia> k = CorePotts.RNGKey(1); s = CorePotts.stream_id("MyModel.size");
 julia> CorePotts.bounded_normal(Float64, k, 0, 1, s, 10.0, 2.0, 5.0, nothing) > 5
 true
 
-julia> st = UInt32[0]; isnan(CorePotts.bounded_normal(Float64, k, 0, 1, s, 1.0, -1.0, 0.0, st))
+julia> st = UInt32[0];
+
+julia> isnan(CorePotts.bounded_normal(Float64, k, 0, 1, s, 1.0, -1.0, 0.0, st))
 true
 
 julia> st

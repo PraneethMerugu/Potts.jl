@@ -3,16 +3,38 @@
 """
     CPMState(ownership, cell; site = (;), model = (;), history = (;))
 
-Structure-of-arrays model state.
+The state of a cellular Potts model, as a structure of arrays.
 
-- `ownership`: site → cell id (`Int32`, `0` = medium), an `N`-dimensional array (the
-  usual symbol is σ).
-- `cell`: `NamedTuple` of per-cell arrays (last dimension = cell id); must contain
-  `kind::Vector{Int32}` and `volume::Vector{Int32}`; may contain any other tracked or
+Build a host state with [`initial_state`](@ref), which checks the shapes. The arrays may
+live on a device; `Adapt` moves the whole state.
+
+# Arguments
+- `ownership`: the cell number of every site, an `N`-dimensional `Int32` array (`0` is the
+  medium). The papers write it σ.
+- `cell`: a `NamedTuple` of per-cell arrays, whose last dimension is the cell number. It
+  holds `kind::Vector{Int32}` and `volume::Vector{Int32}`, and any other tracked or
   authored cell quantity.
-- `site`: per-site arrays shaped like `ownership`. `model`: model-level quantities as
-  1-element arrays (medium properties live here). `history`: ring buffers
-  (`history_buffer`).
+
+# Keywords
+- `site = (;)`: per-site arrays, shaped like `ownership` (or like a coarse grid).
+- `model = (;)`: model-level quantities, each a 1-element array. Medium properties live
+  here.
+- `history = (;)`: ring buffers of past values ([`history_buffer`](@ref)).
+
+# Fields
+- `ownership`, `cell`, `site`, `model`, `history`: as above.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> st = initial_state(Int32[0 1; 1 2], [1, 2]);
+
+julia> volumes(st), cell_kinds(st)
+(Int32[2, 1], Int32[1, 2])
+```
+
+See also [`initial_state`](@ref), [`ownership`](@ref), [`volumes`](@ref).
 """
 struct CPMState{A, C, S, M, H}
     ownership::A
@@ -29,22 +51,117 @@ Adapt.@adapt_structure CPMState
 ncells(st::CPMState) = length(st.cell.kind)
 
 # Saved-state accessors: the arrays of a state by name.
-"""Site → cell id array (`0` = medium)."""
+"""
+    ownership(st::CPMState) -> AbstractArray{Int32}
+
+Return the cell number of every site of `st` (`0` is the medium).
+
+# Arguments
+- `st::CPMState`: the state.
+
+# Returns
+- The live `ownership` array (not a copy), on the state's backend.
+
+See also [`cell_kinds`](@ref), [`volumes`](@ref).
+"""
 ownership(st::CPMState) = st.ownership
-"""Kind of every cell slot (cells are kinds `1…`, the medium is `0`)."""
+"""
+    cell_kinds(st::CPMState) -> AbstractVector{Int32}
+
+Return the kind of every cell slot of `st`.
+
+Cells have kinds `1, 2, …`; the medium's kind `0` is not stored.
+
+# Arguments
+- `st::CPMState`: the state.
+
+# Returns
+- The live `st.cell.kind` vector (not a copy).
+
+See also [`ownership`](@ref), [`volumes`](@ref).
+"""
 cell_kinds(st::CPMState) = st.cell.kind
-"""Generation of every cell slot (incremented when an id is reused)."""
+"""
+    cell_generations(st::CPMState) -> AbstractVector{Int32}
+
+Return the generation of every cell slot of `st`.
+
+A slot's generation starts at 1 and increases by one each time the slot is reused for a
+new cell (a division daughter or a converted cell). Cell-addressed random draws use it
+(see [`cell_entity`](@ref)), so a reused slot does not repeat its earlier draws.
+
+# Arguments
+- `st::CPMState`: the state.
+
+# Returns
+- The live `st.cell.generation` vector (not a copy).
+
+See also [`cell_kinds`](@ref).
+"""
 cell_generations(st::CPMState) = st.cell.generation
-"""Volume of every cell slot (`0` = free slot)."""
+"""
+    volumes(st::CPMState) -> AbstractVector{Int32}
+
+Return the volume, in sites, of every cell slot of `st` (`0` for a free slot).
+
+# Arguments
+- `st::CPMState`: the state.
+
+# Returns
+- The live `st.cell.volume` vector (not a copy).
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> volumes(initial_state(Int32[1 1 0; 2 0 0], [1, 1]))
+2-element Vector{Int32}:
+ 2
+ 1
+```
+
+See also [`ownership`](@ref), [`cell_kinds`](@ref).
+"""
 volumes(st::CPMState) = st.cell.volume
 
 """
-    initial_state(σ, kinds; cell = (;), site = (;), model = (;), shapes = (;))
+    initial_state(σ, kinds; cell = (;), site = (;), model = (;), history = (;),
+                  shapes = (;))
 
-Build a host `CPMState`: `σ` labels sites with ids `1:length(kinds)` (`0` = medium) and
-`kinds[c] ≥ 1` is the kind of cell `c`. Volumes are computed from `σ`. Every site quantity
-has the lattice's size, except one named in `shapes`, which has that size (a field on a
-coarse grid).
+Build a host [`CPMState`](@ref) from a site array and the kinds of its cells.
+
+The volumes are counted from `σ`, and every generation is set to 1. Each `cell` array must
+have one entry per cell along its last dimension, each `model` value must be a 1-element
+array, and each `site` array must have the size of `σ`. A site quantity named in `shapes`
+must have that size instead (a field on a coarse grid). Any other shape, a cell number
+outside `0:length(kinds)` or a kind below 1 throws an `ArgumentError`.
+
+# Arguments
+- `σ::AbstractArray{<:Integer}`: the cell number of every site, `0` for the medium and
+  `1:length(kinds)` for the cells.
+- `kinds::AbstractVector{<:Integer}`: the kind of each cell, all `≥ 1`.
+
+# Keywords
+- `cell = (;)`: extra per-cell arrays, merged after `kind`, `volume` and `generation`.
+- `site = (;)`: per-site arrays.
+- `model = (;)`: model-level quantities, each a 1-element array.
+- `history = (;)`: ring buffers ([`history_buffer`](@ref)), not checked.
+- `shapes = (;)`: the size of each site quantity that is not on the lattice, by name.
+
+# Returns
+- `CPMState`: `ownership` is an `Array{Int32}` copy of `σ`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> st = initial_state(Int32[0 1; 1 2], [1, 2]; cell = (; target = [2.0, 1.0]));
+
+julia> keys(st.cell)
+(:kind, :volume, :generation, :target)
+```
+
+See also [`CPMState`](@ref), [`PottsProblem`](@ref).
 """
 function initial_state(
         σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Integer};
@@ -81,11 +198,21 @@ function initial_state(
 end
 
 """
-    Proposal
+    Proposal{N}
 
-One copy attempt: the spin of `source` would be copied into `target` (linear indices);
-`x` are the target's coordinates; `old`/`new` are the losing/gaining cells; `dir` indexes
-the proposal relation.
+One copy attempt: the cell number of `source` would be copied into `target`.
+
+The algorithms build it and pass it to every model function as `prop`.
+
+# Fields
+- `target::Int`: the linear index of the target site.
+- `source::Int`: the linear index of the source site.
+- `x::NTuple{N, Int}`: the target's lattice coordinates.
+- `dir::Int`: the offset number of the source in the proposal relation.
+- `old::Int32`: the cell that would lose the target (`0` = medium).
+- `new::Int32`: the cell that would gain the target (`0` = medium).
+
+See also [`CPMFunction`](@ref).
 """
 struct Proposal{N}
     target::Int
@@ -97,12 +224,33 @@ struct Proposal{N}
 end
 
 """
-    Footprint(; read = 1, write = 0)
+    Footprint(; read = 1, write = 0, source_read = -1, source_write = -1)
 
-Largest lattice distance, from the target, that a model's functions read (`read`) and
-write besides the target itself (`write`), plus reads and writes anchored at the proposal
-source (`source_read`, `source_write`: distance from the source, `-1` for none), which reach
-`radius(proposal)` further. Sets the checkerboard coloring stride (`reach`).
+The lattice distances that a model's copy-step functions read and write, which set the
+spacing of [`CheckerboardCPM`](@ref)'s blocks.
+
+The distances are Chebyshev distances in sites. Reads and writes anchored at the source
+reach [`radius`](@ref)`(proposal)` further from the target. The effective read distance is
+the largest of `read`, the proposal radius and the source read reach; the effective write
+distance is the larger of `write` and the source write reach.
+
+# Keywords
+- `read = 1`: the largest distance from the target that the functions read.
+- `write = 0`: the largest distance from the target that they write, besides the target
+  itself.
+- `source_read = -1`: the largest distance from the source that they read, `-1` for none.
+- `source_write = -1`: the largest distance from the source that they write, `-1` for
+  none.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> Footprint(; read = 2).write
+0
+```
+
+See also [`CPMFunction`](@ref), [`CheckerboardCPM`](@ref).
 """
 Base.@kwdef struct Footprint
     read::Int = 1
@@ -124,41 +272,57 @@ end
 """
     CPMFunction(delta_H; commit! = commit_volume!, constraint = always, temperature,
                 bias = no_bias, phases = Phases(), lifecycle = nothing,
-                    acceptance = nothing,
-                footprint = Footprint(), fingerprint = 0, sys = nothing, track = nothing,
-                connectivity = nothing)
+                acceptance = nothing, footprint = Footprint(), fingerprint = 0,
+                sys = nothing, track = nothing, connectivity = nothing)
 
-The model, as plain Julia functions (the numerical analogue of `ODEFunction`). Each takes
-`(st, p, prop, ctx)` where `ctx` carries the lattice and relations:
+The model, as plain Julia functions: the numerical analogue of `ODEFunction`.
 
-- `delta_H` → energy change (plus energy-like drives) of accepting `prop`
-- `commit!` → effects of an accepted copy beyond the ownership write (trackers, state)
-- `constraint` → `false` vetoes the proposal
-- `temperature` → the copy temperature
-- `bias` → added to log α (not energy-like: `ΔH_eff = ΔH − T·bias`); default none
-- `phases` → synchronous work before/after each copy sweep (`Phases`)
-- `lifecycle` → division/removal/transition rules (`Lifecycle`), or `nothing`
-- `acceptance` → the model's acceptance law (`Metropolis(; offset)`, `Barker(; offset)`),
-  used unless the algorithm sets one; `nothing` means `Metropolis()`
-- `track` → `nothing` (the default: nothing is accumulated, nothing is compiled), or a
-  callable `track(st, p, prop, ctx, dH)` whose value, for every committed copy, is summed
-  into `stats.accepted_energy_change` (`dH` is `delta_H`'s value, without the bias and the
-  acceptance law's offset). [`TrackEnergyChange`](@ref) sums `dH` itself (`Potts`:
-  `track = (:energy_change,)`). A custom callable must also define
-  [`track_eltype`](@ref)`(track)` (the scalar type of its values, `Float32` on Metal) to run
-  under `CheckerboardCPM`, which accumulates per site in that type; `SequentialCPM` adds
-  into a `Float64` and does not need it.
-- `connectivity` → `nothing` (the default), or the [`ConnectivityHooks`](@ref) of a model
-  with whole-cell connectivity (`Global`, cell-scope `pieces`)
+The per-copy functions take `(st, p, prop, ctx)`: the state, the parameters, the
+[`Proposal`](@ref) and the context, which holds the lattice and the relations. Symbolic
+models (`Potts.PottsProblem`) generate these functions; hand-written functions work the
+same way.
 
-Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
-identically.
+[`CheckerboardCPM`](@ref) spaces its blocks by `footprint`. It widens that spacing to the
+contact relation and to any relation in the problem that reaches farther. A symbolic layer
+may narrow it to the relations that its generated copy-step functions read
+([`copy_step_relations`](@ref)), but only while every copy-step function is its own.
 
-`CheckerboardCPM` spaces its blocks by `footprint`, widened to the contact relation and any
-relation in the problem when one reaches farther. A symbolic layer may narrow
-that to the relations its generated copy-step functions read
-(`CorePotts.copy_step_relations(sys, f)`, keyed on `sys`); it does so only while every
-copy-step function above is its own.
+# Arguments
+- `delta_H`: the energy change of accepting `prop`, plus any energy-like drives.
+
+# Keywords
+- `commit! = commit_volume!`: the effects of an accepted copy beyond the `ownership`
+  write (trackers, state).
+- `constraint = always`: returns `false` to veto the copy attempt.
+- `temperature`: the temperature `T` of the copy attempt (required).
+- `bias = no_bias`: a term added to log α, not energy-like: the effective energy change is
+  `ΔH − T·bias`.
+- `phases = Phases()`: synchronous work before and after each sweep ([`Phases`](@ref)).
+- `lifecycle = nothing`: division, removal and transition rules ([`Lifecycle`](@ref)).
+- `acceptance = nothing`: the acceptance rule ([`Metropolis`](@ref) or
+  [`Barker`](@ref)), used unless the algorithm sets one. `nothing` means `Metropolis()`.
+- `footprint = Footprint()`: the read and write distances ([`Footprint`](@ref)).
+- `fingerprint = 0`: an identity of the model's code, stored as `UInt64`.
+- `sys = nothing`: the symbolic system the functions came from, or `nothing`.
+- `track = nothing`: `nothing` accumulates and compiles nothing. Otherwise a callable
+  `track(st, p, prop, ctx, dH)`, whose value for every committed copy is summed into
+  `stats.accepted_energy_change`. `dH` is the value of `delta_H`, without the bias and the
+  acceptance rule's offset. [`TrackEnergyChange`](@ref) sums `dH` itself. Under
+  `CheckerboardCPM` a custom callable must also define [`track_eltype`](@ref);
+  `SequentialCPM` adds into a `Float64` and does not need it.
+- `connectivity = nothing`: the [`ConnectivityHooks`](@ref) of a model with whole-cell
+  connectivity, or `nothing`.
+
+# Examples
+```julia
+using CorePotts
+J(a, b) = (a == 0) | (b == 0) ? 16.0 : 2.0
+dH(st, p, prop, ctx) = contact_delta(st.ownership, ctx, prop, J) +
+    volume_delta(st.cell.volume, prop, (v, c) -> 50.0 * (v - 25)^2)
+f = CPMFunction(dH; temperature = (st, p, prop, ctx) -> 10.0)
+```
+
+See also [`PottsProblem`](@ref), [`Footprint`](@ref), [`Phases`](@ref).
 """
 struct CPMFunction{DH, CM, CN, TT, BI, PH, LC, AC, SYS, TK, CO}
     delta_H::DH
@@ -191,22 +355,46 @@ end
 """
     TrackEnergyChange{T}()
 
-The `track` of `CPMFunction` that sums each committed copy's ΔH (`track = (:energy_change,)`
-in Potts). `T` is the model's scalar type: the checkerboard accumulates per site in `T` (on
-the device) between the host read points, which reduce into the `Float64`
-`stats.accepted_energy_change`; `SequentialCPM` adds into a `Float64` directly. On a device
-the checkerboard's copies of one cell can be in flight together, each with ΔH taken against
-the cell's totals before the other's commit, so the sum can differ slightly from the change
-of the energy (0.1 % over 20 MCS of a 48² test monolayer); on the CPU it is exact.
+The `track` of a [`CPMFunction`](@ref) that sums the energy change ΔH of each committed
+copy.
+
+Potts sets it for `track = (:energy_change,)`. `T` is the model's scalar type.
+[`CheckerboardCPM`](@ref) accumulates per site in `T`, on the device, between host read
+points, which reduce into the `Float64` `stats.accepted_energy_change`.
+[`SequentialCPM`](@ref) adds into a `Float64` directly. On the CPU the sum is the exact
+change of the energy. On a device, the checkerboard's copies of one cell can be in flight
+together, each with ΔH taken against the cell's totals before the other's commit, so the
+sum can differ slightly from the change of the energy.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.track_eltype(CorePotts.TrackEnergyChange{Float32}())
+Float32
+```
+
+See also [`track_eltype`](@ref).
 """
 struct TrackEnergyChange{T} end
 @inline (::TrackEnergyChange)(st, p, prop, ctx, dH) = dH
 """
     track_eltype(track) -> Type
 
-The scalar type of a `track` callable's values (`CPMFunction(…; track)`): `CheckerboardCPM`
-accumulates them per site in this type between host read points. Define it for a custom
-track (`CorePotts.track_eltype(::MyTrack) = Float64`; `Float32` on Metal).
+Return the scalar type of a `track` callable's values (`CPMFunction(…; track)`).
+
+[`CheckerboardCPM`](@ref) accumulates the values per site in this type between host read
+points. [`TrackEnergyChange`](@ref)`{T}` returns `T`. Define a method for a custom track,
+for example `CorePotts.track_eltype(::MyTrack) = Float64` (`Float32` on Metal). The
+fallback throws an `ArgumentError`.
+
+# Arguments
+- `track`: the callable.
+
+# Returns
+- The scalar type.
+
+See also [`TrackEnergyChange`](@ref), [`CPMFunction`](@ref).
 """
 track_eltype(::TrackEnergyChange{T}) where {T} = T
 function track_eltype(track)
@@ -259,26 +447,64 @@ _hook(h, name) = getfield(h, name)
 """Whether `f` defers some copies to the serial floods (a type-level constant)."""
 @inline has_defer(f) = !(_defer(f) isa Nothing)
 
-"""The no-constraint default: every copy attempt is allowed."""
+"""
+    always(st, p, prop, ctx) -> true
+
+The default `constraint` of a [`CPMFunction`](@ref): allow every copy attempt.
+
+# Arguments
+- `st`, `p`, `prop`, `ctx`: the state, parameters, proposal and context (unused).
+
+# Returns
+- `true`.
+
+See also [`no_bias`](@ref).
+"""
 @inline always(st, p, prop, ctx) = true
 """Whether the context is the lockless checkerboard's (`lockless = true`; a type-level
 constant): commit hooks that would overwrite a cell value add their change atomically
 instead."""
 @inline _lockless(::NamedTuple{K}) where {K} = :lockless in K
 @inline _lockless(ctx) = false
-"""The no-bias default: no copy attempt is biased."""
+"""
+    no_bias(st, p, prop, ctx) -> false
+
+The default `bias` of a [`CPMFunction`](@ref): no copy attempt is biased.
+
+`false` acts as zero in the effective energy change `ΔH − T·bias`.
+
+# Arguments
+- `st`, `p`, `prop`, `ctx`: the state, parameters, proposal and context (unused).
+
+# Returns
+- `false`.
+
+See also [`always`](@ref).
+"""
 @inline no_bias(st, p, prop, ctx) = false
 
 """Effective energy change: `ΔH − T·bias` (a bias adds directly to log α)."""
 @inline _effective_dH(f, dH, T, st, p, prop, ctx) = dH - T * f.bias(st, p, prop, ctx)
 
 """
-    oncopy_cell!(a, j, v, pre, ctx)
+    oncopy_cell!(a, j, v, pre, ctx) -> nothing
 
-The `@on_copy` write of `v` into cell `j` (0, the medium: nothing) of the cell column `a`,
-where `v` was computed while `a[j] == pre`. On the lockless checkerboard (`ctx.lockless`) a
-numeric column gets the change `v - pre` by an atomic add, so concurrent copies to one cell
-all count (`n[new] ~ n[new] + 1`); otherwise, and for other element types, `v` is stored.
+Write the value `v` of an `@on_copy` rule into cell `j` of the cell column `a`.
+
+`v` was computed while `a[j] == pre`. On the lockless checkerboard (`ctx.lockless`), a
+numeric column (integer or float, not `Bool`) gets the change `v - pre` by an atomic add,
+so concurrent copies into one cell all count (`n[new] ~ n[new] + 1`). Otherwise, and for
+other element types, `v` is stored. `j = 0`, the medium, writes nothing.
+
+# Arguments
+- `a::AbstractVector`: the cell column.
+- `j`: the cell number, `0` or in `1:length(a)`.
+- `v`: the new value.
+- `pre`: the value of `a[j]` that `v` was computed from.
+- `ctx`: the copy-step context.
+
+# Returns
+- `nothing`.
 """
 @inline function oncopy_cell!(a, j, v, pre, ctx)
     j == 0 && return nothing
@@ -293,8 +519,25 @@ all count (`n[new] ~ n[new] + 1`); otherwise, and for other element types, `v` i
     return nothing
 end
 
-"""Default `commit!`: maintain `st.cell.volume` (atomic adds: shared-cell checkerboard
-copies to one cell commit concurrently)."""
+"""
+    commit_volume!(st, p, prop, ctx) -> nothing
+
+The default `commit!` of a [`CPMFunction`](@ref): keep `st.cell.volume` up to date.
+
+The losing cell's volume decreases by one and the gaining cell's increases by one; the
+medium (`0`) has no entry. The adds are atomic, because checkerboard copies into one cell
+can commit concurrently.
+
+# Arguments
+- `st::CPMState`: the state.
+- `p`, `ctx`: the parameters and the context (unused).
+- `prop::Proposal`: the accepted copy.
+
+# Returns
+- `nothing`.
+
+See also [`volume_delta`](@ref).
+"""
 @inline function commit_volume!(st, p, prop, ctx)
     # bounds: nonzero owners are cell ids ≤ capacity = length(volume)
     prop.old != 0 && @inbounds(Atomix.@atomic st.cell.volume[prop.old] -= Int32(1))
@@ -308,9 +551,31 @@ end
 """
     contact_delta(σ, ctx, prop, J; relation = ctx.contact)
 
-Change of `Σ_{unordered pairs} w·J(owner, neighbor_owner)` over a (possibly weighted)
-relation when `prop` is accepted. `J(a, b)` takes cell ids (`0` = medium) and is only
-evaluated for `a ≠ b`.
+Return the change of the contact energy `Σ w·J(σᵢ, σⱼ)`, over unordered pairs of
+neighboring sites, when `prop` is accepted.
+
+Only the pairs at the target change. `J(a, b)` takes two cell numbers (`0` = medium) and
+is called only for `a ≠ b`. `w` is the relation's [`weight`](@ref) of the offset.
+
+# Arguments
+- `σ`: the `ownership` array.
+- `ctx`: the copy-step context, which holds `lattice` and the relations.
+- `prop::Proposal`: the copy attempt.
+- `J`: the contact energy of a pair of cell numbers.
+
+# Keywords
+- `relation = ctx.contact`: the contact relation.
+
+# Returns
+- The energy change, in the type of `J`'s values.
+
+# Examples
+```julia
+J(a, b) = (a == 0) | (b == 0) ? 16.0 : 2.0
+dH(st, p, prop, ctx) = contact_delta(st.ownership, ctx, prop, J)
+```
+
+See also [`volume_delta`](@ref), [`surface_delta`](@ref).
 """
 @inline function contact_delta(
         σ, ctx, prop::Proposal{N}, J::F;
@@ -333,9 +598,29 @@ end
 """
     surface_change(σ, ctx, prop; relation = ctx.surface, T = <weight type>) -> (δold, δnew)
 
-Change of the old and new cells' surfaces (weighted count of bonds to other owners over
-`relation`) when `prop` is accepted, accumulated in `T` (pass the tracker's element type;
-Float32 weights convert exactly). Only these two cells' surfaces change.
+Return the change of the surfaces of the losing and the gaining cell when `prop` is
+accepted.
+
+A cell's surface is the weighted count of its bonds, over `relation`, to sites of other
+cells. Only these two cells' surfaces change. The losing cell gains the bonds to its own
+sites and loses the others; the gaining cell does the opposite.
+
+# Arguments
+- `σ`: the `ownership` array.
+- `ctx`: the copy-step context.
+- `prop::Proposal`: the copy attempt.
+
+# Keywords
+- `relation = ctx.surface`: the surface relation.
+- `T = typeof(weight(relation, 1))`: the accumulation type: `Int32` for an unweighted
+  relation, `Float32` for a weighted one. Pass the tracker's element type; `Float32`
+  weights convert exactly.
+
+# Returns
+- `(δold, δnew)`: the two changes, of type `T`. Pass them to [`surface_delta`](@ref) and
+  [`commit_surface!`](@ref).
+
+See also [`surface_delta`](@ref), [`commit_surface!`](@ref), [`recompute_surface`](@ref).
 """
 @inline function surface_change(
         σ, ctx, prop::Proposal{N}; relation = ctx.surface,
@@ -359,7 +644,29 @@ end
 """
     surface_delta(surface, prop, δ, E)
 
-Change of `Σ_cells E(surface, cell)` given `δ = surface_change(…)`.
+Return the change of `Σ_cells E(surface, cell)` for the surface change
+`δ = surface_change(…)`.
+
+The medium (`0`) has no surface term.
+
+# Arguments
+- `surface::AbstractVector`: the surface tracker, one entry per cell.
+- `prop::Proposal`: the copy attempt.
+- `δ`: the `(δold, δnew)` of [`surface_change`](@ref).
+- `E`: the energy `E(s, c)` of cell `c` at surface `s`.
+
+# Returns
+- The energy change, in the type of `E`'s values.
+
+# Examples
+```julia
+function dH(st, p, prop, ctx)
+    δ = surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface))
+    return surface_delta(st.cell.surface, prop, δ, (s, c) -> 0.5 * (s - 20)^2)
+end
+```
+
+See also [`surface_change`](@ref), [`commit_surface!`](@ref).
 """
 @inline function surface_delta(surface, prop, δ, E::F) where {F}
     a, b = prop.old, prop.new
@@ -378,8 +685,23 @@ Change of `Σ_cells E(surface, cell)` given `δ = surface_change(…)`.
 end
 
 """
-Apply `δ = surface_change(…)` to a surface tracker. Valid before or after the ownership
-write, because the surface relation excludes the origin (checked at `init`).
+    commit_surface!(surface, prop, δ) -> nothing
+
+Add the surface change `δ = surface_change(…)` to a surface tracker.
+
+It may run before or after the `ownership` write, because the surface relation excludes
+the zero offset (checked at `init`). The adds are atomic, as in
+[`commit_volume!`](@ref).
+
+# Arguments
+- `surface::AbstractVector`: the surface tracker.
+- `prop::Proposal`: the accepted copy.
+- `δ`: the `(δold, δnew)` of [`surface_change`](@ref).
+
+# Returns
+- `nothing`.
+
+See also [`surface_change`](@ref), [`recompute_surface`](@ref).
 """
 @inline function commit_surface!(surface, prop, δ)
     # atomic: as `commit_volume!`
@@ -389,7 +711,25 @@ write, because the surface relation excludes the origin (checked at `init`).
 end
 
 """
-Change of `Σ_sites E(site, owner)` when the target's owner changes: `E(t, new) − E(t, old)`.
+    site_delta(prop, E)
+
+Return the change of `Σ_sites E(site, cell)` when the target changes cell:
+`E(target, new) − E(target, old)`.
+
+# Arguments
+- `prop::Proposal`: the copy attempt.
+- `E`: the energy `E(i, c)` of site `i` owned by cell `c`.
+
+# Returns
+- The energy change, in the type of `E`'s values.
+
+# Examples
+```julia
+# a kind-dependent energy for each site of a field `φ`
+dH(st, p, prop, ctx) = site_delta(prop, (i, c) -> c == 0 ? 0.0 : -st.site.φ[i])
+```
+
+See also [`volume_delta`](@ref).
 """
 @inline function site_delta(prop, E::F) where {F}
     return E(prop.target, prop.new) -
@@ -399,8 +739,36 @@ end
 """
     recompute_surface(σ, lattice, relation, ncell; T = <weight type>) -> Vector{T}
 
-Surfaces from scratch (initialization and tracker checks). Weighted surfaces default to
-`Float32` (device-portable); pass `T = Float64` for long CPU runs.
+Compute every cell's surface from scratch, for initialization and tracker checks.
+
+The surface of cell `c` is the weighted count of its bonds, over `relation`, to sites of
+other cells (including the medium). The medium itself has no entry.
+
+# Arguments
+- `σ`: the `ownership` array, on the host.
+- `lattice::Lattice`: the lattice.
+- `relation`: the surface relation, from [`relation`](@ref).
+- `ncell::Integer`: the number of cell slots.
+
+# Keywords
+- `T = typeof(weight(relation, 1))`: the element type: `Int32` for an unweighted relation,
+  `Float32` for a weighted one. Pass `T = Float64` for long CPU runs.
+
+# Returns
+- `Vector{T}`: one surface per cell slot.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((4, 4)); σ = zeros(Int32, 4, 4); σ[2:3, 2:3] .= 1;
+
+julia> recompute_surface(σ, l, relation(VonNeumann(), l), 1)
+1-element Vector{Int32}:
+ 8
+```
+
+See also [`surface_change`](@ref), [`commit_surface!`](@ref).
 """
 function recompute_surface(
         σ, lat::Lattice, r::Relation, ncell::Integer; T::Type = typeof(weight(r, 1))
@@ -450,7 +818,30 @@ function _recompute_surface(
     return _recompute_surface(T, σ, lat, r, ncell)
 end
 
-"""Change of `Σ_cells E(volume, cell)` when `prop` moves one site from `old` to `new`."""
+"""
+    volume_delta(volume, prop, E)
+
+Return the change of `Σ_cells E(volume, cell)` when `prop` moves the target from the
+losing cell to the gaining cell.
+
+The losing cell's volume drops by one and the gaining cell's rises by one. The medium
+(`0`) has no volume term.
+
+# Arguments
+- `volume::AbstractVector`: the volume tracker (`st.cell.volume`).
+- `prop::Proposal`: the copy attempt.
+- `E`: the energy `E(v, c)` of cell `c` at volume `v`.
+
+# Returns
+- The energy change, in the type of `E`'s values.
+
+# Examples
+```julia
+dH(st, p, prop, ctx) = volume_delta(st.cell.volume, prop, (v, c) -> 50.0 * (v - 25)^2)
+```
+
+See also [`commit_volume!`](@ref), [`contact_delta`](@ref).
+"""
 @inline function volume_delta(volume, prop, E::F) where {F}
     a, b = prop.old, prop.new
     dH = zero(typeof(E(Int32(1), Int32(1))))
