@@ -368,7 +368,7 @@ end
 # reach 3.3–3.7× at 5000 blocks and above. That 3.3–3.7× is a 5000-block measurement: at
 # 2500 blocks over 1600 cells of 10 × 10 the four-thread gain is about 1.4× (2.76 ms to 1.96
 # ms per MCS, best of two runs), and that is the gain a wide-cell geometry loses to
-# `_phase_conflict!` (see the docstring's threading note). Each phase ends at a barrier, so
+# `_phase_conflict!`. Each phase ends at a barrier, so
 # a thread per busy core stalls on any other process: leave the OS a spare CPU.
 const _INLINE_MAX_BLOCKS = 512
 # true while the trajectories of a parallel ensemble run (set by the ensemble `solve`; the

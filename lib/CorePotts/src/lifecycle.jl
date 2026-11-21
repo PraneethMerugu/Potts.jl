@@ -167,7 +167,8 @@ end
 end
 
 """
-    Lifecycle(trigger; normal = AlongMinorAxis(), kind, divide!, rebuild!, every = 1,
+    Lifecycle(trigger; normal = AlongMinorAxis(), kind, divide! = no_divide_rule,
+              rebuild!, every = 1,
               cluster_normal = normal, cluster_divide! = divide!, rules = false,
               before = nothing, release = nothing, owner_changed = nothing)
 
@@ -185,10 +186,10 @@ Both kinds of division can happen in one MCS:
   that plane through the cluster centroid; `cluster_divide!` runs for each member. A
   portable `cluster_normal` reads `st.cell.volume`, `anchor`, `m1` and `m2` only at the
   root's index, any other cell column only as `generation`, `kind` or `cluster`, and not
-  `st.ownership`. The host planner passes a cluster-labeled `σ` and cluster moments at
-  every root; the device planner passes the cell-labeled `σ`, the full cell columns, and
-  the cluster's volume and moments at every index. The daughters form a new cluster. A
-  dividing cluster takes precedence over its members' own `EVENT_DIVIDE`.
+  `st.ownership`. The host planner passes a `σ` that holds cluster numbers and cluster
+  moments at every root; the device planner passes a `σ` that holds cell numbers, the full
+  cell columns, and the cluster's volume and moments at every index. The daughters form a
+  new cluster. A dividing cluster takes precedence over its members' own `EVENT_DIVIDE`.
 - [`EVENT_DIVIDE`](@ref) divides the cell alone along `normal`; `divide!` runs. A
   compartment's daughter (the parent shares its cluster with another live cell) stays in
   the parent's cluster; a lone cell's daughter is a lone cell.
@@ -213,17 +214,16 @@ its generation, so cell-addressed random draws never repeat.
   function that returns a vector.
 - `kind`: `kind(st, p, ctx, key, mcs, c) -> Int32`, the destination kind of a transition.
   The default keeps the cell's kind.
-- `divide!`: `divide!(st, p, ctx, key, mcs, parent, daughter)`, the daughter state rule,
-  run after the default copy of every non-tracker cell quantity (for example, to halve
-  extensive quantities). The default is [`no_divide_rule`](@ref).
+- `divide! = no_divide_rule`: `divide!(st, p, ctx, key, mcs, parent, daughter)`, the
+  daughter state rule, run after the default copy of every non-tracker cell quantity (for
+  example, to halve extensive quantities). [`no_divide_rule`](@ref) does nothing.
 - `rebuild!`: `rebuild!(st, p, ctx, backend)`, a host hook run after the built-in
   trackers are rebuilt. Model trackers that the lifecycle cannot know, such as the arrays
   of `commit_site_sum!` and `commit_site_min!`, must be recomputed here
   (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or they go stale. On a
   device, a lifecycle with `rebuild!` (or a model with a custom `remake_frozen` rule) runs
   its planner on the host as on the CPU, with one synchronizing read-back per checked
-  MCS.
-  Every other lifecycle runs entirely on the device. The default does nothing.
+  MCS. Every other lifecycle runs entirely on the device. The default does nothing.
 - `every::Integer = 1`: check the triggers every `every` MCS.
 - `cluster_normal = normal`, `cluster_divide! = divide!`: `normal` and `divide!` for
   cluster divisions.

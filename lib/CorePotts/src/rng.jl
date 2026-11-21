@@ -38,7 +38,8 @@ end
 The key of one trajectory's random streams, for [`draw`](@ref).
 
 The integer form hashes the tuple `(seed, replica, repeat)` with one Philox4x32-10 call
-into the two key words, so distinct tuples give distinct keys. The two-word form takes the
+into the two key words (a 64-bit hash: distinct tuples give distinct keys with high
+probability). The two-word form takes the
 words as they are.
 
 # Arguments

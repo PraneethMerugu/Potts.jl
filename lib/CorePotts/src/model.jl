@@ -12,7 +12,7 @@ live on a device; `Adapt` moves the whole state.
 - `ownership`: the cell number of every site, an `N`-dimensional `Int32` array (`0` is the
   medium). The papers write it σ.
 - `cell`: a `NamedTuple` of per-cell arrays, whose last dimension is the cell number. It
-  holds `kind::Vector{Int32}` and `volume::Vector{Int32}`, and any other tracked or
+  holds `kind`, `volume` and `generation` (`Vector{Int32}` each), and any other tracked or
   authored cell quantity.
 
 # Keywords

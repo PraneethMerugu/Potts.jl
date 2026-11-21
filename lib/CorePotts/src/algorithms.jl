@@ -188,19 +188,21 @@ copy whose decision needs a whole-cell search (a `Global` veto without a window,
 off their local fast path) is decided after its phase by one work item, with no copy in
 flight.
 
-Every phase is checked before it runs. A phase whose work items would share a cell (when a
-cell is wider than `(parts - 1) · region + 1`) runs inline, one item after another. Every
+Every phase is checked before it runs. A phase whose work items share a cell (possible when
+a cell is wider than `(parts - 1) · region + 1`) runs inline, one item after another. Every
 other phase is a coloring: its items share no cell that a decision or commit touches, so it
 reaches the same decisions inline or threaded. A CPU run is therefore reproducible from its
 seed at any thread count. A device run depends on the timing of the work items and is not
 reproducible. Because shared-cell phases run inline, cells wider than the spacing gain
-nothing from threads: with the default 2D layout (spacing 8 sites), a lattice tiled by
-10 × 10 cells runs every phase inline, and one tiled by 5 × 5 cells runs none inline.
+nothing from threads. How many phases run inline depends on the layout and the state: with
+the default 2D layout (spacing 8 sites), in the measured tilings, 10 × 10 cells ran every
+phase inline and 5 × 5 cells ran none inline.
 
 The kinetics match `SequentialCPM` within the statistical resolution of the project's
 checkerboard kinetics checks (foam, cell sorting, the OpenVT chain and monolayer, Akeeb
-invasion, a 3D RPE sheet and the Act cell's persistence). The Act cell moves up to 6 %
-faster at weak activity.
+invasion, a 3D RPE sheet and the Act cell's persistence). In the project's Act-cell check
+(one cell, CPU, 64 seeds), the cell moves up to 6 % faster at weak activity
+(λ_act = 100); see `docs/design/research/checkerboard-kinetics.md`.
 
 # Keywords
 - `acceptance = nothing`: the acceptance rule; `nothing` uses the model's, as for

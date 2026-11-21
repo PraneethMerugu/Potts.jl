@@ -50,8 +50,7 @@ end
 
 The checkpoint format that this version writes and reads (`2`).
 
-In format 2 the field compiler steps the fields of a state. A checkpoint of format 1,
-which has no `format` field, cannot be continued.
+A checkpoint of format 1 (it has no `format` field) cannot be continued.
 
 See also [`PottsCheckpoint`](@ref).
 """

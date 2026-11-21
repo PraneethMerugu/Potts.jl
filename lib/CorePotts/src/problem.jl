@@ -34,16 +34,16 @@ the state, and a different `frozen` mask is an `ArgumentError`.
 
 # Keywords
 - `contact = Moore(1)`: the contact relation, exposed to the model as `ctx.contact`.
-- `proposal = VonNeumann(1)`: the copy neighborhood, used by algorithms constructed
+- `proposal = VonNeumann(1)`: the proposal relation, used by algorithms constructed
   without one (`SequentialCPM()`).
 - `relations = (;)`: named relations (for example `(; surface = Moore(1))`), resolved on
   `lattice` and exposed as `ctx.surface`, …. The names `contact`, `proposal`, `lattice`,
   `mobility`, `mcs` and `spacing` are reserved.
 - `spacing = nothing`: the lattice spacing per axis, exposed as `ctx.spacing` to field
   primitives; `ndims(lattice)` positive numbers in the model's float type (`Float32` for
-  Metal).
+  Metal). `nothing`: spacing 1 on every axis (`ctx.spacing` is not set).
 - `frozen = nothing`: a `Bool` mask of sites that never change owner and never donate
-  (walls, obstacles). Sites outside the lattice domain are always frozen.
+  (obstacles). Sites outside the lattice domain are always frozen.
 - `seed = 0`, `replica = 0`, `repeat = 0`: the random-stream address, stored as `UInt64`,
   `UInt32` and `UInt32`.
 - `tangent = nothing`: a `CorePotts.ParameterTangent` that holds the parameters with
@@ -261,7 +261,7 @@ The default is `nothing`.
 
 # Examples
 ```julia
-CorePotts.frozen_kinds(::MySystem) = (Int32(3),)    # kind 3 is a wall
+CorePotts.frozen_kinds(::MySystem) = (Int32(3),)    # kind 3 is a frozen kind
 ```
 
 See also [`frozen_varies`](@ref), [`remake_frozen`](@ref), [`frozen_sites`](@ref).
@@ -329,7 +329,7 @@ end
 Return the state leaves that a custom [`remake_frozen`](@ref) rule reads at a refresh, or
 `nothing`.
 
-The leaves are `:ownership` (the labels) or cell column names, each at most once. On a
+The leaves are `:ownership` (the cell numbers) or cell column names, each at most once. On a
 device, a refresh then copies only these leaves to the host before it runs the rule. Every
 other leaf is the live device array: do not read it on the host (scalar indexing errors;
 `Array(...)` works but is an uncounted transfer). `nothing` (the default) copies the whole
@@ -744,7 +744,8 @@ _proposal(alg, prob) = something(alg.proposal, prob.proposal)
 The keywords `solve` and `init` of a `PottsProblem` take (SciML's common keywords that have
 a meaning on the MCS clock, and `backend` and `checkpoint`). Any other keyword is an
 `ArgumentError` that lists these: a Monte Carlo sweep has no step size or truncation error,
-so `dt`, `abstol` and `reltol` are among the refused ones.
+so `dt` is refused. `abstol` and `reltol` are refused too, except for a problem whose field
+phases use `LatticeNewton`, where they are accepted and stored in the run's options.
 """
 const SOLVE_KEYWORDS = (
     :backend, :saveat, :save_start, :save_end, :save_everystep, :save_idxs, :tstops,
@@ -836,19 +837,18 @@ end
 
 """
     init(prob::PottsProblem, alg::AbstractCPMAlgorithm; backend = CPU(), saveat = [],
-        save_start = true,
-         save_end = true, save_everystep = isempty(saveat), save_idxs = nothing,
-             tstops = [],
-         maxiters = typemax(Int), callback = nothing, checkpoint = nothing, seed = nothing,
-         rng = nothing, verbose = true, progress = false, progress_steps = 1000,
-         progress_name = "CPM", progress_id = :CorePotts, alias = nothing, dense = false)
+         save_start = true, save_end = true, save_everystep = nothing, save_idxs = nothing,
+         tstops = [], maxiters = typemax(Int), callback = nothing, checkpoint = nothing,
+         seed = nothing, rng = nothing, verbose = true, progress = false,
+         progress_steps = 1000, progress_name = "CPM", progress_id = :CorePotts,
+         alias = nothing, dense = false)
     solve(prob::PottsProblem, alg::AbstractCPMAlgorithm; kwargs...)
 
 The integrator (or the solution) of a Potts run, with SciML's common keywords on the MCS
 clock:
 
 - Saving: `saveat` (MCS, or a number: every that many MCS from `t0`), `save_start`,
-  `save_end`, `save_everystep` (every MCS; by default when `saveat` is empty, as SciML).
+  `save_end`, `save_everystep` (every MCS; `nothing` means `isempty(saveat)`, as SciML).
   A saved state is a host copy of the whole state, so a run whose saves would hold more than
   2 GiB warns: give `saveat`, `save_everystep = false` or `save_idxs`. `save_idxs` names the
   state leaves to save (`:ownership`, cell, site or model array names, or the model's state
@@ -2130,9 +2130,9 @@ The saved states of a run at integer MCS, a `SciMLBase.AbstractTimeseriesSolutio
 
 `sol[i]` is the `i`-th saved state and `sol(t)` the state saved at MCS `t`; `sol(t; idxs)`
 reads `idxs` there. There is no interpolation between MCS (`dense` is `false`): a time
-that was not saved, or is not a whole MCS, is an `ArgumentError`. A state is a label
-lattice and cell tables, not one array, so `Array(sol)` and `sol[j, i]` are refused. Read
-a quantity by name, `sol[x]` or `sol[x, i]`.
+that was not saved, or is not a whole MCS, is an `ArgumentError`. A state is a lattice
+of cell numbers and cell tables, not one array, so `Array(sol)` and `sol[j, i]` are
+refused. Read a quantity by name, `sol[x]` or `sol[x, i]`.
 
 # Fields
 - `u`: the saved host states.
