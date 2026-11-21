@@ -39,9 +39,14 @@ n = \left\lceil \frac{dt \, \rho(p)}{1.8} \right\rceil
   diffusion operators, the local terms, the face conditions and the reads of a pair table.
   [`stability_bound`](@ref) returns it as a function of the parameters.
 - The count is computed again when a parameter changes (`remake`, `integ.ps[k] = v`).
-- A term that the bound cannot see (a rate that reads the time in its coefficient, a
-  parameter without a value, rows that read each other in a loop and are not diagonally
-  dominant) makes the automatic count refuse the problem.
+- A coefficient that reads the time is bounded over each window's time span.
+- These terms are ones the bound cannot see, and they make the automatic count refuse the
+  problem:
+  - advection;
+  - a nonlinear rate;
+  - a coefficient with more than 6 kind sets and comparisons;
+  - a parameter without a value;
+  - coupled rows that are not diagonally dominant, whose spectrum may be complex.
 - `substeps = n` is a minimum. The count is the larger of `n` and the bound over the terms
   that the bound sees. When the bound sees no term, `n` is used.
 
@@ -74,12 +79,14 @@ julia> [only(substep_counts(solve(prob, ExplicitEuler(; substeps = n); dt = 1.0)
 ```
 
 An implicit algorithm takes one substep per window by default. It raises the count only
-where its operator needs it: a positive local derivative `g` that the operator holds takes
-`n ≥ ⌈2 dt g⌉`. Here too `substeps = n` is a minimum.
+where its operator needs it. A positive local derivative `g` that the operator holds takes
+`n ≥ ⌈2γ dt g⌉`, with γ = 1 for `BackwardEuler` and `BDF2` and γ = 1/2 for
+`CrankNicolson`. Here too `substeps = n` is a minimum.
 
 [`substep_counts`](@ref) returns the count of each group, and [`field_report`](@ref) prints
-the bound and its cause. [Solvers](@ref fields-solvers) gives every rule of the bound and
-the Newton iterations.
+the bound and its cause. [Solvers](@ref fields-solvers) gives the other implicit rules: the
+convergence rule of the Newton correction, and the least count of 2 for `CrankNicolson` on
+data that can jump.
 
 ## Groups and their order
 
@@ -132,9 +139,10 @@ closed there. Reads follow these rules:
    site is accepted.
 3. An input, the `domain` mask, and an aux field that reads no field wrap only where every
    field wraps. A neighbor read of such a value by a field that wraps where another field
-   is closed is refused.
-4. A face condition and a periodic pair of one field on one axis, or a pair that joins two
-   fields, is refused.
+   is closed is refused. A `domain` is refused outright when the fields differ in
+   periodicity on an axis, because each field reads the mask at its neighbors.
+4. These are refused: a face condition and a periodic pair of one field on one axis, a
+   pair that joins two fields, and a pair on an axis the lattice lacks.
 
 The refusals name the field, the axis and each rule that applies.
 
