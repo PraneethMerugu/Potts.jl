@@ -61,8 +61,10 @@ opname(op::Op) = op == INSIDE_OP ? "inside" : lowercase(string(op))
 const COMMUTATIVE = (ADD, MUL, MIN, MAX, EQ, AND, OR, XOR)
 const CALLS = (
     :sin, :cos, :tan, :tanh, :sinh, :cosh, :cbrt, :exp2, :log2, :log10, :expm1, :log1p,
-    :atan, :floor, :ceil, :round,
+    :atan, :floor, :ceil, :round, :sign, :mod, :rem,
 )
+# the number of operands of a call of `f` (`mod(x, y)` and `rem(x, y)` take two)
+call_arity(f::Symbol) = f in (:mod, :rem) ? 2 : 1
 
 """
     Grid(dims; geometry = CUBIC, domain = 0)

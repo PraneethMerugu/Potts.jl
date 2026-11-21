@@ -101,6 +101,8 @@ function opexpr(op::Op, a::Vector{Any}, n::Node, k::Kernel, T::Type)
     op == SQRT && return _guarded(:sqrt, a[1], T)
     op == LOG && return _guarded(:log, a[1], T)
     op == POWI && return :(powi($(a[1]), $(Int(n.imm))))   # no library `pow`
+    # (`mod` and `rem` take two operands: Base's float methods, branch-only, no `throw`)
+    op == CALL && length(a) == 2 && return Expr(:call, k.calls[n.imm], a[1], a[2])
     op == CALL && return _guarded(k.calls[n.imm], a[1], T)
     op == BITTEST && return :((($(a[1]) >> $(Int(n.imm))) & one($(a[1]))) != zero($(a[1])))
     if op == CAST
