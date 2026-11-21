@@ -148,32 +148,9 @@ sol = solve(prob, SequentialCPM(); saveat = 1)
 ```
 
 `LatticePDE.discretize(Potts.fields(sys), disc)` gives one SciML problem: an `ODEProblem` of
-the rates, or a `DiscreteProblem` of the maps. A field algorithm steps it,
-`solve(prob, BackwardEuler(); dt = 0.1, save_everystep = false)`, and so does an OrdinaryDiffEq solver,
-`solve(prob, Rodas5P())`. The problem's `p` holds the parameters, the tables and the inputs.
-On the integrator of a field algorithm, `integ[c]` returns a copy of the field's values, on the
-problem's device.
-Writing into the copy, `integ[c][1, 1] = v`, changes nothing; to change the field, assign it:
-`integ[c] = values`.
-Parameters, tables and inputs go through `integ.ps`, as in SciML: `integ.ps[:k] = 2.0`,
-`integ.ps[:δ] = values`, `integ.ps[δ[2]] = v` and `integ.ps[:kind] = K`. They work the same
-way on an OrdinaryDiffEq integrator. Each write runs the checks of `setp`, the
-substep count and the masks again, or changes nothing. `integ[:k]` of a parameter is an error
-that gives this route.
-`discretize` takes SciML's keywords `u0`, `p` and `tspan`, with the rule of `remake`: `discretize(Potts.fields(sys), disc; p = [:k => 2.0], u0 = [:c => 0.5],
-tspan = (0, 10))` builds the problem at those values, with no `remake`. It also takes the
-Jacobian keywords of an implicit OrdinaryDiffEq solver. `sparse = true` gives the problem the
-sparse pattern of its Jacobian, read off the compiled program (`field_jacobian_sparsity(prob)`), and
-a coloring of it, so `Rodas5P()` forms the Jacobian with a few evaluations of the right side
-instead of a dense one. `jac = true` gives it the Jacobian itself (colored Duals). Both are
-host only. The Jacobian-vector product `prob.f.jvp` is always set, so a Krylov linear solver
-runs matrix-free, also on a device, and the lattice multigrid preconditions it:
-`solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs = LatticeMultigrid(), gmres_restart = 10)))`.
-With `LatticeMultigrid`, GMRES takes a few iterations per solve, so a small memory,
-`gmres_restart = 10`, is enough: LinearSolve currently allocates the GMRES workspace again
-at each new `W` (SciML/LinearSolve.jl#1378 fixes it). For a symmetric
-system, `linsolve = LatticePCG()` takes conjugate gradients with the same preconditioner.
-Any other keyword is an error that names it.
+the rates, or a `DiscreteProblem` of the maps. A field algorithm steps it, and so does an
+OrdinaryDiffEq solver. [SciML interop](@ref fields-sciml) shows the keywords of
+`discretize`, sparse Jacobians, the integrator and the solution.
 
 A `PDESystem` coupled by `@fields` or `Potts.couple` stays a plain ModelingToolkit system.
 `Potts.fields(model)` is the `PDESystem` of the model's fields, and
@@ -182,17 +159,9 @@ A `PDESystem` coupled by `@fields` or `Potts.couple` stays a plain ModelingToolk
 fields with any SciML solver. The result matches the owned run only while σ is frozen: see
 [The SciML path](@ref manual-sciml-path).
 
-A field algorithm returns SciML's `ODESolution`, with linear interpolation between the saves:
-`sol(t)`, `Array(sol)`, `sol.ps` (the values at the end of the run) and `sol.stats` work. A
-field reads as SciML reads a variable, on every solver and in a Potts solution too: `sol[c]` (or
-`sol[:c]`, or the bare `c`) is one grid per save, so `sol[c][end]` is the last grid;
-`sol[c, i]` is the grid at save `i`, `sol(t; idxs = c)` the grid at time `t`, `sol[x]` holds the
-site centers, and `sol(t, x, y)` interpolates between them. `field_series(sol, :c)` is the
-time-first view, as in MethodOfLines: an array of size `(length(sol.t), nx, ny)` that reads the
-saves when indexed. On a Potts solution it gives the same view of a field over the saved MCS.
-On a large lattice, pass `saveat` (the times to keep) or `save_everystep = false` (the end
-only) to an OrdinaryDiffEq solver. By default it saves every step with its dense output, about
-seven state vectors per step for `FBDF` (14 MiB per step at 512²).
+A field reads as SciML reads a variable in a Potts solution too: `sol[c]` (or `sol[:c]`) is
+one grid per save, and `field_series(sol, :c)` is the time-first view of the field over the
+saved MCS.
 
 ## The Hamiltonian as Symbolics expressions [C3]
 

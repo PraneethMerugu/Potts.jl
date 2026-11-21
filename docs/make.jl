@@ -251,6 +251,13 @@ manual = [
 # The fields section: LatticePDE on its own, in the order of a SciML package's docs
 fields = [
     "Getting started" => "fields/getting_started.md",
+    "Boundary conditions" => "fields/boundaries.md",
+    "Solvers" => "fields/solvers.md",
+    "Grids" => "fields/grids.md",
+    "Number types" => "fields/types.md",
+    "Maps" => "fields/maps.md",
+    "SciML interop" => "fields/sciml.md",
+    "Coupling to a Potts model" => "fields/coupling.md",
     "API" => "fields/api.md",
 ]
 
