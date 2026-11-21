@@ -10,7 +10,8 @@ the Artistoo parameter set: one cell grows into a colony on a closed lattice.
 - A cell divides at the deterministic size `2A₀` along a uniformly random plane, and both
   daughters restart at `V_target = A₀`.
 - Type-1 contact inhibition: a cell grows only while `volume ≥ β V_target`. `β = 0` (the
-  default) is the uninhibited baseline.
+  default) is the uninhibited baseline; the benchmark's inhibited runs use `β ≈ 0.9`
+  (`docs/src/models/openvt.md`).
 
 The kinds are `medium` and `cell`, and the cell variable is `V_target`. The lattice is
 closed with Moore contacts, and copies come from the 8 Moore neighbors. Seed with

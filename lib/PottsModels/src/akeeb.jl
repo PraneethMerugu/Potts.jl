@@ -160,7 +160,8 @@ overlay(Tiling((3, 3); region = (1:X, 1:3cld(slab, 3)), kinds = [:follower],
   - `:authors` (default) gives `misses = :count`, the authors' loop: every draw counts one
     leader toward the quota, a leader is painted only on a hit, and the quota is tested
     only after a hit. A miss leaves no cell (an empty "ghost" leader), so fewer leaders are
-    painted than counted.
+    painted than counted (at the default 500×300, about 382 painted for 390 counted;
+    `docs/src/models/akeeb.md`).
   - `:retry` gives `misses = :retry`: a miss is redrawn, so exactly the quota is painted.
 
 Several leaders inside one follower can cut it in two; that is the published slab, so the
@@ -247,8 +248,8 @@ nothing).
 - `slab = 21`: the slab height, in sites.
 - `seeding::Symbol = :authors`: `:authors` or `:retry`.
 
-Throws an `ArgumentError` for another `seeding` or a lattice that is not taller than the
-slab.
+Throws an `ArgumentError` for another `seeding`, a lattice that is not 2D (through
+[`akeeb_layout`](@ref)), or a lattice that is not taller than the slab.
 
 # Returns
 - `Vector{Pair}`: the operating point

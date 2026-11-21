@@ -23,7 +23,7 @@ Differences from the paper (Glazier & Graner 1993):
 - a periodic lattice (the paper does not say): fine for sorting, not for runs where cells
   detach and would wrap around;
 - the model does not anneal. The paper measures on a copy annealed for 2 paper MCS at
-  T = 0 (32 of ours); `test/papers_tests.jl` does the same;
+  T = 0 (32 of ours); `lib/PottsModels/test/papers_tests.jl` does the same;
 - one `V₀` for both kinds: the paper's cavity run (per-kind targets, non-neighbor copies)
   is not expressible with this model.
 
@@ -137,14 +137,16 @@ kinds are cycled over the random generators. The result is deterministic in `see
 
 A medium margin of `margin` sites surrounds the aggregate on a square lattice of side
 `2⌈√(40n/π)⌉ + 1 + 2margin`; use `lattice = size(σ)`. On the periodic `GranerGlazier`
-lattice the gap to the aggregate's periodic image is `2margin`. Over thousands of MCS the
-whole aggregate drifts; with a small margin (10 sites) it can reach the lattice edge and
-wrap across it, so the default of 60 sites is for long runs. Short runs can pass a smaller
-`margin` to save lattice area. The aggregate is rebuilt on the larger lattice, not
+lattice the gap to the aggregate's periodic image is `2margin`. The whole aggregate drifts.
+With a margin of 10 sites and `n = 200`, a cell first reaches the lattice edge at
+22 800, 30 900 and 29 000 MCS in the three of 17 run seeds that reach it within 40 000 MCS
+(`lib/PottsModels/test/acceptance/graner_glazier_margin_tests.jl`). The default of 60 sites
+is for long runs, such as the paper run (`n = 1000`, 160 000 MCS). Short runs can pass a
+smaller `margin` to save lattice area. The aggregate is rebuilt on the larger lattice, not
 embedded, so a different `margin` can move a few boundary sites between cells: compare
 margins statistically, not site by site.
 
-The paper relaxes its aggregate as one cell type for 400 paper MCS before assigning types
+The paper relaxes its aggregate as one kind for 400 paper MCS before assigning kinds
 (§II D3); no Potts relaxation is run here. The cell areas are more spread than after that
 relaxation (SD 7.6 for `n = 1000`, against 1.6 for a Potts-relaxed aggregate), but the
 heterotypic boundary fractions from this start and from a relaxed one agree within 0.005

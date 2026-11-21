@@ -112,7 +112,8 @@ The areas are the cells' site counts in the whole `frame`, so a cell cut by the 
 keeps its full area. Above the panel, 1/45 of the panel height apart, is a banner 5/45 of
 the panel high in the proposed Potts.jl color RGB(8,29,88), with "Potts.jl" in white bold.
 To show a block moved inward from the rim, pass that block as `frame` with `window` equal
-to its size.
+to its size. The submitted panel is moved inward to about 70 % tissue (65 to 75 %;
+`lib/PottsModels/reproductions/15_openvt_monolayer.jl`).
 
 The method is in an extension and requires Makie and MakiePotts to be loaded
 (`using CairoMakie, MakiePotts`).
@@ -121,12 +122,15 @@ The method is in an extension and requires Makie and MakiePotts to be loaded
 - `frame`: a 2D MakiePotts render frame of a colony, for example `renderframe(u)`.
 
 # Keywords
-- `window::Integer = 64`: the side of the block, in sites. It must be positive.
+- `window::Integer = 64`: the side of the block, in sites. It must be positive. 64 sites
+  is about 8 cell diameters, estimated from the TST closeup
+  (`lib/PottsModels/reproductions/15_openvt_monolayer.jl`).
 - `banner::Bool = true`: draw the banner; `false` gives the bare panel.
 - `areas = nothing`: the cell areas (cell number => area), for example for a block stored
   without the rest of the lattice. By default, the site counts in `frame`.
 
-Throws an `ArgumentError` for a frame that is not 2D or a `window` that is not positive.
+Throws an `ArgumentError` for a frame that is not 2D, a `window` that is not positive, a
+`window` larger than the frame, or a frame with no cell.
 
 # Returns
 - `Makie.Figure`: the panel.
@@ -178,7 +182,8 @@ The method is in an extension and requires Makie and MakiePotts to be loaded
 - `state_colors = (growing, inhibited)`: the two colors of `color = :state`.
 
 Throws an `ArgumentError` for a frame that is not 2D, another `color`, `color = :state`
-without `inhibited`, or `color = :area` on a frame with no cell.
+without `inhibited`, `areas` or `inhibited` with no entry for a cell of `frame`, or
+`color = :area` with `colorrange === nothing` on a frame with no cell.
 
 # Returns
 - `PottsPlot`: the plot of the cells.

@@ -199,8 +199,9 @@ merks_state(; lattice = (500, 500), kw...) = layout(merks_layout(; lattice, kw..
 Return the layout behind [`merks_state`](@ref): `n` endothelial boxes of `side²` sites,
 at least one medium site apart.
 
-The boxes have uniformly random corners in a centered `region`, `off + 2 : off + R − 1`
-per axis with `off = (lattice − region) ÷ 2`. The layout is
+The boxes lie inside a centered `region`, `off + 2 : off + R − 1` per axis with
+`off = (lattice − region) ÷ 2`; their corners are uniformly random in
+`off + 2 : off + R − side`. The layout is
 `Scattered(n, (side, side); region, kinds = [:endothelial], seed, gap = 1)`.
 
 # Keywords
@@ -430,7 +431,7 @@ prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500
 ```
 
 # References
-- Merks, Brodsky, Goligorsky, Newman & Glazier, *Dev. Biol.* **289**, 44 (2006).
+- Merks, Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44 (2006).
 
 See also [`Merks2008`](@ref), [`MerksVasculogenesis`](@ref).
 """
@@ -529,7 +530,7 @@ prob = PottsProblem(Merks2008(; name = :m), layout(merks2008_sprout(), (202, 202
 ```
 
 # References
-- Merks, Perryn, Shirinifard & Glazier, *PLoS Comput. Biol.* **4**, e1000163 (2008).
+- Merks, Perryn, Shirinifard & Glazier, PLoS Comput. Biol. 4, e1000163 (2008).
 
 See also [`Merks2006`](@ref), [`MerksVasculogenesis`](@ref).
 """

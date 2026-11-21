@@ -282,7 +282,8 @@ error), 0 when `offset = false`. Both methods are deterministic.
   second derivative `(2D/P)e^{−Δt/P}`, which gives `P = −1/c₁` and `D = e^{c₀}P/2`. The
   residual `m − furth_mean_squared_displacement(Δt, 0, D, P)` at the short times
   (`short = (lo, hi)`, default `Δt ≤ P`, or the first two times when fewer than two
-  qualify) is then fitted by the line `2D_fast·Δt + offset`, and `S = D_fast/(D_fast + D)`.
+  qualify; a given `short` must hold at least 2 times) is then fitted by the line
+  `2D_fast·Δt + offset`, and `S = D_fast/(D_fast + D)`.
   `D_fast` is not clamped, so noise can make it, and `S`, negative. With fewer than 3
   positive second differences, or a fit that does not decay (`c₁ ≥ 0`), it throws: the data
   do not resolve a persistence (a purely diffusive or a ballistic MSD), and
