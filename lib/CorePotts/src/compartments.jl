@@ -6,11 +6,60 @@
 # cluster as a unit.
 
 # bounds: c is a cell id from σ or a copy proposal, ≤ capacity
-"""Cluster of cell `c` (`0` for the medium)."""
+"""
+    cluster_of(cell, c) -> Int32
+
+Return the cluster of cell `c`: `cell.cluster[c]`, or `0` for the medium.
+
+A cluster is named by one of its live members, its root. A cell alone is its own cluster.
+
+# Arguments
+- `cell`: the cell state, with a `cluster` column.
+- `c`: the cell number.
+
+# Returns
+- The cluster id, or `0` when `c == 0`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> cell = (; cluster = Int32[1, 1, 3]);
+
+julia> cluster_of(cell, 2), cluster_of(cell, 0)
+(1, 0)
+```
+
+See also [`same_cluster`](@ref), [`init_clusters`](@ref).
+"""
 @inline cluster_of(cell, c) = c == 0 ? Int32(0) : @inbounds cell.cluster[c]
 
 """
-`true` if `a` and `b` are cells of the same cluster (use for internal contact energies).
+    same_cluster(cell, a, b) -> Bool
+
+Return `true` if `a` and `b` are cells of the same cluster.
+
+Use it to tell internal from external contact energies. The medium (`0`) is in no
+cluster, so the result is `false` if `a` or `b` is `0`.
+
+# Arguments
+- `cell`: the cell state, with a `cluster` column.
+- `a`, `b`: the cell numbers.
+
+# Returns
+- `Bool`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> cell = (; cluster = Int32[1, 1, 3]);
+
+julia> same_cluster(cell, 1, 2), same_cluster(cell, 1, 3), same_cluster(cell, 0, 0)
+(true, false, false)
+```
+
+See also [`cluster_of`](@ref).
 """
 @inline function same_cluster(cell, a, b)
     return a != 0 && b != 0 &&
@@ -21,12 +70,41 @@ end
     init_clusters(σ, cluster, lattice; relation = nothing, T = Float64, kind = nothing,
                   prefer = ()) -> NamedTuple
 
-Compartment storage to merge into the cell state: `cluster` (the given ids, normalized so
-each cluster is named by one live member, its root) and `cluster_volume`, plus
-`cluster_surface` over `relation` if given (element type `T`). The root is the lowest
-member whose `kind` is in `prefer` (the kinds that name clusters, e.g. the cytoplasm),
-else the lowest member. Roots are stable: they change only when the root dies, and then
-to the lowest live member of the same kind if there is one.
+Build the compartment columns to merge into the cell state.
+
+The given cluster ids are normalized so that each cluster is named by one live member,
+its root. The root is the lowest member whose kind is in `prefer` (the kinds that name
+clusters, for example the cytoplasm), else the lowest member. Free and dead slots are
+their own cluster. During a run, roots change only when the root dies, and then to the
+lowest live member of the same kind if there is one.
+
+# Arguments
+- `σ`: the `ownership` array, on the host.
+- `cluster::AbstractVector`: a cluster id for every cell slot.
+- `lattice::Lattice`: the lattice of `σ`.
+
+# Keywords
+- `relation = nothing`: the relation of the cluster surface. With `nothing`, no
+  `cluster_surface` column is built.
+- `T::Type = Float64`: the element type of `cluster_surface`.
+- `kind = nothing`: the kind of every cell slot, read with `prefer`.
+- `prefer = ()`: the kinds whose members name their cluster.
+
+# Returns
+- `(; cluster, cluster_volume)`, plus `cluster_surface` when `relation` is given.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> σ = Int32[1 2; 3 0]; l = Lattice((2, 2); boundary = Closed());
+
+julia> init_clusters(σ, [2, 2, 3], l; relation = VonNeumann(), T = Int)
+(cluster = Int32[1, 1, 3], cluster_volume = Int32[2, 0, 1], cluster_surface = [2, 0, 2])
+```
+
+See also [`cluster_of`](@ref), [`recompute_cluster_volume`](@ref),
+[`recompute_cluster_surface`](@ref).
 """
 function init_clusters(
         σ, cluster::AbstractVector, lat::Lattice; relation = nothing,
@@ -80,7 +158,20 @@ end
 # Ids that name a cluster with live members (not free for reuse, even if that cell died).
 _referenced_clusters(cl, volume) = Set(cl[c] for c in eachindex(cl) if volume[c] > 0)
 
-"""Cluster volumes from scratch (indexed by cluster id)."""
+"""
+    recompute_cluster_volume(σ, cluster) -> Vector{Int32}
+
+Compute the volume of every cluster from scratch, indexed by cluster id.
+
+# Arguments
+- `σ`: the `ownership` array, on the host.
+- `cluster`: the cluster id of every cell slot.
+
+# Returns
+- `Vector{Int32}`: the number of sites of each cluster, one entry per cell slot.
+
+See also [`commit_cluster_volume!`](@ref), [`init_clusters`](@ref).
+"""
 function recompute_cluster_volume(σ, cluster)
     v = zeros(Int32, length(cluster))
     for s in σ
@@ -89,7 +180,28 @@ function recompute_cluster_volume(σ, cluster)
     return v
 end
 
-"""Cluster surfaces (bonds to sites outside the cluster) over `relation`, from scratch."""
+"""
+    recompute_cluster_surface(σ, cluster, lattice, relation; T = Float64) -> Vector{T}
+
+Compute the surface of every cluster from scratch, indexed by cluster id.
+
+The surface of a cluster counts the bonds of `relation` from its sites to sites outside
+the cluster, with the relation's weights.
+
+# Arguments
+- `σ`: the `ownership` array, on the host.
+- `cluster`: the cluster id of every cell slot.
+- `lattice::Lattice`: the lattice of `σ`.
+- `relation`: an [`AbstractRelationSpec`](@ref) or a resolved relation.
+
+# Keywords
+- `T::Type = Float64`: the element type of the result.
+
+# Returns
+- `Vector{T}`: one surface per cell slot.
+
+See also [`commit_cluster_surface!`](@ref), [`init_clusters`](@ref).
+"""
 function recompute_cluster_surface(σ, cluster, lat::Lattice, r; T::Type = Float64)
     return _recompute_cluster_surface(
         T, σ, cluster, lat, r isa Relation ? r : relation(r, lat)
@@ -104,10 +216,22 @@ function _recompute_cluster_surface(
 end
 
 """
-    commit_cluster_volume!(cell, prop)
+    commit_cluster_volume!(cell, prop) -> nothing
 
-Move the target between the clusters of `old` and `new` in `cell.cluster_volume` (atomic,
-so it is safe under checkerboard).
+Move the target of the accepted copy `prop` between the clusters of `prop.old` and
+`prop.new` in `cell.cluster_volume`.
+
+Nothing changes when both cells are in the same cluster. The updates are atomic, so the
+call is safe in a checkerboard phase.
+
+# Arguments
+- `cell`: the cell state, with `cluster` and `cluster_volume` columns.
+- `prop::Proposal`: the accepted copy.
+
+# Returns
+- `nothing`.
+
+See also [`cluster_volume_delta`](@ref).
 """
 @inline function commit_cluster_volume!(cell, prop)
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)
@@ -120,7 +244,34 @@ end
 """
     cluster_volume_delta(cell, prop, E)
 
-Change of `Σ_clusters E(cluster_volume, k)` when `prop` moves the target between clusters.
+Compute the change of `Σ_clusters E(cluster_volume, k)` when `prop` moves the target
+between clusters.
+
+The result is zero when both cells are in the same cluster. The medium has no term.
+
+# Arguments
+- `cell`: the cell state, with `cluster` and `cluster_volume` columns.
+- `prop::Proposal`: the copy attempt.
+- `E`: the energy term, `E(volume, k)` for a cluster `k`.
+
+# Returns
+- The energy change, of the type that `E` returns.
+
+# Examples
+A volume constraint on clusters, with target volume 4 and strength 2. The copy moves a
+site from cluster 3 (volume 1) to cluster 1 (volume 2):
+```jldoctest
+julia> using CorePotts
+
+julia> cell = (; cluster = Int32[1, 1, 3], cluster_volume = Int32[2, 0, 1]);
+
+julia> prop = CorePotts.Proposal{2}(1, 2, (1, 1), 1, Int32(3), Int32(1));
+
+julia> cluster_volume_delta(cell, prop, (v, k) -> 2.0 * (v - 4)^2)
+8.0
+```
+
+See also [`commit_cluster_volume!`](@ref), [`cluster_surface_delta`](@ref).
 """
 @inline function cluster_volume_delta(cell, prop, E::F) where {F}
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)
@@ -134,10 +285,29 @@ Change of `Σ_clusters E(cluster_volume, k)` when `prop` moves the target betwee
 end
 
 """
-    cluster_surface_change(σ, cell, ctx, prop; relation = ctx.surface, T) -> (δa, δb)
+    cluster_surface_change(σ, cell, ctx, prop; relation = ctx.surface,
+                           T = typeof(weight(relation, 1))) -> (δa, δb)
 
-Change of the surfaces of the clusters of `old` and `new` (zero if they are the same
-cluster): `surface_change` with owners replaced by their clusters.
+Compute the change of the surfaces of the clusters of `prop.old` and `prop.new`.
+
+It is the surface change with each owner replaced by its cluster. Both changes are zero
+when the two cells are in the same cluster.
+
+# Arguments
+- `σ`: the `ownership` array.
+- `cell`: the cell state, with a `cluster` column.
+- `ctx`: the kernel context; the function reads `ctx.lattice` and, by default,
+  `ctx.surface`.
+- `prop::Proposal`: the copy attempt.
+
+# Keywords
+- `relation = ctx.surface`: the resolved relation of the surface.
+- `T::Type = typeof(weight(relation, 1))`: the type of the changes.
+
+# Returns
+- `(δa, δb)`: the changes for the clusters of `prop.old` and `prop.new`.
+
+See also [`cluster_surface_delta`](@ref), [`commit_cluster_surface!`](@ref).
 """
 @inline function cluster_surface_change(
         σ, cell, ctx, prop::Proposal{N}; relation = ctx.surface,
@@ -159,7 +329,25 @@ cluster): `surface_change` with owners replaced by their clusters.
     return δa, δb
 end
 
-"""Change of `Σ_clusters E(cluster_surface, k)` given `δ = cluster_surface_change(…)`."""
+"""
+    cluster_surface_delta(cell, prop, δ, E)
+
+Compute the change of `Σ_clusters E(cluster_surface, k)` given
+`δ = cluster_surface_change(…)`.
+
+The result is zero when both cells are in the same cluster. The medium has no term.
+
+# Arguments
+- `cell`: the cell state, with `cluster` and `cluster_surface` columns.
+- `prop::Proposal`: the copy attempt.
+- `δ`: the pair from [`cluster_surface_change`](@ref).
+- `E`: the energy term, `E(surface, k)` for a cluster `k`.
+
+# Returns
+- The energy change, of the type that `E` returns.
+
+See also [`commit_cluster_surface!`](@ref), [`cluster_volume_delta`](@ref).
+"""
 @inline function cluster_surface_delta(cell, prop, δ, E::F) where {F}
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)
     S = cell.cluster_surface
@@ -172,9 +360,23 @@ end
 end
 
 """
-Apply `δ = cluster_surface_change(…)` to `cell.cluster_surface` (atomic). With a weighted
-relation in a float column the adds of two copies into one cluster round in their order,
-which a threaded or device checkerboard phase does not fix (lockless cells).
+    commit_cluster_surface!(cell, prop, δ) -> nothing
+
+Add `δ = cluster_surface_change(…)` to `cell.cluster_surface` for an accepted copy.
+
+The updates are atomic. With a weighted relation in a float column, the adds of two
+copies into one cluster round in the order they happen, which a threaded or device
+checkerboard phase does not fix.
+
+# Arguments
+- `cell`: the cell state, with `cluster` and `cluster_surface` columns.
+- `prop::Proposal`: the accepted copy.
+- `δ`: the pair from [`cluster_surface_change`](@ref).
+
+# Returns
+- `nothing`.
+
+See also [`recompute_cluster_surface`](@ref).
 """
 @inline function commit_cluster_surface!(cell, prop, δ)
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)
