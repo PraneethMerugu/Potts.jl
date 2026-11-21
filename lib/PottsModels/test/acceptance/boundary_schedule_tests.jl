@@ -1037,8 +1037,16 @@ end
     @testset "boundary schedule: @boundary and @schedule errors name the offender" begin
         face = (face2_op(), (0, 1))
         fkw = (; field_solver = ExplicitEuler(substeps = 1))
-        e = bad(boundary_body(FACE2_BASE, :(@fields face2_bad(:periodic))), face...; fkw...)
-        @test e !== nothing && occursin("periodic", lowercase(message(e)))
+        # a face on y, which the lattice wraps, closes the field on y (base: refused,
+        # "per-field periodicity is not supported yet"); the hand step with y closed
+        nm = Symbol(:Bad_, BAD[] += 1)
+        SRC[nm] = boundary_body(FACE2_BASE, :(@fields face2_bad(:periodic)))
+        sol = solve(problem(nm, face...; seed = 1, fkw...), first(ALGS); saveat = 1)
+        hand = ftcs(FACE2_C0, 1, 1; D = 0.2, axes = ((:noflux, :noflux), (0.0, :noflux)))
+        @test maximum(abs, boundary_c(sol.u[end]) .- hand) < 1.0e-12
+        # (control: the hand step with y wrapped misses it)
+        wrap = ftcs(FACE2_C0, 1, 1; D = 0.2, axes = ((:noflux, :noflux), :periodic))
+        @test maximum(abs, boundary_c(sol.u[end]) .- wrap) > 1.0e-6
         e = bad(boundary_body(FACE2_BASE, :(@fields face2_bad(:z))), face...; fkw...)
         @test e !== nothing && occursin(r"\bz\b", message(e)) &&
             occursin("the lattice of `boundary_schedule` has 2 axes", message(e))
