@@ -148,7 +148,7 @@ Rules that keep the sets sound:
 
 Generated code reads other cells' state through one accessor. The read policy is a type
 parameter that the algorithm chooses. A model without extra read sets compiles to the same
-code as today; an A/B against the parent commit shows it.
+generated code as today under every policy; an A/B against the parent commit shows it.
 
 | Algorithm | Policy | What a read of another cell returns |
 |---|---|---|
@@ -157,22 +157,29 @@ code as today; an A/B against the parent commit shows it.
 | `CheckerboardCPM(reads = :snapshot)` | per-phase copy (5.5) | the state at the start of the phase |
 | `CheckerboardCPM(reads = :live)` | version counters (5.6) | a consistent live value of each cell |
 
-- The policy acts on reads of cells outside the copy's two cells. For a model without extra
-  read sets, all three policies run today's path: the CPU same-cell test and the lockless
-  device scheme.
-- The default policy is not decided. On a device it is chosen after a measurement of the
-  round counts, the launch cost and tier 2 (open question Q3).
+- **Models without extra read sets.** Their generated code never changes. `:snapshot` and
+  `:live` run today's path for them: the CPU same-cell test and the lockless device scheme.
+  `:exact` applies to all models: for these models it runs priority rounds over same-cell
+  conflicts only (5.4), which changes the scheduler, not the model code. It therefore also
+  makes device runs exact for cells wider than the spacing. It costs something only when
+  `:exact` is chosen.
+- **Defaults.** On the CPU the default is `reads = :exact`, for every model. On a device the
+  default is chosen after a measurement of the round counts, the launch cost and tier 2.
+- **A/B.** The default path is A/B-tested against today's path before it becomes the
+  default: on the CPU, `:exact` against today's same-cell scheme for models without extra
+  read sets (the generated code is equal, so the A/B measures the scheduler).
 
 ### 5.4 `reads = :exact`: priority rounds
 
 Under `:exact` a phase equals a sequential run of all its work items in a uniform random
-order. Every committed ΔH is then exact.
+order. Every committed ΔH is then exact. `:exact` applies to every model.
 
 - **Sets per item.** Claims are per work item, because one item makes all the attempts of its
   sub-region. Its write set W is the cells in its box of radius `need`, as `_phase_conflict!`
   computes, plus the third cells whose per-pair aggregates a commit changes (the target's
   neighbor cells, as with `commit_contact_count!`). Its read set R is the union of the read
-  sets (5.2) of the cells in W.
+  sets (5.2) of the cells in W. For a model without extra read sets, R adds nothing to W:
+  W is the cells in the item's box, and conflicts are same-cell conflicts only.
 - **Conflict.** Two items conflict if W of one meets W ∪ R of the other. Read-read overlap is
   not a conflict.
 - **Keys.** Each item gets a unique random key per phase: a bijective keyed mix of its block
@@ -205,8 +212,9 @@ order. Every committed ΔH is then exact.
   and 3 rounds that is about 400 launches per MCS.
 - **Inline paths.** Every phase with a conflict uses the key order, also when it runs inline:
   `cache.inline` (at most 512 blocks, `threads = false`, threaded ensembles), small block
-  counts, and phases that run inline because of a conflict. This changes CPU results for
-  models with extra read sets (no pins, D-275) and the tier 1 oracle (section 7).
+  counts, and phases that run inline because of a conflict. Because `:exact` is the CPU
+  default for every model, this changes CPU results for all models (no pins, D-275) and the
+  tier 1 oracle (section 7).
 - **Draws.** Attempts draw by (block, lid), never by round or position. An item runs exactly
   once per phase, so no draw is used twice. Tier 0 tests this invariant.
 - **Exception.** Copy-level connectivity deferrals (`_push_serial!` from `block_attempt!`)
@@ -219,7 +227,8 @@ order. Every committed ΔH is then exact.
   rounds at b ≤ 2 and 2.4 to 3.3 rounds at b = 4 to 8. Region changes the checkerboard
   kinetics. So each model with extra read sets gets its region from a measured sweep of
   rounds × launch cost against kinetics. Tier 2 runs at the chosen region, which the model's
-  docs record. Other models keep today's default region.
+  docs record. Models without extra read sets keep today's default region under every
+  policy.
 
 ### 5.5 `reads = :snapshot`: per-phase copy
 
@@ -247,9 +256,10 @@ reader never sees half of one commit's adds.
   adds one to the count; end subtracts one from the count and adds one to the epoch, in one
   atomic add.
 - **Reader.** Read the word, read the sums, read the word again. Retry if the count was not
-  0 or the word changed. Retries are bounded (a stated cap), because a GPU wavefront without
-  independent forward progress can spin on a writer in its own wavefront. The behavior at the
-  cap and its counter are fixed with the device measurement (open question Q3).
+  0 or the word changed. Retries are bounded by a stated cap, because a GPU wavefront without
+  independent forward progress can spin on a writer in its own wavefront. At the cap the
+  reader takes the value as read and increments a per-run "torn reads" counter in the solve
+  statistics, so the rate is measured and reported.
 - **Memory ordering.** CPU reads and writes of shared sums use relaxed atomic access, so
   threaded runs have no data races. The version word uses acquire and release ordering (the
   standard seqlock fences). The builder checks that Atomix gives these orderings on each
@@ -295,7 +305,7 @@ give t to b, u(t) and u′(t) be the unlike-neighbor counts before and after, an
 n_b(t) the numbers of neighbors of t that a and b own. The forward probability is
 ∝ n_b(t)/u(t), the reverse ∝ n_a(t)/u′(t), and the ratio is (n_a/u′)/(n_b/u). Everything
 lies within the footprint. A target with u(t) = 0 is rejected. Targets uniform over boundary
-sites (`skip_interior`) would add a global normalizer; see open question Q5.
+sites (`skip_interior`) would add a global normalizer; see Q5, settled when the model is built.
 
 **Random-order operators.** The paper solves each cell's FBA in a random order and writes
 the result back to the field before the next solve. Cells i and j conflict if the write site
@@ -369,12 +379,13 @@ the axis of a near-isotropic cell and checks the Float32 conditioning of the eig
 - Only `SequentialCPM` and `CheckerboardCPM(reads = :exact)` are called exact.
   `:exact` is called exact in docs and in the paper only after its tier 2 passes on a minimal
   case.
-- The scope is models run under `:exact`, apart from the copy-level connectivity deferrals
-  (5.4). "Exact" means every committed ΔH is exact and the phase equals a sequential run of
-  its items in a uniform random order; the checkerboard kinetics still differ from
-  `SequentialCPM` and are measured by tier 2.
-- The base lockless device path stays inexact for cells wider than the spacing (D-271). That
-  covers every model without extra read sets on a device, and `:snapshot` and `:live`.
+- The scope is every model run under `:exact`, with or without extra read sets, apart from
+  the copy-level connectivity deferrals (5.4). "Exact" means every committed ΔH is exact and
+  the phase equals a sequential run of its items in a uniform random order; the checkerboard
+  kinetics still differ from `SequentialCPM` and are measured by tier 2.
+- `:exact` makes device runs exact also for cells wider than the spacing. Under `:snapshot`
+  and `:live` the base lockless device path stays inexact for such cells (D-271), for every
+  model.
 - The D-330 drive reads on `CheckerboardCPM` are live and unprotected today on both backends.
   Under this design they are read sets (references) and follow the chosen policy.
 
@@ -392,14 +403,13 @@ the axis of a near-isotropic cell and checks the Float32 conditioning of the eig
   stop be exact to the MCS? Exact means one read-back per MCS on a device.
 - **Q2.** Is FBA on the host acceptable for device FBCA runs (one read and one write per
   MCS)?
-- **Q3.** The default read policy, and the reader's retry cap under `:live`. The device
-  default follows a measurement of rounds, launch cost and tier 2. The CPU default is not
-  ruled.
+- **Q3.** The device default read policy follows a measurement of rounds, launch cost and
+  tier 2. (Settled: the CPU default is `:exact`; the `:live` retry cap behavior is in 5.6.)
+
+Settled when the model is built, from its paper:
 - **Q4.** Do Jafari Nivlouei's neighbor loops run at copy time (read sets over contact
   neighbors) or between sweeps (no read sets; the gap audit G6 suggests lagged coefficients
-  for an ODE)? The model spec decides.
+  for an ODE)?
 - **Q5.** Hastings acceptance with `skip_interior`: the boundary-site count is global, and on
-  the checkerboard only a per-sub-region count is local. Refuse the combination, or define a
-  sub-region normalizer?
-- **Q6.** Should `reads = :exact` also apply to models without extra read sets (priority rounds
-  over W alone)? It would make wide-cell device runs exact, at the round cost.
+  the checkerboard only a per-sub-region count is local. How the model that needs it
+  normalizes.
