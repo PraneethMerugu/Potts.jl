@@ -261,6 +261,8 @@ Policy: ensemble or statistical agreement, no bitwise parity. FBA optima can be 
 
 ## 6. Required general features
 
+**Parallel form (D-332, 2026-11-22).** The random-order solves with write-back (08b p.287) run in conflict rounds derived from the drawn permutation: a cell waits only for earlier cells whose site sets overlap its own, so the result equals the sequential order. Neighbor-site writes at copy time run on `CheckerboardCPM` with `region` widened by the write radius. FBA solves stay on the host. See `../parallel-mechanisms.md` §4 and §6.
+
 | ID | Need in FBCA | Notes |
 |---|---|---|
 | G1 | `@retire` for lower-boundary expulsion (08a), starvation death (08b), and therapy death `rand(Bernoulli(0.5))` per MCS after t = 2000 for the dominant type (08a p.88); `@create` via division | "Dominant type" needs a population observable (G12) evaluated at trigger time |

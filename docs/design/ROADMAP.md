@@ -673,6 +673,7 @@ Full runs are offline (D-146).
   - (2026-11-16) The checkerboard items above name the colored, claiming checkerboard. D-271 replaced it with the lockless block scheme, and `_color_order!` no longer exists, so they need restating before work starts.
 - [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
   SciMLBase callbacks, `@terminate`.
+  - (D-332) Lowered onto the D-089 device planner: retire into a collective, create at a site set and state kept across a transition run on the device; a quiet MCS stays at 0 syncs and 0 transfers (`research/parallel-mechanisms.md` §3).
   - (D-162) `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as MTK `SymbolicDiscreteCallback`s from the start, so `ModelingToolkitBase.discrete_events(sys)` lists them. Per-cell, per-site, per-copy and structural rules are never listed as callbacks.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
@@ -757,19 +758,23 @@ merges (phase-end checkpoint).
   - related centroids with declared footprints;
   - R2 `Chains`;
   - D-075: `ordered = true`, `prev`/`next`/`rank`/`linked`, `angles(rel)` energies. Gate: Y1, Y2.
+  - (D-332) Angle terms on `CheckerboardCPM` (CPU and device) through read-set claims over linked cells; tiers 0–2 of `research/parallel-mechanisms.md` §7. Replaces D-329's sequential-only refusal.
 - **P6.7** Zajac:
   - R7 tensor ΔH;
   - R11a `neighbors`/`contact`;
   - R11b exact pair trackers (D-051 item 3);
-  - D-075: `interfaces(k, k)` sequential-exact first; the checkerboard form behind an A/B,
-    or a time-boxed D-051 item 5 exception; `count = true`;
+  - D-075: `interfaces(k, k)` sequential-exact first; the checkerboard form behind an A/B
+    (D-332: no D-051 item 5 exception; read-set claims over both cells and their contact
+    neighbors, exact; the phase-snapshot form only as a documented deviation after tier 2);
+    `count = true`;
   - the 12a Eq 7 unit test. Labelled as a reconstruction.
 - **P6.7b** the 14c chemotaxis variant: R12 `Pre(x, k)` on cell variables.
 - **P6.8** Bauer 2007:
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Rod` and `InsertUntil(shape; occupied, collective)`.
   - R3 symbolic `@transition` with scope that survives it;
   - R14 steady init (SteadyStateDiffEq / NonlinearSolve);
-  - R15 `CellOperator` and `uptake` (once per MCS, D-065 Q8);
+  - R15 `CellOperator` and `uptake` (once per MCS, D-065 Q8); on the device, one work item
+    or workgroup per cell (D-332);
   - R10 `UnlikeNeighbor`;
   - R2 `Fibres`;
   - D-075: `uptake` is one host round trip per MCS on Metal (D-035 as amended);
@@ -785,7 +790,8 @@ merges (phase-end checkpoint).
     - state the extra launches: 4 per MCS in 2D;
     - a late-state benchmark via `benchmark/ab.jl`;
     - record `exp(−α/T)` for 05 and 11. Where it fails, widen `W` or fall back to
-      sequential; that fallback is a D-051 item 5 exception under D-075's time-boxed row;
+      sequential (superseded by D-332: no sequential fallback; widen `W`, defer to the
+      serial list, or a documented close-to-exact form);
   - R8 `@create`;
   - R16 branch and loop detection. B2 resolved (D-235); the §8b screens (about 45 min, 2D) run on the PC once P6.8 and P6.9 exist.
 - **P6.10** Jafari Nivlouei:
@@ -807,9 +813,11 @@ merges (phase-end checkpoint).
   - the Eq 6 averaging operator;
   - division plane by draw;
   - copy-time field writes: the `@on_copy` neighbour-target form, sequential first with the
-    08b conservation test. The checkerboard form (write footprint, 4 → 9 colours) is a
-    second item with an A/B. Until it lands, `CheckerboardCPM` rejects the model
+    08b conservation test. The checkerboard form (`region` widened by the write radius,
+    D-332) is a second item with an A/B. Until it lands, `CheckerboardCPM` rejects the model
     (D-075). Gate: X5.
+  - (D-332) random-order FBA with write-back runs in conflict rounds derived from the
+    permutation (equal to the sequential result); FBA solves stay on the host.
 
 ## Field compiler: LatticeFields and LatticePDE (D-256 onward)
 
