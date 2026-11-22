@@ -168,8 +168,9 @@ function trackers_exact(sol, lat::CorePotts.Lattice{N}) where {N}
     end
 end
 # daughters seen in the saves (every MCS): a slot whose volume goes from 0 to positive. A
-# division counted twice (the planner kernel's and the host planner's) exceeds them; this
-# holds for one run alone, so it also checks the device runs, which are not reproducible
+# division counted twice (by the failed form and by the form that takes over) exceeds
+# them; this holds for one run alone, so it also checks the device runs, which are not
+# reproducible
 function births(sol)
     return sum(2:length(sol.u); init = 0) do i
         a, b = sol.u[i - 1].cell.volume, sol.u[i].cell.volume
@@ -259,7 +260,7 @@ end
     :pottsmodels, :acceptance,
 ] begin
     @testset "lifecycle launch fusion: lifecycle follow-ups" begin
-        @testset "(a) a fused form that cannot launch hands over to the staged form (CPU)" begin
+        @testset "(a) a fused form that cannot launch hands over to staged (CPU)" begin
             for (name, prob) in cases(Float64), seed in (1, 2)
                 @testset "$name, seed $seed" begin
                     check_handover(name, remake(prob; seed))

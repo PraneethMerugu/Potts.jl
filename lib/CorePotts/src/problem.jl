@@ -1223,7 +1223,7 @@ Base.@nospecializeinfer function _init(
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     fused_limits = _fused_lifecycle_limits(alg)
     lcache = prob.f.lifecycle === nothing ? nothing :
-        LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, true; fused_limits)
+        LifecycleCache(backend, ndims(lat), ncells(prob.u0), state; fused_limits)
     integ = PottsIntegrator(
         prob, alg, _device_law(_law(alg, prob.f), backend), state, cache,
         lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
@@ -1749,23 +1749,9 @@ function _run_entry!(integ::PottsIntegrator, ::LifecyclePhase)
     return nothing
 end
 
-# The old host planner (D-035), kept for one A/B and unused: `_HOST_PLANNER[] = true` (not
-# public API) runs it on the CPU instead of the lifecycle planner. Events are known on the
-# host, and the frozen mask follows them at once (D-081; quiet MCS pay nothing)
-const _HOST_PLANNER = Ref(false)
-function _step_lifecycle!(integ, ::Nothing, before::Bool = true)
-    launches, events = run_lifecycle!(
-        integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, _stats(integ), before
-    )
-    _stats(integ).launches += launches
-    events && _refresh_frozen!(integ)
-    return nothing
-end
 # The lifecycle planner (D-089, D-332): enqueued, with the standard-rule mask refresh; then
 # the host stage (`_host_stage!`) where the backend is the CPU or the model has host hooks
 function _step_lifecycle!(integ, D::DeviceLifecycle)
-    _HOST_PLANNER[] && integ.backend isa CPU && return _step_lifecycle!(integ, nothing)
     sc = integ.mscratch
     refresh = if sc === nothing
         nothing
@@ -1821,8 +1807,8 @@ function _host_hooks!(integ)
     return nothing
 end
 
-# tests: the lifecycle runs staged whatever the `CheckerboardCPM` limits (for test files that
-# build their own algorithms); the fused form runs on the CPU too, within those limits
+# tests: the lifecycle runs staged whatever the `CheckerboardCPM` limits (for test files
+# that build their own algorithms); the fused form runs on the CPU too, within those limits
 const _FORCE_STAGED_LIFECYCLE = Ref(false)
 const _FORCE_FUSED_LIFECYCLE = Ref(false)
 # the sizes up to which the device lifecycle runs fused (`CheckerboardCPM` keywords;

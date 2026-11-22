@@ -1,6 +1,6 @@
 # The lifecycle planner (`src/lifecycle_device.jl`) is one KernelAbstractions planner for
-# every backend and every algorithm. The CPU runs its staged form (one kernel per stage); the
-# fused form (one workgroup) runs on a device, and here on the CPU under
+# every backend and every algorithm. The CPU runs its staged form (one kernel per stage);
+# the fused form (one workgroup) runs on a device, and here on the CPU under
 # `_FORCE_FUSED_LIFECYCLE`, so the lifecycle, compartment and relationship tests check its
 # kernels without a GPU. On a device the statistics are exact at host read points (saves,
 # `current_state(integ)`, `checkpoint`, the end of `solve!`); on the CPU they are folded
@@ -232,7 +232,9 @@ end
             gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = quiet
         )
-        f0 = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics)
+        f0 = CPMFunction(
+            gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics
+        )
         n(f, k) = begin
             integ = init(PottsProblem(f, base.st, base.lat, (0, 4), gg_params()), k)
             step!(integ)

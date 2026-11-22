@@ -1,10 +1,11 @@
 # The lifecycle planner (D-089, D-096, D-332): one KernelAbstractions planner for every
-# backend and every algorithm. Every lifecycle MCS enqueues a fixed sequence of kernels, with
-# no host decision and no read-back on a device. A quiet device MCS costs the trigger kernel
-# and launches whose work items return at once (they read the round's event flag on the
-# device). On the CPU the flag is host memory: a quiet MCS ends after the trigger kernel.
-# Host hooks (`Lifecycle.rebuild!`, a custom `remake_frozen`, cell-scope `pieces`) run as a
-# host stage after the planner, on event rounds only (`_host_stage!` in `problem.jl`).
+# backend and every algorithm. Every lifecycle MCS enqueues a fixed sequence of kernels,
+# with no host decision and no read-back on a device. A quiet device MCS costs the trigger
+# kernel and launches whose work items return at once (they read the round's event flag on
+# the device). On the CPU the flag is host memory: a quiet MCS ends after the trigger
+# kernel. Host hooks (`Lifecycle.rebuild!`, a custom `remake_frozen`, cell-scope `pieces`)
+# run as a host stage after the planner, on event rounds only (`_host_stage!` in
+# `problem.jl`).
 #
 #   trigger    (cells)   events; the round's event flag; cluster ids that hold a dead root
 #   plan       (one workgroup of up to PLAN_WG items) the id plan: daughter
@@ -16,8 +17,8 @@
 #   copies     (cells)   daughter column copies, generation, cluster ids, links (removed
 #              cells' links dropped, daughters unlinked), for every cell before any rule
 #              runs
-#   rules      (cells)   the daughter state rules and transitions (they see the trackers as
-#              the CPU path's rules do: not yet updated)
+#   rules      (cells)   the daughter state rules and transitions (they see the trackers
+#              not yet updated)
 #   surface    (sites)   the surface change of each parent and daughter (only the moved
 #                        sites)
 #   counts     (cells, then sites) contact counts (`ctx.contact_counts`), zeroed and summed
@@ -31,8 +32,9 @@
 #              follows the state
 #
 # Lifecycle statistics and the mask counts accumulate on the device and are folded into
-# `integ.stats` only at host read points (saves, `current_state`, `checkpoint`, the end of
-# `solve!`), which synchronize anyway (`_fold_lifecycle!`).
+# `integ.stats` at host read points (saves, `current_state`, `checkpoint`, the end of
+# `solve!`), which synchronize anyway (`_fold_lifecycle!`); on the CPU also after every
+# event round.
 #
 # Index bounds of the `@inbounds` below: cell ids (`c`, `d`, `k`, `r`, `m`: live cells,
 # daughters, free slots and cluster ids) are ≤ cap, the length of every cell column and of
@@ -198,10 +200,10 @@ end
 @inline _on(dv, par) = @inbounds(dv.flag[par]) != Int32(0)
 
 # ---------------------------------------------------------------------------------------
-# Plan: one workgroup of `wg` items; item `t` owns the contiguous slots `_chunk(t, cap, wg)`,
-# so every scan is in slot order. Values that live across barriers are in `dv.cnt` and
-# `dv.tot` (device memory, coherent within the workgroup across a barrier, as the fused
-# form relies on), so the workgroup size is a launch argument.
+# Plan: one workgroup of `wg` items; item `t` owns the contiguous slots
+# `_chunk(t, cap, wg)`, so every scan is in slot order. Values that live across barriers are
+# in `dv.cnt` and `dv.tot` (device memory, coherent within the workgroup across a barrier,
+# as the fused form relies on), so the workgroup size is a launch argument.
 
 @inline function _chunk(t, cap, wg)
     K = cld(cap, wg)
@@ -382,7 +384,7 @@ end
     nreq > ndiv && Atomix.@atomic dv.acc[_ACC_DEFERRED] += nreq - ndiv
     # free-list entries taken this round (serials): scratch, committed to the counter after
     # the partition (`_advance_births!`), so a staged launch that fails in the planner
-    # leaves the state's counter as it was for the host planner
+    # leaves the state's counter as it was
     @inbounds dv.taken[1] = @inbounds(tot[2]) + ndiv          # taken has 1 entry, tot 3
     return nothing
 end
@@ -447,15 +449,16 @@ end
     return nothing
 end
 
-# A daughter's volume and moment sums about the parent's anchor accumulate in integer scratch
-# (`_dpartition_body!`): Int64 where the backend has 64-bit atomics (the bound below then
-# always holds, since `m2` is Int64), Int32 elsewhere (Metal). With δ the integer offsets (site − parent anchor) of the daughter's
-# sites, a subset of the parent's, and P_k = Σ_parent δ_k² (the parent's `m2[k, k]`, exact):
+# A daughter's volume and moment sums about the parent's anchor accumulate in integer
+# scratch (`_dpartition_body!`): Int64 where the backend has 64-bit atomics (the bound below
+# then always holds, since `m2` is Int64), Int32 elsewhere (Metal). With δ the integer
+# offsets (site − parent anchor) of the daughter's sites, a subset of the parent's, and
+# P_k = Σ_parent δ_k² (the parent's `m2[k, k]`, exact):
 #   |Σ δ_k| ≤ Σ |δ_k| ≤ Σ δ_k² ≤ P_k                         (integers: |δ| ≤ δ²)
 #   |Σ δ_k δ_l| ≤ Σ (δ_k² + δ_l²)/2 ≤ max(P_k, P_l)
 #   0 ≤ Σ δ_k² ≤ P_k,   0 ≤ the daughter's volume ≤ the parent's (an Int32 site count)
-# so every final sum fits in the scratch type when every P_k ≤ its `typemax` (atomic adds wrap, so
-# the order of the partial sums does not matter), and each site's own term
+# so every final sum fits in the scratch type when every P_k ≤ its `typemax` (atomic adds
+# wrap, so the order of the partial sums does not matter), and each site's own term
 # |δ_k δ_l| ≤ max(P_k, P_l).
 # A larger cell does not divide: its division is deferred and counted (`_ACC_LARGE`), the
 # state stays exact, and the host warns at the next read point.
@@ -600,7 +603,8 @@ end
     ta = @index(Local, Linear)
     if live
         _plan_a!(
-            ta, wg, cnt, events, daughter, removed, bias, dv, par, round, ruled, st, clusters
+            ta, wg, cnt, events, daughter, removed, bias, dv, par, round, ruled, st,
+            clusters
         )
     end
     @synchronize
@@ -1278,7 +1282,8 @@ end
 # ---------------------------------------------------------------------------------------
 # The fused form: every stage above as a section of one workgroup, the barriers between
 # sections in place of the kernel boundaries (device memory is coherent within the
-# workgroup across a barrier). Item `t` of the `wg` takes the slots or sites `t, t + wg, …` (`tw = (t, wg)`).
+# workgroup across a barrier). Item `t` of the `wg` takes the slots or sites
+# `t, t + wg, …` (`tw = (t, wg)`).
 
 @inline function _each!(body::B, tw, n, args::A) where {B, A}
     i = Int(tw[1])                      # a local index may be 32-bit on a device
@@ -1318,7 +1323,8 @@ end
 end
 
 @kernel function _fused_kernel!(
-        wg, buf, dv, cols, links, fns, opt, par, round, ruled, clusters, st, p, ctx, key, mcs
+        wg, buf, dv, cols, links, fns, opt, par, round, ruled, clusters, st, p, ctx, key,
+        mcs
     )
     cnt = @uniform dv.cnt
     tot = @uniform dv.tot
@@ -1396,7 +1402,9 @@ end
         _dsurface_body!, (ts, wg), length(st.ownership), opt.surf,
         (dv, par, st.ownership, opt.surf, opt.rel, ctx.lattice, opt.su)
     )
-    _each_if!(_dcount_zero_body!, (ts, wg), length(buf.events), opt.cc, (dv, par, opt.ccols))
+    _each_if!(
+        _dcount_zero_body!, (ts, wg), length(buf.events), opt.cc, (dv, par, opt.ccols)
+    )
     _each_if!(_deuler_zero_body!, (ts, wg), length(buf.events), opt.eul, (dv, par, opt.eul))
     @synchronize
     tz = @index(Local, Linear)
@@ -1437,7 +1445,8 @@ end
         (dv, par, st.ownership, st.cell, opt.csurf, opt.rel, ctx.lattice, opt.cu)
     )
     _refresh_each!(
-        _dfrozen_body!, (tm, wg), length(st.ownership), opt.refresh, dv, par, st, ctx.lattice
+        _dfrozen_body!, (tm, wg), length(st.ownership), opt.refresh, dv, par, st,
+        ctx.lattice
     )
     @synchronize
     tr = @index(Local, Linear)
@@ -1460,7 +1469,7 @@ dropped.
 """
 function _fold_lifecycle!(integ; report::Bool = true, now::Int = integ.t)
     lc = integ.lcache
-    (lc === nothing || lc.device === nothing) && return nothing
+    lc === nothing && return nothing
     D = lc.device
     stats = _stats(integ)
     counted_copy!(stats, D.acc, D.dv.acc)

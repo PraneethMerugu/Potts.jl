@@ -1,15 +1,12 @@
 # Cell lifecycle: division, removal, kind transition, creation and id reuse
-# (INTERNALS §1.7 as amended by D-035 and D-089).
+# (INTERNALS §1.7 as amended by D-089 and D-332).
 #
-# Two planners with the same semantics:
-# - On the CPU (the host path, D-035): per checked MCS one trigger kernel over cells writes
-#   an event code per cell and counts events; quiet MCS end there. Otherwise the host plans
-#   (allocates daughter ids lowest-first among free ids, defers on exhausted capacity), then
-#   kernels partition sites by plane, remove cells, set kinds and apply the daughter state
-#   rule, and the trackers are rebuilt exactly.
-# - On a device (`lifecycle_device.jl`, D-089): the same plan and updates run as device
-#   kernels every checked MCS, with no host decision and no read-back; the statistics are
-#   folded into `integ.stats` at host read points.
+# One planner (`lifecycle_device.jl`) on every backend and for every algorithm: per checked
+# MCS a trigger kernel writes an event code per cell, then kernels plan (daughter ids
+# lowest-first among free ids, deferral on exhausted capacity), partition sites by plane,
+# remove cells, set kinds, apply the daughter state rules and update the trackers, with no
+# host decision. On the CPU a quiet MCS ends after the trigger kernel; the statistics are
+# folded into `integ.stats` at host read points (on the CPU at once, on event rounds).
 #
 # Cell ids are `1:capacity`; an id is free when its volume is zero. Reusing an id increments
 # its generation, so cell-addressed randomness never replays.
@@ -78,8 +75,8 @@ deferred (no free slot) still transitions the cell. `stats.lifecycle.transitions
 the cell once.
 
 It composes with [`ruled_event`](@ref): `ruled_event(transitioning(e), i)`. It runs
-inside the trigger kernel, so it does not check `event`. The planner checks it on the
-host and throws an `ArgumentError` at the MCS's read point for any other event.
+inside the trigger kernel, so it does not check `event`. The planner flags any other event
+and throws an `ArgumentError` at the MCS's read point.
 
 # Arguments
 - `event`: `EVENT_DIVIDE` or `EVENT_DIVIDE_CLUSTER`.
@@ -98,7 +95,7 @@ julia> CorePotts.transitioning(EVENT_DIVIDE)
 @inline transitioning(event) = Int32(event) | _TRANSITIONING
 public transitioning
 
-# a trigger value whose transition bit is on an event other than a division (host check)
+# a trigger value whose transition bit is on an event other than a division
 @inline function _bad_transition(e)
     return (e & _TRANSITIONING) != Int32(0) &&
         !(_base_event(e) == EVENT_DIVIDE || _base_event(e) == EVENT_DIVIDE_CLUSTER)
@@ -130,7 +127,7 @@ Return `event` as fired by rule `i`, for the trigger of a `Lifecycle(…; rules 
 
 The event is in the low byte and the rule index `i ≥ 1` above it, so only that rule's
 daughter state rule runs. When no rule fires, return [`EVENT_NONE`](@ref) itself, not
-`ruled_event(EVENT_NONE, i)`: a nonzero value counts as an event and forces a host plan.
+`ruled_event(EVENT_NONE, i)`: a nonzero value counts as an event and runs the planner.
 
 # Arguments
 - `event`: the trigger code.
@@ -303,30 +300,8 @@ A model state that has it and a `birth` cell column gets serials at every divisi
 """
 const NEXT_BIRTH = Symbol("#next_birth")
 
-# the reference reset of an event round (`Lifecycle.release`), one launch over the cells
-@inline _release_body!(c, release::F, st) where {F} = (release(st, c % Int32); nothing)
-_run_release!(::Nothing, st, backend) = 0
-function _run_release!(f::F, st, backend) where {F}
-    (Exec.launch!(backend, _release_body!, ncells(st), (f, st)); 1)
-end
 @inline _release!(::Nothing, st, c) = nothing
 @inline _release!(f::F, st, c) where {F} = (f(st, c % Int32); nothing)
-
-# the serials of this round's daughters `ds` (host path), in increasing slot order
-function _assign_births!(stats, st, ds)
-    (haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH)) || return nothing
-    b = to_host(stats, st.cell.birth)
-    nb = to_host(stats, getfield(st.model, NEXT_BIRTH))
-    next = nb[1]
-    for d in sort(ds)
-        b[d] = next
-        next += one(next)
-    end
-    nb[1] = next
-    counted_copy!(stats, st.cell.birth, b)
-    counted_copy!(stats, getfield(st.model, NEXT_BIRTH), nb)
-    return nothing
-end
 
 # `before` as its own launch (MCS the lifecycle does not check)
 _run_before(::Nothing, st, p, ctx, key, mcs, backend) = 0
@@ -520,64 +495,6 @@ end
 # ---------------------------------------------------------------------------------------
 # Kernels
 
-# `count[slot]` counts this round's events; item 1 zeroes the other slot, the next round's
-# (its value was read after the previous round), so no separate reset command is enqueued
-# (T3)
-@inline function _trigger_body!(c, events, count, slot, trigger, st, p, ctx, key, mcs)
-    # count has 2 entries, slot ∈ (1, 2)
-    c == 1 && (@inbounds count[3 - slot] = Int32(0))
-    e = EVENT_NONE
-    if @inbounds(st.cell.volume[c]) > 0
-        e = trigger(st, p, ctx, key, mcs, c % Int32) % Int32
-    end
-    @inbounds events[c] = e
-    # slot ∈ (1, 2) = axes(count)
-    return e != EVENT_NONE && @inbounds Atomix.@atomic count[slot] += Int32(1)
-end
-
-@inline function _normal_body!(
-        c, normals, events, daughter, normal, st, p, ctx, key, mcs, ruled
-    )
-    return if _base_event(_event(ruled, @inbounds(events[c]))) == EVENT_DIVIDE &&
-            @inbounds(daughter[c]) > 0    # cell divisions only
-        n = normal(st, p, ctx, key, mcs, Int32(c))
-        for d in 1:length(n)
-            @inbounds normals[d, c] = n[d]
-        end
-    end
-end
-
-@inline function _partition_body!(
-        i, σ, daughter, normals, bias, removed, cell, lat, hook::H, st
-    ) where {H}
-    c = @inbounds σ[i]
-    return if c > 0
-        if @inbounds(removed[c])
-            @inbounds σ[i] = Int32(0)
-            _owner_changed!(hook, st, i)
-        elseif @inbounds(daughter[c]) > 0
-            N = ndims(lat)
-            δ = min_image(lat, coordinates(lat, i), anchor(cell, c, Val(N)))
-            T = eltype(normals)
-            V = T(@inbounds cell.volume[c])
-            # 0 unless it divides with its cluster
-            side = @inbounds bias[c]
-            # site − centroid
-            offset = embed(
-                lat,
-                ntuple(d -> T(δ[d]) - T(@inbounds cell.m1[d, c]) / V, Val(N))
-            )
-            for d in 1:N
-                side += T(offset[d]) * @inbounds(normals[d, c])
-            end
-            if side > 0
-                @inbounds σ[i] = daughter[c]
-                _owner_changed!(hook, st, i)
-            end
-        end
-    end
-end
-
 # A transition is applied before the division of the same cell (A-17, R8's "transition >
 # divide"): the `kind` hook reads the cell before the state rules run (its columns are the
 # parent's, the daughter holds their copy), both halves take the new kind, and the daughter
@@ -606,16 +523,12 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# Host orchestration
+# Scratch
 
-"""Lifecycle scratch: device buffers sized by capacity, plus host mirrors; `device` is the
-device planner's state (`DeviceLifecycle`), or `nothing` for the host path."""
-struct LifecycleCache{E, C, D, R, NM, B, DL}
+"""Lifecycle scratch: buffers sized by capacity on the state's backend, and the planner's
+state (`DeviceLifecycle`)."""
+struct LifecycleCache{E, D, R, NM, B, DL}
     events::E
-    count::C            # the event counts of alternate rounds (host path; `_trigger_body!`)
-    # host copy of this round's count: one transfer per lifecycle MCS (host path)
-    host::Vector{Int32}
-    round::Base.RefValue{Int}   # host-path rounds run (selects the slot of `count`)
     daughter::D
     removed::R
     normals::NM
@@ -624,18 +537,16 @@ struct LifecycleCache{E, C, D, R, NM, B, DL}
 end
 
 function LifecycleCache(
-        backend, N::Int, capacity::Int, st = nothing,
-        device::Bool = false; fused_limits = (;)
+        backend, N::Int, capacity::Int, st = nothing; fused_limits = (;)
     )
     T = Exec.default_float(backend)
     return LifecycleCache(
         KernelAbstractions.zeros(backend, Int32, capacity),
-        KernelAbstractions.zeros(backend, Int32, 2), zeros(Int32, 1), Ref(0),
         KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Bool, capacity),
         KernelAbstractions.zeros(backend, T, N, capacity),
         KernelAbstractions.zeros(backend, T, capacity),
-        device ? DeviceLifecycle(backend, N, capacity, st; fused_limits...) : nothing
+        DeviceLifecycle(backend, N, capacity, st; fused_limits...)
     )
 end
 
@@ -647,256 +558,6 @@ Base.@kwdef mutable struct LifecycleStats
     empty_daughters::Int = 0
 end
 
-"""A division with no free cell slot waits for one; the first per run warns (silently fewer
-divisions otherwise skew any proliferation result)."""
-function _defer!(stats, cap)
-    stats.deferred == 0 &&
-        @warn "lifecycle: all $cap cell slots are in use; divisions are deferred until \
-            slots free up. Pass a larger `capacity`."
-    stats.deferred += 1
-    return nothing
-end
-
-"""
-Run the lifecycle for MCS `mcs` with the host planner (the CPU path; on a device only for
-host hooks, see `Lifecycle`). Returns `(launches, events)`: the number of kernel launches,
-and whether any cell had an event (then kinds, owners and cell ids may have changed, and
-the integrator refreshes the frozen mask). Synchronizes once and reads back the 4-byte event
-count (counted on a device). Quiet MCS return after the trigger kernel.
-`pstats` is the integrator's `PottsStats` (lifecycle counts, host transfers).
-`before = false`: `lc.before` has already run this MCS (a device form that failed after
-launching it).
-"""
-function run_lifecycle!(
-        lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend, pstats,
-        before::Bool = true
-    )
-    nb = before ? _run_before(lc.before, st, p, ctx, key, mcs, backend) : 0
-    mcs % lc.every == 0 || return nb, false
-    stats = pstats.lifecycle
-    cap = length(st.cell.kind)
-    slot = Int32((cache.round[] += 1) % 2 + 1)
-    Exec.launch!(
-        backend, _trigger_body!, cap,
-        (cache.events, cache.count, slot, lc.trigger, st, p, ctx, key, mcs)
-    )
-    launches = 1 + nb
-    sync!(pstats, backend)
-    counted_copy!(pstats, cache.host, 1, cache.count, slot, 1)
-    cache.host[1] == 0 && return launches, false
-    # D-066 item 5 (a): references to dead cells are reset before any id is allocated
-    launches += _run_release!(lc.release, st, backend)
-
-    # plan (host): daughter ids lowest-first among free ids; defer when capacity is
-    # exhausted
-    events = to_host(pstats, cache.events)
-    # rule-carrying events: split off the firing rules (`rule[c]`), re-attached for the
-    # device
-    rule = if lc.rules === Val(true)
-        (r = events .>> _RULE_SHIFT; events .&= _EVENT_MASK; r)
-    else
-        nothing
-    end
-    # `transitioning(e)` (A-17): the transition bit is set apart and re-attached to the
-    # planned event
-    nbad = count(_bad_transition, events)
-    nbad > 0 && throw(_bad_transition_error(nbad))
-    tb = (events .& _TRANSITIONING) .!= 0
-    events .&= ~_TRANSITIONING
-    volume = to_host(pstats, st.cell.volume)
-    # a dead root still names its cluster while members live: never reuse its id
-    held = if _has_clusters(st)
-        _referenced_clusters(to_host(pstats, st.cell.cluster), volume)
-    else
-        Set{Int32}()
-    end
-    free = [
-        c
-            for c in 1:cap
-            if volume[c] == 0 && events[c] == EVENT_NONE && !(Int32(c) in held)
-    ]
-    daughter = zeros(Int32, cap)
-    removed = zeros(Bool, cap)          # not a BitVector: copies to device arrays
-    nextfree = 1
-    has_clusters = _has_clusters(st)
-    roots = Int32[]
-    if has_clusters
-        cl = to_host(pstats, st.cell.cluster)
-        members = Dict{Int32, Vector{Int32}}()
-        for c in 1:cap
-            volume[c] > 0 && push!(get!(members, cl[c], Int32[]), Int32(c))
-        end
-        # pass 1: clusters divide as a unit, in root order; members follow their root and a
-        # dividing cluster takes precedence over its members' own events except removal
-        for c in 1:cap                                  # only the root's event counts
-            if events[c] == EVENT_DIVIDE_CLUSTER && cl[c] != c
-                events[c] = tb[c] ? EVENT_TRANSITION : EVENT_NONE
-                tb[c] = false
-            end
-        end
-        for c in 1:cap
-            events[c] == EVENT_DIVIDE_CLUSTER && cl[c] == c || continue
-            ms = filter(m -> events[m] != EVENT_REMOVE, members[Int32(c)])
-            if nextfree + length(ms) - 1 <= length(free)
-                for m in ms
-                    # a member that transitions transitions first (A-17)
-                    events[m] = if events[m] == EVENT_TRANSITION || tb[m]
-                        _EVENT_DIVIDE_CLUSTER_TRANSITION
-                    else
-                        EVENT_DIVIDE_CLUSTER
-                    end
-                    tb[m] = false
-                    # members follow the root's rule
-                    rule === nothing || (rule[m] = rule[c])
-                    daughter[m] = free[nextfree]
-                    nextfree += 1
-                end
-                push!(roots, Int32(c))
-                stats.divisions += length(ms)
-            else
-                # a deferred division: the transition stays
-                events[c] = tb[c] ? EVENT_TRANSITION : EVENT_NONE
-                tb[c] = false
-                _defer!(stats, cap)
-            end
-        end
-    elseif any(==(EVENT_DIVIDE_CLUSTER), events)
-        throw(
-            ArgumentError(
-                "lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"
-            )
-        )
-    end
-    # pass 2: cells dividing alone, removals
-    for c in 1:cap
-        if events[c] == EVENT_DIVIDE && daughter[c] == 0
-            if nextfree <= length(free)
-                daughter[c] = free[nextfree]
-                nextfree += 1
-                stats.divisions += 1
-            else
-                _defer!(stats, cap)
-            end
-        elseif events[c] == EVENT_REMOVE
-            removed[c] = true
-            stats.removals += 1
-        end
-    end
-    # a cell dividing alone that transitions: the transition before its division, or alone
-    # when deferred
-    for c in 1:cap
-        tb[c] && events[c] == EVENT_DIVIDE &&
-            (events[c] = daughter[c] > 0 ? EVENT_DIVIDE | _TRANSITIONING : EVENT_TRANSITION)
-    end
-    stats.transitions += count(_transitions, events)
-    counted_copy!(pstats, cache.daughter, daughter)
-    counted_copy!(pstats, cache.removed, removed)
-    counted_copy!(
-        pstats, cache.events, if rule === nothing
-            events
-        else
-            events .| (rule .<< _RULE_SHIFT)
-        end
-    )
-
-    if isempty(roots)
-        fill!(cache.bias, zero(eltype(cache.bias)))
-    else
-        _cluster_planes!(
-            pstats, cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members
-        )
-    end
-    # after the host planes
-    if any(c -> daughter[c] > 0 && _base_event(events[c]) == EVENT_DIVIDE, 1:cap)
-        Exec.launch!(
-            backend, _normal_body!,
-            cap,
-            (
-                cache.normals, cache.events, cache.daughter,
-                _plane(lc.normal, eltype(cache.normals)), st, p, ctx, key, mcs, lc.rules,
-            )
-        )
-        launches += 1
-    end
-    n = length(st.ownership)
-    Exec.launch!(
-        backend, _partition_body!,
-        n,
-        (
-            st.ownership, cache.daughter, cache.normals, cache.bias, cache.removed,
-            st.cell, ctx.lattice, lc.owner_changed, st,
-        )
-    )
-    launches += 1
-
-    # daughters: copy every non-tracker cell quantity from the parent, same kind, new
-    # generation
-    parents = findall(>(0), daughter)
-    if !isempty(parents)
-        ds = daughter[parents]
-        # `map` over (name, array) unrolls statically: no runtime dispatch per quantity
-        map(keys(st.cell), values(st.cell)) do name, a
-            (
-                name in (:volume, :surface, :anchor, :m1, :m2, :generation, :birth) ||
-                    _is_link_data(name) ||
-                    _is_scratch_column(name)
-            ) ||
-                _copy_columns!(pstats, a, ds, parents)          # daughters start unlinked
-            nothing
-        end
-        gen = to_host(pstats, st.cell.generation)
-        gen[ds] .+= Int32(1)
-        counted_copy!(pstats, st.cell.generation, gen)
-        _assign_births!(pstats, st, ds)
-        if has_clusters
-            clh = to_host(pstats, st.cell.cluster)
-            for m in parents
-                d = daughter[m]
-                # the root's daughter names the new cluster
-                if _divides_with_cluster(events[m])
-                    clh[d] = daughter[cl[m]]
-                elseif length(members[cl[m]]) == 1       # a lone cell's daughter is lone
-                    clh[d] = d
-                    # else it stays in the parent's cluster
-                end
-            end
-            counted_copy!(pstats, st.cell.cluster, clh)
-        end
-    end
-    any(_is_adjacency, keys(st.cell)) && (any(removed) || !isempty(parents)) &&
-        _lifecycle_links!(pstats, st, findall(removed), daughter[parents])
-    Exec.launch!(
-        backend, _cell_rule_body!,
-        cap,
-        (
-            cache.events, cache.daughter, lc.kind, lc.divide!,
-            lc.cluster_divide!, st, p, ctx, key, mcs, lc.rules,
-        )
-    )
-    launches += 1
-
-    _has_clusters(st) && _fix_clusters!(pstats, st)
-    _rebuild_trackers!(pstats, st, ctx, backend; division = (daughter, removed))
-    lc.rebuild!(st, p, ctx, backend)
-    if !isempty(parents)
-        v = to_host(pstats, st.cell.volume)
-        stats.empty_daughters += count(d -> v[d] == 0, daughter[parents])
-    end
-    return launches, true
-end
-
-function _copy_columns!(stats, a::AbstractVector, dst, src)
-    h = to_host(stats, a)
-    h[dst] .= h[src]
-    return counted_copy!(stats, a, h)
-end
-function _copy_columns!(stats, a::AbstractArray, dst, src)
-    h = to_host(stats, a)
-    sel(x) = ntuple(d -> d == ndims(h) ? x : Colon(), ndims(h))
-    h[sel(dst)...] .= h[sel(src)...]
-    return counted_copy!(stats, a, h)
-end
-
 """
     rebuild_trackers!(st, ctx, backend) -> st
 
@@ -905,7 +566,7 @@ Recompute the built-in trackers in `st.cell` exactly from `σ`, on the host.
 The trackers are `volume`, `surface` (over `ctx.surface`, if both exist), `euler` and
 `euler_full`, the `pieces` columns, the moments (`anchor`, `m1`, `m2`), the cluster
 trackers (`cluster_volume`, `cluster_surface`) and the contact counts named in
-`ctx.contact_counts`. Use it after host edits of `σ`; the lifecycle uses it at events.
+`ctx.contact_counts`. Use it after host edits of `σ`.
 
 # Arguments
 - `st`: the state.
@@ -918,11 +579,7 @@ trackers (`cluster_volume`, `cluster_surface`) and the contact counts named in
 rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backend)
 
 # `stats`: the integrator's `PottsStats` counting the host transfers (D-085), or `nothing`
-# `division = (daughter, removed)` (the host lifecycle round): a weighted float `surface`
-# takes the round's changes in integer weight units, added to the tracker, as the device
-# lifecycle does (`_dsurface_body!`), so the host and a device agree bitwise; otherwise (and
-# for every other tracker) the trackers are recomputed from σ
-function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
+function _rebuild_trackers!(stats, st, ctx, backend)
     sync!(stats, backend)
     σ = to_host(stats, st.ownership)
     lat = host_lattice(stats, ctx.lattice)
@@ -935,18 +592,9 @@ function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
     counted_copy!(stats, st.cell.volume, volume)
     if haskey(st.cell, :surface) && haskey(ctx, :surface)
         T = eltype(st.cell.surface)
-        u = division === nothing ? nothing : _units_for(T, ctx.surface, length(σ), CPU())
-        if u === nothing
-            counted_copy!(
-                stats, st.cell.surface, _recompute_surface(
-                    T, σ, lat, ctx.surface, cap
-                )
-            )
-        else
-            surf = to_host(stats, st.cell.surface)
-            _surface_unit_deltas!(surf, σ, lat, ctx.surface, u, division...)
-            counted_copy!(stats, st.cell.surface, surf)
-        end
+        counted_copy!(
+            stats, st.cell.surface, _recompute_surface(T, σ, lat, ctx.surface, cap)
+        )
     end
     _rebuild_euler!(stats, st, σ, lat, cap)
     _rebuild_pieces!(stats, st, σ, lat, cap)
@@ -959,47 +607,6 @@ function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
     _has_clusters(st) && _rebuild_cluster_trackers!(stats, st, σ, ctx)
     _rebuild_contact_counts!(stats, st, σ, lat, _contact_counts(ctx))
     return st
-end
-
-# The surface changes of a lifecycle round in integer weight units, on the host: the
-# arithmetic of the device lifecycle (`_plan_h!` zeroes a daughter's surface,
-# `_dsurface_body!` sums the changes of parents and daughters, `_dfinalize_body!` adds each
-# cell's sum once, then resets a removed cell). σ is after the partition.
-function _surface_unit_deltas!(
-        surf::AbstractVector{T}, σ, lat, rel, u, daughter, removed
-    ) where {T}
-    cap = length(surf)
-    parent = zeros(Int32, cap)
-    for c in 1:cap
-        d = daughter[c]
-        d > 0 && (parent[d] = Int32(c); surf[d] = zero(T))
-    end
-    acc = zeros(Int64, cap)
-    for i in eachindex(σ)
-        s = σ[i]
-        s > 0 || continue
-        pc = parent[s]
-        pc > 0 || continue
-        x = coordinates(lat, i)
-        sd = Int64(0)
-        sp = Int64(0)
-        for k in 1:length(rel)
-            inside, y = shift(lat, x, rel.offsets[k])
-            inside || continue
-            n = σ[linear_index(lat, y)]
-            w = u.q[k]
-            n != s && (sd += w)
-            n == pc && (sp += w)
-            (n != pc && n != s) && (sp -= w)
-        end
-        acc[s] += sd
-        acc[pc] += sp
-    end
-    for c in 1:cap
-        acc[c] != 0 && (surf[c] += _wvalue(T, acc[c], u.e))
-        removed[c] && (surf[c] = zero(T))
-    end
-    return surf
 end
 
 """
@@ -1054,19 +661,3 @@ function with_capacity(st::CPMState, capacity::Integer)
 end
 
 _is_link_data(name::Symbol) = _is_adjacency(name) || startswith(String(name), "link_")
-
-# RemoveIncident for removed cells; empty link rows for daughters (their ids may be reused),
-# in every relationship's adjacency. Payloads are left: `add_link!` rewrites a slot's.
-function _lifecycle_links!(stats, st, removed, daughters)
-    # `map` over (name, array) unrolls statically: each adjacency has its concrete type
-    map(keys(st.cell), values(st.cell)) do name, dev
-        _is_adjacency(name) || return nothing
-        host = (; links = to_host(stats, dev))
-        for c in Iterators.flatten((removed, daughters))
-            remove_incident!(host, c)
-        end
-        counted_copy!(stats, dev, host.links)
-        return nothing
-    end
-    return nothing
-end

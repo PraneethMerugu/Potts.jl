@@ -1653,8 +1653,8 @@ end
 # update (`cand`) and the trigger reads the columns it writes only at the trigger's own
 # cell, the update moves into the lifecycle as `Lifecycle.before`: on a device, update and
 # trigger of a cell then run in one work item, one launch for both. Same code, same order
-# (the host planner runs `before` as its own launch first); the expressions and so the
-# fingerprint are unchanged.
+# (an MCS the lifecycle does not check runs `before` as its own launch); the expressions
+# and so the fingerprint are unchanged.
 function _fuse_before(c::CompiledPottsSystem, T, phases, lc, cand)
     (lc === nothing || cand === nothing || lc.before !== nothing) && return phases, lc
     mcs = phases.mcs

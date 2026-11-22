@@ -591,7 +591,8 @@ end
             @test_throws ArgumentError run_lifecycle(
                 σ, kinds, lat, Lifecycle(bad; kind); tspan = (0, 2), alg
             )
-            u = run_lifecycle(σ, kinds, lat, Lifecycle(good; kind); tspan = (0, 2), alg).u[end]
+            lc = Lifecycle(good; kind)
+            u = run_lifecycle(σ, kinds, lat, lc; tspan = (0, 2), alg).u[end]
             @test count(>(0), u.cell.volume) == length(kinds) + 1 &&
                 u.cell.kind[1] == 3 - kinds[1]
         end
