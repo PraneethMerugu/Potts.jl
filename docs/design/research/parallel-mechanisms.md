@@ -45,9 +45,15 @@ One KernelAbstractions planner replaces the two planners. It runs on the CPU bac
 a device, for every algorithm, `SequentialCPM` included. `@transition`, `@retire`,
 `@create`, `@convert`, `@discrete_events` and `@terminate` are built once, in this planner.
 
+This section is enough to unify the existing rules (divide, remove, transition): their device
+kernels exist, and the acceptance bar below is concrete. The new rules (retire, create,
+discrete events, terminate) need the three PROPOSED rulings below (precedence, collective,
+fallback) before they are built.
+
 - **New device work.**
   - **Retire into a collective.** A partition kernel moves the cell's sites to the
-    collective. An atomic add updates the collective's volume and target.
+    collective. An atomic add updates the collective's volume, and the rule's own update
+    statement updates its target (see "Collective and target" below).
   - **Create at a site set.** The planner allocates the id (the same prefix scan as for
     daughters). The partition kernel assigns the sites. `@create` and `@convert` (D-066,
     `convert.jl`, today a host routine plus kernels) move into the planner.
@@ -61,12 +67,41 @@ a device, for every algorithm, `SequentialCPM` included. `@transition`, `@retire
 - Lifecycle rules run between sweeps, so they do not change what a copy reads. They need no
   checkerboard work.
 
+**Event precedence in one lifecycle round (PROPOSED, pending a user ruling).** Every trigger
+reads the state before the round. The events then apply in the order retire and remove,
+convert, transition, divide, create, then model-scope discrete events, then the terminate
+check. Reason: it extends the existing priority list (remove > convert > transition > divide
+> create, `research/feature-roadmap-review.md`) and keeps A-17, and no outcome depends on
+cell index.
+
+| A cell or site set has, in one round | Outcome |
+|---|---|
+| retire (or remove) and divide | the cell retires; the division is dropped |
+| retire (or remove) and transition | the cell retires; the transition is dropped |
+| transition and divide | the transition applies first; both halves carry the new kind (A-17, as today) |
+| retire `sites => ref`, and `ref` also retires | the sites go with `ref` to `ref`'s destination |
+| retire `sites => ref`, and `ref` divides | the sites join `ref` first; `ref` then divides |
+| `@create` at sites that a retiring cell owns | the create applies after the retire; it takes the sites that are medium after the retire |
+| `@create` at sites that a dividing cell owns | those sites belong to a daughter, so the create skips them; skipped sites are counted, and a create with no site left is dropped and counted |
+| a discrete event and any cell event | cell triggers read the state before the round; model-scope affects apply after the cell events |
+| `@terminate` | checked after the whole round; the round's events stay applied, then the run stops |
+
+**Collective and target (PROPOSED, pending a user ruling).** A collective is an ordinary
+cell: one id, its own kind, declared `collective = true` so that it may have several pieces
+without a split warning (api-synthesis §2). Its target is a cell variable of that cell (for
+example `V_target`), not a parameter. A retire into the collective always adds the retired
+volume to the collective's volume tracker. The target changes only through the rule's own
+update statement (`V_target[core] += volume`), applied by atomic add. Reason: this is the
+Jiang 2005 sketch of api-synthesis §5.2, and no hidden rule changes a target.
+
 **Acceptance.** The host planner is deleted only after all of the following hold.
 1. **Five host behaviors.**
    - Host hooks (`Lifecycle.rebuild!`, a custom `remake_frozen`, cell-scope `pieces` with a
      lifecycle) run as an explicit host stage after the planner, not as a second planner.
-   - No silent handover: a staged form that always launches (an adapted `PLAN_WG` for the
-     Metal workgroup limits), or a kept fallback that a test exercises.
+   - No silent handover. **PROPOSED, pending a user ruling:** a staged form that always
+     launches, with `PLAN_WG` adapted to the backend's workgroup limit (more stages where
+     needed), and no host fallback. Reason: it keeps one planner, as ruled, and the limits
+     are known at `init`, so a test can cover the smallest workgroup.
    - The `SequentialCPM` mobile-site list is rebuilt when the event flag is set. On the CPU
      the flag is in host memory, so the read is free.
    - Moment scratch is Int64 where `_atomic64(backend)` holds, as `mcnt` already is, so large
@@ -109,8 +144,11 @@ reads within the footprint or from cell state kept as running sums.
 - **One source.** The adds are plain on `SequentialCPM` and atomic on parallel backends,
   from one KernelAbstractions and Atomix source.
 - **Integers.** Position sums are integers over the unwrapped coordinates that the centroid
-  trackers use, so they are exact and independent of order. They are Int64 where
+  trackers use, so they are exact and independent of order. They are relative to the cell's
+  anchor and re-centered between sweeps, as today (`geometry.jl`). They are Int64 where
   `_atomic64(backend)` holds, and paired 32-bit words elsewhere (`_paired`).
+- **Covariance in integers.** The covariance is formed in integers (for example
+  N·Σxy − Σx·Σy) before the conversion to float, so the axis keeps Float32 precision.
 - **Derived values.** Centroid, axis, angle and curvature are computed on read from the sums.
   Nothing derived is stored.
 - **No threading inside one ΔH.** A ΔH reads about 8 to 100 sites, so threads cost more than
@@ -171,8 +209,9 @@ generated code as today under every policy; an A/B against the parent commit sho
 
 ### 5.4 `reads = :exact`: priority rounds
 
-Under `:exact` a phase equals a sequential run of all its work items in a uniform random
-order. Every committed ΔH is then exact. `:exact` applies to every model.
+Under `:exact` a phase equals a sequential run of all its work items in a random order.
+The order is pseudo-random (a keyed bijection of the block indices), not uniform over all
+n! orders. Every committed ΔH is then exact. `:exact` applies to every model.
 
 - **Sets per item.** Claims are per work item, because one item makes all the attempts of its
   sub-region. Its write set W is the cells in its box of radius `need`, as `_phase_conflict!`
@@ -194,22 +233,50 @@ order. Every committed ΔH is then exact. `:exact` applies to every model.
      item has a smaller key. The item then makes its attempts.
 
   Items of one round are pairwise free of conflicts, and every conflicting pair runs in key
-  order. W and R must be rebuilt each round: an earlier item can give a later item's cell a
-  new contact neighbor that a third item writes in the same round.
-- **Marks and token.** Both words are 32-bit, so the scheme runs on every backend, Metal
-  included. A mark is a descending round token in the high t bits and the key in the low
-  32 − t bits. Fresh marks are always smaller than stale ones, so no reset launch is needed
-  until the token wraps; then one `fill!` resets both arrays. Memory: 2 × cell capacity × 4 B.
-- **Overflow guard.** The keys need log2(items per phase) bits. At t = 8 that allows 2^24
-  items per phase; a 1024³ lattice with `parts = 4` and b = 1 has 2^18. `init` throws a
-  typed error if the items per phase exceed 2^(32 − t).
+  order. The remaining item with the smallest key always runs, so every round makes
+  progress. W and R must be rebuilt each round: an earlier item can give a later item's cell
+  a new contact neighbor that a third item writes in the same round.
+- **Why check and run can share one launch.** While item j checks, other items of the same
+  launch may already run. Item j's check is still sound:
+  - W_j comes from σ in j's box. A running item i writes only its own sub-region, which lies
+    outside j's box because the spacing is at least `need` + 1.
+  - R_j comes from the contact store and the references of the cells of W_j. A running item
+    changes those only for cells in W_i, and a cell in W_i ∩ W_j is already a conflict, so j
+    does not run this round.
+  - A cell that j enumerates at check time but did not mark fails the check. That is
+    conservative: j waits for a later round.
+- **Marks and token.** A mark is the round token in the high bits and the key in the low
+  bits. The token is one global counter that decreases by one every round, across phases
+  and MCS. Fresh marks are therefore always smaller than every stale mark, so the atomic min
+  needs no reset launch. When the counter reaches 0, one `fill!` resets both arrays and the
+  counter restarts at its maximum. A token that restarted each phase would be unsound: the
+  small tokens of the last phase would beat this phase's fresh marks, so `amin` would never
+  equal a key on cells marked late in the last phase, and those items would never run.
+- **Mark width and limits.**
+  - On backends with 64-bit atomics (CPU, ROCm, CUDA) the marks are 64-bit: a 32-bit token
+    and a 32-bit key. Up to 2^32 items per phase; the token wraps after 2^32 rounds. Memory:
+    2 × cell capacity × 8 B.
+  - Elsewhere (Metal) the marks are 32-bit. The token width is chosen per run:
+    t = 32 − ceil(log2(items per phase)), and `fill!` runs every 2^t − 1 rounds. For example,
+    a 1024³ lattice with `parts = 4` and b = 1 has (1024/4)³ = 2^24 items per phase, so
+    t = 8 and `fill!` runs every 255 rounds. Memory: 2 × cell capacity × 4 B.
+  - `init` throws a typed error only when neither fits: more than 2^32 items per phase with
+    64-bit marks, or more than 2^31 (t < 1) with 32-bit marks.
 - **Marking cost.** The check launch rescans the box and expands R again, about twice the
   marking cost. No per-item lists are stored: a duplicate atomic min with the same key is
   harmless, so no deduplication buffer is needed. On the CPU the marking is a KA launch, not
   a serial host loop like `_phase_conflict!`.
 - **Launches.** Two per round, plus a 4-B read of the remaining-item count every r rounds,
   with r chosen by measurement; launches with no remaining items return at once. At 64 phases
-  and 3 rounds that is about 400 launches per MCS.
+  and 3 rounds that is about 400 launches per MCS. On a device the read-back is a sync, so
+  there are at least 64 syncs per MCS at 64 phases. The device-default measurement (Q3)
+  counts them. An alternative is a fixed round budget per phase, gated on the device, with
+  one read-back per MCS to adapt the budget.
+- **CPU: rounds or inline per phase.** On the CPU, running a phase inline in key order gives
+  the same result, path by path, as running it in rounds. So the scheduler may choose rounds
+  or inline for each phase by cost (for example, inline when the expected round count
+  exceeds a threshold) without changing any result. This protects the CPU A/B of the
+  `:exact` default.
 - **Inline paths.** Every phase with a conflict uses the key order, also when it runs inline:
   `cache.inline` (at most 512 blocks, `threads = false`, threaded ensembles), small block
   counts, and phases that run inline because of a conflict. Because `:exact` is the CPU
@@ -252,18 +319,38 @@ reader never sees half of one commit's adds.
 - **Writer.** A commit brackets its adds to a cell with two atomic adds on the cell's version
   word. On a device several items can commit to one cell at the same time (lockless scheme),
   so a single odd or even version is not enough: two concurrent writers leave it even. The
-  word therefore packs an in-flight writer count (high bits) and an epoch (low bits). Begin
-  adds one to the count; end subtracts one from the count and adds one to the epoch, in one
-  atomic add.
-- **Reader.** Read the word, read the sums, read the word again. Retry if the count was not
-  0 or the word changed. Retries are bounded by a stated cap, because a GPU wavefront without
+  word therefore packs an epoch (high bits) and an in-flight writer count (low bits). Begin
+  adds one to the count. End subtracts one from the count and adds one to the epoch, in one
+  atomic add. With the epoch in the high bits, its carry leaves the word harmlessly when it
+  wraps; in the low bits it would raise the count for the rest of the run.
+- **Field widths.** The count has at least ceil(log2(items per phase + 1)) bits, because at
+  most one commit per item is in flight. The epoch has at least 16 bits, which makes ABA
+  (the word returning to the same value during one read) negligible. The word is 64-bit
+  where the backend has 64-bit atomics. On Metal it is 32-bit, which allows at most
+  2^16 − 1 items per phase under `:live`; `init` throws a typed error above that.
+- **Protocol.**
+  - Writer: begin (atomic add of one, relaxed); a release fence; the adds to the sums
+    (relaxed atomics); end (the atomic add of the end step, with release ordering).
+  - Reader: load the word with acquire ordering (v1); retry if its count is not 0; load the
+    sums (relaxed atomics); an acquire fence; load the word again (v2); retry if v2 ≠ v1.
+  - The release fence after begin keeps the adds from becoming visible before the count.
+    The acquire fence before the second load keeps the sum loads before it. Without these
+    fences torn reads go undetected and the counter undercounts.
+- **Precondition.** `:live` is built on a backend only if Atomix or KernelAbstractions gives a
+  device-wide fence there (ROCm, CUDA, Metal). The builder checks this first. Without the
+  fence, `:live` is not built on that backend.
+- **Retry cap.** Retries are bounded by a stated cap, because a GPU wavefront without
   independent forward progress can spin on a writer in its own wavefront. At the cap the
-  reader takes the value as read and increments a per-run "torn reads" counter in the solve
-  statistics, so the rate is measured and reported.
-- **Memory ordering.** CPU reads and writes of shared sums use relaxed atomic access, so
-  threaded runs have no data races. The version word uses acquire and release ordering (the
-  standard seqlock fences). The builder checks that Atomix gives these orderings on each
-  backend.
+  reader takes the value as read and counts a torn read. Torn reads are counted per block,
+  as `cnt` is, not in one global atomic, and are folded into the solve statistics at read
+  points, so the rate is measured and reported. Two consequences:
+  - A reader lane that waits on a writer lane of its own wavefront always reaches the cap.
+    So the count includes these lockstep waits, which do not tear a value, and overstates
+    real tears.
+  - A large hot cell with many concurrent writers (Zajac) rarely shows a count of 0, so most
+    of its reads will be torn. `:live` is expected to fail tier 2 for such models.
+- **Data races.** CPU reads and writes of shared sums use relaxed atomic access, so threaded
+  runs have no data races.
 - `:live` is not exact. It is a documented deviation under the same tier 2 rule as
   `:snapshot`.
 
@@ -274,8 +361,12 @@ only per-cell counts by kind mask exist (`lib/CorePotts/src/contact_counts.jl`).
 
 - Each cell has a fixed maximum degree of (neighbor id, contact count) slots. Overflow sets
   the status word, which raises a typed error at the next sync.
-- A commit adds the count changes for the target's neighbor cells, which are in W. A new
-  neighbor claims a slot by compare-and-swap on its id; counts change by atomic add.
+- A commit adds the count changes for the target's neighbor cells, which are in W. Counts
+  change by atomic add.
+- A slot is found or inserted in a fixed probe order. The writer scans for its neighbor's id
+  and, at an empty slot, tries a compare-and-swap of the id. After a failed compare-and-swap
+  it compares the winner's id with its own: if equal it uses that slot, else it probes on.
+  Without this check two lockless writers would insert duplicate slots for one neighbor.
 - A slot whose count reaches 0 keeps its id until a compaction between sweeps, so slot reuse
   never races with an insert.
 - The store is allocated only for models whose terms read contact neighbors.
@@ -381,7 +472,7 @@ the axis of a near-isotropic cell and checks the Float32 conditioning of the eig
   case.
 - The scope is every model run under `:exact`, with or without extra read sets, apart from
   the copy-level connectivity deferrals (5.4). "Exact" means every committed ΔH is exact and
-  the phase equals a sequential run of its items in a uniform random order; the checkerboard
+  the phase equals a sequential run of its items in a pseudo-random order; the checkerboard
   kinetics still differ from `SequentialCPM` and are measured by tier 2.
 - `:exact` makes device runs exact also for cells wider than the spacing. Under `:snapshot`
   and `:live` the base lockless device path stays inexact for such cells (D-271), for every
@@ -403,8 +494,14 @@ the axis of a near-isotropic cell and checks the Float32 conditioning of the eig
   stop be exact to the MCS? Exact means one read-back per MCS on a device.
 - **Q2.** Is FBA on the host acceptable for device FBCA runs (one read and one write per
   MCS)?
-- **Q3.** The device default read policy follows a measurement of rounds, launch cost and
-  tier 2. (Settled: the CPU default is `:exact`; the `:live` retry cap behavior is in 5.6.)
+- **Q3.** The device default read policy follows a measurement of rounds, launch cost,
+  read-back syncs and tier 2. (Settled: the CPU default is `:exact`; the `:live` retry cap
+  behavior is in 5.6.)
+
+PROPOSED in section 3, pending a user ruling before the new lifecycle rules are built:
+- **P1.** The event precedence table.
+- **P2.** What a collective and its target are.
+- **P3.** A staged planner form that always launches, with no host fallback.
 
 Settled when the model is built, from its paper:
 - **Q4.** Do Jafari Nivlouei's neighbor loops run at copy time (read sets over contact
