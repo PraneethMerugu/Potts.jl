@@ -25,9 +25,9 @@ module FortunaField
 end
 
 """
-    FortunaMigration(; name, lattice = (120, 120, 31), drive = :extension_only, R = 15.0,
-        φ_n = 0.15, φ_l = 0.05, T = 100.0, λ = 10.0, λ_F = 150.0, c = 0.1, D_F = 1.0e-4,
-        k_decay = 0.9, k_source = 0.9, J)
+    FortunaMigration(; name, lattice = (120, 120, 31), drive = :extension_only,
+        factin_source = :substrate_contact, R = 15.0, φ_n = 0.15, φ_l = 0.05, T = 100.0,
+        λ = 10.0, λ_F = 150.0, c = 0.1, D_F = 1.0e-4, k_decay = 0.9, k_source = 0.9, J)
 
 Build the 3D crawling-cell model of Fortuna et al. (2020): one cell made of a cytoplasm, a
 nucleus and a lamellipodium on a flat substrate, driven by an F-actin field that the
@@ -44,7 +44,9 @@ lamellipodium makes where it touches the substrate.
   from the authors' code (the paper has no lid).
 - **F-actin.** Eq 6: `∂F/∂t = D_F ΔF − k_decay F + k_source` on lamellipodium sites with
   a substrate face neighbor, on the whole lattice. The field is the `PDESystem`
-  `FortunaField.factin`, coupled with `@fields`; the site predicate is its input.
+  `FortunaField.factin`, coupled with `@fields`; the site predicate is its input. With
+  `factin_source = :all_lamellipodium` the source covers every lamellipodium site, as Eq 9 of
+  Thomas et al. (2022) prints it.
 - **Drive.** Eq 7 as printed: a copy of a lamellipodium into the medium (an extension)
   adds `λ_F (F(target) − F(source))` to ΔH. With `drive = :extension_retraction` the same
   term also applies to a copy of the medium into a lamellipodium (a retraction), as in the
@@ -93,6 +95,10 @@ table):
 - `drive = :extension_only`: the copies that the F-actin drive applies to (structural).
   `:extension_only` is Eq 7 as printed; `:extension_retraction` adds retractions, as the
   authors' code does.
+- `factin_source = :substrate_contact`: the sites of the F-actin source (structural).
+  `:substrate_contact` is Eq 6 of Fortuna et al. (2020), the lamellipodium sites with a
+  substrate face neighbor; `:all_lamellipodium` is Eq 9 of Thomas et al. (2022), every
+  lamellipodium site. Throws an `ArgumentError` for any other value.
 - `R = 15.0`: the cell radius in sites. Pass the radius of the lattice you use.
 - `φ_n = 0.15`, `φ_l = 0.05`: the nucleus and lamellipodium volume fractions.
 - `T = 100.0`, `λ = 10.0`: the temperature and the volume constraint strength.
@@ -118,6 +124,8 @@ sol = solve(prob, SequentialCPM(); saveat = 50)
 # References
 - Fortuna, Perrone, Krug, Susin, Belmonte, Thomas, Glazier & de Almeida, Biophys. J. 118,
   2801 (2020).
+- Thomas, Fortuna, Perrone, Graner & de Almeida, Physica A 587, 126511 (2022): the
+  polarization study, with the source of Eq 9 (`factin_source = :all_lamellipodium`).
 
 See also [`fortuna_lattice`](@ref), [`fortuna_layout`](@ref).
 """
@@ -125,6 +133,7 @@ See also [`fortuna_lattice`](@ref), [`fortuna_layout`](@ref).
     @structural_parameters begin
         lattice = (120, 120, 31)                   # R = 15: int(8R)² × int(2.1R)
         drive = :extension_only                    # or :extension_retraction
+        factin_source = :substrate_contact         # or :all_lamellipodium
     end
     @kinds medium substrate[frozen] lid[frozen] cytoplasm lamellipodium nucleus
     @parameters begin
@@ -168,10 +177,20 @@ See also [`fortuna_lattice`](@ref), [`fortuna_layout`](@ref).
     touches_substrate(s) = count(true for n in VonNeumann(1)(s) if kind[n] == substrate) > 0
 
     # Eq 6: the source on lamellipodium sites with a substrate face neighbor (the `ifelse`
-    # skips the neighbor fold at the other sites)
+    # skips the neighbor fold at the other sites); Thomas et al. (2022) Eq 9: the source
+    # on every lamellipodium site
+    factin_source in (:substrate_contact, :all_lamellipodium) || throw(
+        ArgumentError(
+            "FortunaMigration: `factin_source` must be one of :substrate_contact, \
+            :all_lamellipodium, got $(repr(factin_source))"
+        )
+    )
     @fields F = FortunaField.factin(lattice) (
-        FortunaField.source =>
-            ifelse(kind == lamellipodium, touches_substrate(site), false),
+        FortunaField.source => (
+            factin_source === :substrate_contact ?
+                ifelse(kind == lamellipodium, touches_substrate(site), false) :
+                kind == lamellipodium
+        ),
     )
     @energy begin
         cells(cytoplasm, lamellipodium, nucleus) => λ * (volume - V_target)^2    # Eq 5
@@ -242,11 +261,13 @@ function fortuna_lattice(R::Real, φ_l::Real)
 end
 
 """
-    fortuna_layout(R, sys) -> [ownership => σ, kind => kinds, cluster => ids]
+    fortuna_layout(R, sys; nucleus = :ball) -> [ownership => σ, kind => kinds, cluster => ids]
 
 Return the start of [`FortunaMigration`](@ref) on the lattice of `sys`: the paper's two
 concentric balls (supplement S1, p. 6), no lamellipodium, the substrate plane at z = 1 and
-the lid at z = L_z.
+the lid at z = L_z. With `nucleus = :cube` the nucleus is a cube of 6³ sites instead, the
+start of Thomas et al. (2022): "a spherical cell with no lamellipodium engulfing a cubic
+nucleus resting over the substrate".
 
 - Both balls are centered at `(L/2 + 1, L/2 + 1, R + 3/2)`, both strict (`d < r`). The
   supplement puts the center at `L_z/2` with `L_z = 2.1R`, so the ball rests on the
@@ -261,8 +282,16 @@ the lid at z = L_z.
   fewer for a center on a site).
 - The start volumes are not the targets: the volume constraints relax them to the fixed
   targets `(1 − φ_n − φ_l)V`, `φ_n V` and `φ_l V`.
+- The cube (`nucleus = :cube`) spans `ceil(c − 3):ceil(c − 3) + 5` on each axis around
+  the same center `c`: 216 sites for every `R`. Thomas et al. do not state its size; 6³ is
+  the cube of the authors' code, with the code's offset (`x − 3:x + 2` around an integer
+  center), so in x and y it sits half a site off the ball's center.
 - Cells: 1 cytoplasm, 2 nucleus, 3 substrate, 4 lid; the cytoplasm and the nucleus share
   a cluster.
+
+# Keywords
+- `nucleus::Symbol = :ball`: `:ball` (Fortuna et al. 2020, supplement S1) or `:cube`
+  (Thomas et al. 2022). Throws an `ArgumentError` for any other value.
 
 The operating point holds no parameter values: add `:R => R, :φ_l => φ_l`.
 
@@ -272,13 +301,21 @@ sys = FortunaMigration(; name = :fortuna, lattice = fortuna_lattice(10, 0.05))
 op = [fortuna_layout(10, sys); :R => 10.0; :φ_l => 0.05]
 ```
 """
-function fortuna_layout(R::Real, sys)
+function fortuna_layout(R::Real, sys; nucleus::Symbol = :ball)
+    nucleus in (:ball, :cube) || throw(
+        ArgumentError("fortuna_layout: `nucleus` must be :ball or :cube, got $(repr(nucleus))")
+    )
     L, _, Lz = Potts.lattice(sys).dims
-    rn = cbrt(216 / (4π / 3))
-    center = Point(L / 2 + 1, L / 2 + 1, R + 1.5)          # resting on the substrate
+    c = (L / 2 + 1, L / 2 + 1, R + 1.5)                    # resting on the substrate
+    center = Point(c...)
+    region = if nucleus === :ball
+        Interior(Sphere(center, cbrt(216 / (4π / 3))))
+    else
+        map(x -> (ceil(Int, x - 3)):(ceil(Int, x - 3) + 5), c)   # 6³ sites
+    end
     body = Group(
         Objects(Interior(Sphere(center, Float64(R))); kinds = [:cytoplasm]),
-        Fill(:nucleus; region = Interior(Sphere(center, rn)))
+        Fill(:nucleus; region)
     )
     return layout(
         overlay(

@@ -7,7 +7,9 @@
 #   substrate test, two substeps per MCS, and the secrete-then-diffuse order all give
 #   other values;
 # - the update order: the model's step equals CompuCell3D's (diffuse and decay, then add
-#   the source).
+#   the source);
+# - `factin_source = :all_lamellipodium` (Thomas et al. 2022, Eq 9): the whole-lattice
+#   oracle with the source on every lamellipodium site, against the substrate-contact form.
 
 @testsetup module FortunaFieldSetup
 include(joinpath(@__DIR__, "shared", "common.jl"))
@@ -33,9 +35,12 @@ end
 const SMALL_KINDS = [SUBSTRATE, LID, LAMELLIPODIUM, CYTOPLASM]
 # The field after each of `n` MCS of the twin. D_F = 0.05 and k_decay = 0.3 make the
 # diffusion visible after a few steps (the explicit step stays stable: 1 − 6D_F − k > 0).
-function field_run(n; D = 0.05, k = 0.3, ks = 0.9, solver = ONE_STEP)
+function field_run(
+        n; D = 0.05, k = 0.3, ks = 0.9, solver = ONE_STEP,
+        factin_source = :substrate_contact
+    )
     prob = PottsProblem(
-        twin_sys(SMALL),
+        twin_sys(SMALL; factin_source),
         [
             small_op(); :R => 3.0; :φ_l => 0.05; :c => 0.0; :D_F => D; :k_decay => k;
             :k_source => ks
@@ -129,4 +134,27 @@ end
     late = oracle_run(20; p..., order = :secrete_first)
     @test maxdiff(ours, late) > 0.8
     @test maximum(last(late)) < 0.11 && maximum(last(ours)) > 0.99
+end
+
+@testitem "Fortuna field: the source on every lamellipodium site" setup = [
+    FortunaFieldSetup,
+] tags = [:pottsmodels, :core] begin
+    # Thomas et al. (2022), Eq 9: the source covers the lamellipodium sites at z = 3 too
+    # (no substrate face neighbor). The cytoplasm at z = 2 stays without a source.
+    σ = entry(small_op(), ownership)
+    all_sites = findall(source_mask(σ, SMALL_KINDS; substrate = false) .== 1)
+    @test length(all_sites) == 13                    # 9 at z = 2 and 4 at z = 3
+    n = 6
+    ours = field_run(n; factin_source = :all_lamellipodium)
+    want = oracle_run(n; substrate = false)
+    @test maxdiff(ours, want) < 1.0e-12
+    # the z = 3 sites are sources: F = 1 − 0.1ⁿ there at D_F = 0, as at z = 2
+    Fs = field_run(3; D = 0.0, k = 0.9, factin_source = :all_lamellipodium)
+    @test all(n -> all(I -> Fs[n][I] ≈ 1 - 0.1^n, all_sites), 1:3)
+    @test all(n -> maximum(abs, Fs[n][setdiff(CartesianIndices(σ), all_sites)]) == 0, 1:3)
+    # negative controls: the substrate-contact oracle and the default model differ
+    @test maxdiff(ours, oracle_run(n)) > 0.1
+    @test maxdiff(field_run(n), want) > 0.1
+    # the keyword is structural and checked
+    @test_throws ArgumentError FortunaMigration(; name = :f, factin_source = :cytoplasm)
 end
