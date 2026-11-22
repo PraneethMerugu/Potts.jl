@@ -71,7 +71,7 @@
 # Oracles: the parameter values are the spec's, with the unit conversions computed here; ΔH
 # against a brute-force total energy written here (all pairs of the stated neighbourhood,
 # area, the covariance length) plus a chemotaxis formula and TST's ConnectivityPreservedP
-# written here from ca.cpp; the field against a plain explicit Euler written here (15
+# written here from ca.cpp; the field against a plain explicit Euler (shared/merks_field_oracle.jl; 15
 # substeps, ring clamped after each); `merks_state` against the former loop, copied here
 # with StableRNG; the frame against a hand-written 20-offset stencil. Negative controls:
 # the other phase order, no clamp, 14 substeps and a 9-point Laplacian each miss the field
@@ -88,6 +88,7 @@
 
 @testsetup module MerksSplitSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
+include(joinpath(@__DIR__, "..", "shared", "merks_field_oracle.jl"))
 using Potts: CorePotts
 using StableRNGs: StableRNG
 using Random: MersenneTwister
@@ -95,7 +96,6 @@ const MERKS_SPLIT_J = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
 const SOLVER = ExplicitEuler(substeps = 15)
 # NeighborOrder(4) in 2D written out: 1 ≤ dx² + dy² ≤ 5 (4 + 4 + 4 + 8 = 20 sites)
 const N20 = [(dx, dy) for dx in -2:2 for dy in -2:2 if 1 <= dx^2 + dy^2 <= 5]
-const MERKS_SPLIT_N8 = [(dx, dy) for dx in -1:1 for dy in -1:1 if (dx, dy) != (0, 0)]
 # TST's fixed 8-ring, cyclic, starting at (−1, 0) (ca.cpp:1170-1173)
 const RING = ((-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1))
 merks_split_c(u) = Float64.(Array(u.site.c))
@@ -197,48 +197,7 @@ function chemo(prop, c, p; mode = :extension_retraction)
     χ = (prop.old == 0 || prop.new == 0) ? p.χcM : p.χcc
     return -χ * (sat(c[prop.target], p.s) - sat(c[prop.source], p.s))
 end
-# ---------------------------------------------------------------------------------------
-# The field oracle (spec 01 §2.7, §7.4): explicit Euler, h = 1/n per substep, 5-point
-# Laplacian with zero flux at the lattice edge (the frame clamps anyway), c set to 0 on the
-# frame after every substep. `stencil = :nine` is a negative-control 9-point Laplacian;
-# `clamp = false` drops the clamp. (TST splits each substep into secrete/decay, then
-# diffuse; the model takes the unsplit step — a deviations-table row of the reproduction
-# page.)
-# ---------------------------------------------------------------------------------------
-function merks_split_field(c0, σ, kindof, p; n = 15, clamp = true, stencil = :five)
-    c = copy(c0)
-    X, Y = size(c)
-    h = 1 / n
-    isEC = [kindof(σ[x, y]) == 1 for x in 1:X, y in 1:Y]
-    isM = [σ[x, y] == 0 for x in 1:X, y in 1:Y]
-    ring = [kindof(σ[x, y]) == 2 for x in 1:X, y in 1:Y]
-    offs = stencil === :five ? [(1, 0), (-1, 0), (0, 1), (0, -1)] : MERKS_SPLIT_N8
-    wts = if stencil === :five
-        ones(4)
-    else
-        [abs(a) + abs(b) == 1 ? 0.5 : 0.25 for (a, b) in MERKS_SPLIT_N8]
-    end
-    function lap(c, x, y)
-        return sum(
-            k -> wts[k] * (
-                if 1 <= x + offs[k][1] <= X && 1 <= y + offs[k][2] <= Y
-                    c[x + offs[k][1], y + offs[k][2]] - c[x, y]
-                else
-                    0.0
-                end
-            ), eachindex(offs)
-        )
-    end
-    for _ in 1:n
-        c = [
-            c[x, y] +
-                h * (p.Dc * lap(c, x, y) + p.α * isEC[x, y] - p.ε * c[x, y] * isM[x, y])
-                for x in 1:X, y in 1:Y
-        ]
-        clamp && (c[ring] .= 0.0)
-    end
-    return c
-end
+# The field oracle `merks_split_field` (and `MERKS_SPLIT_N8`): shared/merks_field_oracle.jl
 # =======================================================================================
 # D-087: `merks_state` on `Scattered`, draw-for-draw the former loop under a StableRNG
 # =======================================================================================
