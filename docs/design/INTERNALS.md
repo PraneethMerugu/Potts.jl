@@ -214,7 +214,7 @@ Event-driven and validate-then-commit:
    KernelAbstractions planner runs on every backend and algorithm: a device runs the fused
    form (one workgroup) for small problems, else one kernel per stage; the CPU runs the
    staged form and ends a quiet MCS after the trigger kernel (the flag is host memory).
-2. Plan (one workgroup, `lifecycle_device.jl`): daughter ids lowest-first among free ids
+2. Plan (one workgroup, `lifecycle_planner.jl`): daughter ids lowest-first among free ids
    by prefix scans in slot order (deterministic), clusters first in root order with the
    D-035 greedy deferral when capacity runs out, then cells dividing alone; cluster planes
    from the members' exact moments; cell normals.
@@ -263,7 +263,7 @@ applied at the boundary.
     and must also define `frozen_varies(sys) = true`**; otherwise the mask is static
     (`init` warns once). Potts defines only `frozen_kinds` (`nothing` without `[frozen]`).
   - The standard-rule refresh kernel is enqueued with the lifecycle (D-089,
-    `lifecycle_device.jl`) and returns at once on quiet rounds; the CPU folds its counts
+    `lifecycle_planner.jl`) and returns at once on quiet rounds; the CPU folds its counts
     (mobile count, attempts, the `SequentialCPM` mobile-site list) after each event round.
     A custom rule refreshes in the host stage.
     `reinit!`, `set_state!` on `kind` and `derivative_discontinuity!(integ, true)` refresh too

@@ -55,6 +55,24 @@ const PLAN_WG = 256
 const _PLAN_WG_MAX = Ref(PLAN_WG)
 const _PLAN_WG_LIMIT = Ref(0)
 
+"""The error of a launch whose workgroup exceeds the simulated limit `_PLAN_WG_LIMIT`."""
+struct _PlanWGLimitError <: Exception
+    wg::Int
+end
+Base.showerror(io::IO, e::_PlanWGLimitError) =
+    print(io, "workgroup of ", e.wg, " items exceeds the planner's simulated limit")
+
+"""
+    _workgroup_limit_error(e) -> Bool
+
+Whether the launch error `e` says that the workgroup exceeds the kernel's limit. Only such
+an error makes `_fit_plan_wg!` halve the workgroup; any other error (a compile error in a
+user function, for example) is thrown at once. The backend extensions add their launch
+errors.
+"""
+_workgroup_limit_error(e) = false
+_workgroup_limit_error(::_PlanWGLimitError) = true
+
 # The forms of the lifecycle: one fused launch (small device problems), then one kernel per
 # stage, which always launches (the CPU uses it always: a quiet MCS ends after its trigger)
 const _FORM_FUSED = 1
@@ -114,7 +132,7 @@ end
 """Host side of the lifecycle planner: the round counter, the kernel objects and the fold
 buffers (`acc`/`mask` are read at host read points, and on the CPU after every event round;
 `seen` are the values already folded)."""
-struct DeviceLifecycle{DV, CO, LI, K, KF}
+struct LifecyclePlanner{DV, CO, LI, K, KF}
     dv::DV
     cols::CO            # the cell columns a daughter copies from its parent
     links::LI           # the adjacency matrices of the relationships
@@ -139,7 +157,7 @@ end
 const _FUSED_LIFECYCLE_MAX_SITES = 1 << 16
 const _FUSED_LIFECYCLE_MAX_CELLS = 1 << 13
 
-function DeviceLifecycle(
+function LifecyclePlanner(
         backend, N::Int, cap::Int, st; max_sites::Int = _FUSED_LIFECYCLE_MAX_SITES,
         max_cells::Int = _FUSED_LIFECYCLE_MAX_CELLS
     )
@@ -159,7 +177,7 @@ function DeviceLifecycle(
     else
         nothing
     end
-    return DeviceLifecycle(
+    return LifecyclePlanner(
         _device_scratch(backend, N, cap, length(st.ownership)), cols, links,
         _plan_kernel!(backend), fused,
         Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false),
@@ -992,7 +1010,7 @@ standard-rule frozen mask. Returns the number of kernel launches. On a device no
 synchronized or transferred; on the CPU a quiet round ends after the trigger kernel.
 `cache.device.par[]` is the round's event-flag slot (`_events_on`).
 """
-function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backend, refresh)
+function run_lifecycle!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backend, refresh)
     D = cache.device
     mcs % lc.every != 0 && return _run_before(lc.before, st, p, ctx, key, mcs, backend)
     r = (D.round[] += 1)
@@ -1087,21 +1105,21 @@ end
 
 """
 Fit the planner's workgroup to its pipeline's limit: launch the planner with `live = false`
-(no stage runs) over one workgroup of `D.wg[]` items, halving until the launch is accepted.
-A launch that exceeds the limit fails on the host before anything is enqueued. The plan does
-not depend on the workgroup size.
+(no stage runs) over one workgroup of `D.wg[]` items, halving while the launch fails with a
+workgroup-limit error (`_workgroup_limit_error`). A launch that exceeds the limit fails on
+the host before anything is enqueued. Any other error is thrown at once. The plan does not
+depend on the workgroup size.
 """
 function _fit_plan_wg!(D, args::A) where {A}
     w = D.wg[]
     while true
         ok = try
             lim = _PLAN_WG_LIMIT[]
-            lim > 0 && w > lim &&
-                throw(ArgumentError("workgroup of $w exceeds the planner's limit (test)"))
+            lim > 0 && w > lim && throw(_PlanWGLimitError(w))
             D.plan!(false, w, args...; ndrange = w, workgroupsize = w)
             true
         catch e
-            (isfatal(e) || w == 1) && rethrow()
+            (w == 1 || isfatal(e) || !_workgroup_limit_error(e)) && rethrow()
             false
         end
         ok && break

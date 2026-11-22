@@ -1745,13 +1745,13 @@ completed MCS, which the copy functions (`delta_H`, `constraint`, `temperature`,
 sweep_ctx(ctx::NamedTuple, mcs::Integer) = merge(ctx, (; mcs = Int(mcs)))
 
 function _run_entry!(integ::PottsIntegrator, ::LifecyclePhase)
-    integ.f.lifecycle === nothing || _step_lifecycle!(integ, integ.lcache.device)
+    integ.f.lifecycle === nothing || _step_lifecycle!(integ)
     return nothing
 end
 
 # The lifecycle planner (D-089, D-332): enqueued, with the standard-rule mask refresh; then
 # the host stage (`_host_stage!`) where the backend is the CPU or the model has host hooks
-function _step_lifecycle!(integ, D::DeviceLifecycle)
+function _step_lifecycle!(integ)
     sc = integ.mscratch
     refresh = if sc === nothing
         nothing
@@ -1759,11 +1759,11 @@ function _step_lifecycle!(integ, D::DeviceLifecycle)
         (; integ.ctx.mobility.frozen, kinds = frozen_kinds(integ.f.sys))
     end
     lc = integ.f.lifecycle
-    _stats(integ).launches += run_lifecycle_device!(
+    _stats(integ).launches += run_lifecycle!(
         lc, integ.lcache, integ.state, integ.p, integ.ctx, integ.key, integ.t,
         integ.backend, refresh
     )
-    integ.t % lc.every == 0 && _host_stage!(integ, D, integ.backend)
+    integ.t % lc.every == 0 && _host_stage!(integ, integ.lcache.device, integ.backend)
     return nothing
 end
 

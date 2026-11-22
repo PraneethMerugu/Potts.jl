@@ -1,4 +1,4 @@
-# The lifecycle planner (`src/lifecycle_device.jl`) is one KernelAbstractions planner for
+# The lifecycle planner (`src/lifecycle_planner.jl`) is one KernelAbstractions planner for
 # every backend and every algorithm. The CPU runs its staged form (one kernel per stage);
 # the fused form (one workgroup) runs on a device, and here on the CPU under
 # `_FORCE_FUSED_LIFECYCLE`, so the lifecycle, compartment and relationship tests check its
@@ -6,7 +6,7 @@
 # `current_state(integ)`, `checkpoint`, the end of `solve!`); on the CPU they are folded
 # after every event round.
 
-@testsetup module CP_lifecycle_device
+@testsetup module CP_lifecycle_planner
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates,
@@ -73,15 +73,15 @@ include("shared/export_all.jl")
 end
 
 @testitem "lifecycle planner: attachment, statistics, scratch and determinism" setup = [
-    CP_lifecycle_device,
-] tags = [:corepotts, :lifecycle_device] begin
+    CP_lifecycle_planner,
+] tags = [:corepotts, :lifecycle_planner] begin
     @testset "lifecycle planner: attachment, statistics, scratch and determinism" begin
         prob = ld_base_prob().prob
         # one planner for every algorithm; the CPU runs it staged, a test may force fused
         for alg in (SequentialCPM(), CheckerboardCPM())
             integ = init(prob, alg; save_start = false, save_end = false)
             D = integ.lcache.device
-            @test D isa CorePotts.DeviceLifecycle && D.fused! === nothing
+            @test D isa CorePotts.LifecyclePlanner && D.fused! === nothing
             @test D.form[] == CorePotts._FORM_STAGED
             # the CPU has 64-bit atomics: the moment scratch is Int64
             @test eltype(D.dv.dm1) == Int64 && eltype(D.dv.dm2) == Int64
@@ -113,8 +113,8 @@ end
 end
 
 @testitem "lifecycle planner (fused): lifecycle_tests" setup = [
-    CP_lifecycle_device,
-] tags = [:corepotts, :lifecycle_device] begin
+    CP_lifecycle_planner,
+] tags = [:corepotts, :lifecycle_planner] begin
     @testset "fused lifecycle_tests" begin
         with_fused() do
             @test init(ld_base_prob().prob, CheckerboardCPM()).lcache.device.fused! !==
@@ -125,8 +125,8 @@ end
 end
 
 @testitem "lifecycle planner (fused): compartments_tests" setup = [
-    CP_lifecycle_device,
-] tags = [:corepotts, :lifecycle_device] begin
+    CP_lifecycle_planner,
+] tags = [:corepotts, :lifecycle_planner] begin
     @testset "fused compartments_tests" begin
         with_fused() do
             @test init(ld_base_prob().prob, CheckerboardCPM()).lcache.device.fused! !==
@@ -137,8 +137,8 @@ end
 end
 
 @testitem "lifecycle planner (fused): relationships_tests" setup = [
-    CP_lifecycle_device,
-] tags = [:corepotts, :lifecycle_device] begin
+    CP_lifecycle_planner,
+] tags = [:corepotts, :lifecycle_planner] begin
     @testset "fused relationships_tests" begin
         with_fused() do
             @test init(ld_base_prob().prob, CheckerboardCPM()).lcache.device.fused! !==
@@ -149,8 +149,8 @@ end
 end
 
 @testitem "lifecycle planner: the fused form that cannot launch hands over" setup = [
-    CP_lifecycle_device,
-] tags = [:corepotts, :lifecycle_device] begin
+    CP_lifecycle_planner,
+] tags = [:corepotts, :lifecycle_planner] begin
     @testset "the fused form that cannot launch hands over" begin
         # A fused form whose first launch fails (on a device: its workgroup exceeds what
         # the kernel's pipeline allows; simulated here) hands over to the staged form, which
@@ -179,8 +179,8 @@ end
 end
 
 @testitem "lifecycle planner: workgroup fit and the smallest workgroup" setup = [
-    CP_lifecycle_device,
-] tags = [:corepotts, :lifecycle_device] begin
+    CP_lifecycle_planner,
+] tags = [:corepotts, :lifecycle_planner] begin
     @testset "workgroup fit and the smallest workgroup" begin
         # The plan does not depend on the planner's workgroup: a workgroup of one item (the
         # smallest a backend can impose) gives the same run as the default, in both forms
@@ -212,6 +212,10 @@ end
             fit = solve(pg, CheckerboardCPM(); saveat = 5)
             CorePotts._PLAN_WG_LIMIT[] = 0
             @test same_run(fit, solve(pg, CheckerboardCPM(); saveat = 5))
+            # only a workgroup-limit error halves; any other launch error is thrown at once
+            @test CorePotts._workgroup_limit_error(CorePotts._PlanWGLimitError(24))
+            @test !CorePotts._workgroup_limit_error(ErrorException("compile error"))
+            @test !CorePotts._workgroup_limit_error(ArgumentError("bad argument"))
             # the smallest workgroup, through the whole lifecycle suite (staged)
             CorePotts._PLAN_WG_MAX[] = 1
             include_items(@__MODULE__, joinpath(@__DIR__, "lifecycle_tests.jl"))
@@ -223,8 +227,8 @@ end
 end
 
 @testitem "lifecycle planner: CPU quiet MCS, mobile-site list and host hooks" setup = [
-    CP_lifecycle_device,
-] tags = [:corepotts, :lifecycle_device] begin
+    CP_lifecycle_planner,
+] tags = [:corepotts, :lifecycle_planner] begin
     @testset "CPU quiet MCS, mobile-site list and host hooks" begin
         base = ld_base_prob()
         # a quiet MCS on the CPU costs the trigger kernel only, in both forms
@@ -297,9 +301,9 @@ end
 end
 
 @testitem "lifecycle planner: divide! links and moment-scratch bound" setup = [
-    CP_lifecycle_device,
+    CP_lifecycle_planner,
 ] tags = [
-    :corepotts, :lifecycle_device,
+    :corepotts, :lifecycle_planner,
 ] begin
     @testset "divide! links and moment-scratch bound" begin
         base = ld_base_prob()
@@ -410,9 +414,9 @@ end
 end
 
 @testitem "lifecycle planner: Lifecycle.before with the trigger" setup = [
-    CP_lifecycle_device,
+    CP_lifecycle_planner,
 ] tags = [
-    :corepotts, :lifecycle_device,
+    :corepotts, :lifecycle_planner,
 ] begin
     @testset "Lifecycle.before with the trigger" begin
         # `Lifecycle.before` (D-101): a cell update run with the trigger of each cell, in
@@ -500,8 +504,8 @@ end
 end
 
 @testitem "lifecycle planner: pieces columns equal a recount after events" setup = [
-    CP_lifecycle_device,
-] tags = [:corepotts, :lifecycle_device] begin
+    CP_lifecycle_planner,
+] tags = [:corepotts, :lifecycle_planner] begin
     @testset "cell-scope pieces columns equal a recount after events" begin
         prob = pieces_lifecycle_problem()
         u0 = prob.u0

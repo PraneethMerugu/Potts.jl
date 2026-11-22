@@ -71,7 +71,7 @@ end
                         fused_lifecycle_max_sites = sites
                     ); saveat = 1
                 )
-                @test integ.lcache.device isa CorePotts.DeviceLifecycle
+                @test integ.lcache.device isa CorePotts.LifecyclePlanner
                 @test (integ.lcache.device.fused! === nothing) == (form == "staged")
                 sol = solve!(integ)
                 @test sol.stats.lifecycle.divisions >= 3 &&

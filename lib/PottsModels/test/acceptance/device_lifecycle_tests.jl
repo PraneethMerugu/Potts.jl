@@ -13,8 +13,8 @@
 #        quantities besides `V_target`, and whether the capacity is 6 or 60 slots; and for
 #        these plain divisions it is exactly 0 syncs / 0 transfers / 0 B (D-089: the whole
 #        lifecycle on the device, no host decision). Compartment (F2) and link (F3) event
-#        MCS: the same traffic on a 16×16 and a 64×64 lattice (their host planning may stay,
-#        O(events); a device link graph is later work).
+#        MCS: the same traffic on a 16×16 and a 64×64 lattice (the one lifecycle planner
+#        plans them as well; their traffic does not grow with the lattice).
 #  (iii) Events keep their exact MCS and the results are those of the CPU path, in law:
 #        division counts, kinds, generations (a reused slot's generation goes up by one),
 #        daughters' copied quantities and state rules, compartment clusters (a cluster

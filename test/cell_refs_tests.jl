@@ -553,7 +553,7 @@ end
             cpu = cr_release_summary(solve(prob, CheckerboardCPM()).u[end])
             @test cpu == (; nalive = 4, slot3 = true, names2 = 2, names0 = 2, other = 0)
             integ = init(prob, CheckerboardCPM(); backend)
-            @test integ.lcache.device isa CorePotts.DeviceLifecycle
+            @test integ.lcache.device isa CorePotts.LifecyclePlanner
             # both forms (release inside the copies stage) agree with the CPU
             dev = cr_release_summary(solve!(integ).u[end])
             @test Symbol(integ.retcode) === :Success

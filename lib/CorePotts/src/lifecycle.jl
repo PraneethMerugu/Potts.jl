@@ -1,7 +1,7 @@
 # Cell lifecycle: division, removal, kind transition, creation and id reuse
 # (INTERNALS §1.7 as amended by D-089 and D-332).
 #
-# One planner (`lifecycle_device.jl`) on every backend and for every algorithm: per checked
+# One planner (`lifecycle_planner.jl`) on every backend and for every algorithm: per checked
 # MCS a trigger kernel writes an event code per cell, then kernels plan (daughter ids
 # lowest-first among free ids, deferral on exhausted capacity), partition sites by plane,
 # remove cells, set kinds, apply the daughter state rules and update the trackers, with no
@@ -533,7 +533,7 @@ end
 # Scratch
 
 """Lifecycle scratch: buffers sized by capacity on the state's backend, and the planner's
-state (`DeviceLifecycle`)."""
+state (`LifecyclePlanner`)."""
 struct LifecycleCache{E, D, R, NM, B, DL}
     events::E
     daughter::D
@@ -553,7 +553,7 @@ function LifecycleCache(
         KernelAbstractions.zeros(backend, Bool, capacity),
         KernelAbstractions.zeros(backend, T, N, capacity),
         KernelAbstractions.zeros(backend, T, capacity),
-        DeviceLifecycle(backend, N, capacity, st; fused_limits...)
+        LifecyclePlanner(backend, N, capacity, st; fused_limits...)
     )
 end
 

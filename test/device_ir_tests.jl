@@ -7,7 +7,7 @@
 # - negative controls for the scan itself: a kernel that widens to Float64 through a
 #   Float64 literal, and one that converts explicitly, are flagged; their Float32 twin is
 #   not;
-# - the staged lifecycle's compile-only launch (`_CompileOnly`, lifecycle_device.jl)
+# - the staged lifecycle's compile-only launch (`_CompileOnly`, lifecycle_planner.jl)
 #   compiles the kernel the launch then runs, and writes nothing, on ROCm.
 #
 # ROCm only (included first from test/gpu.jl when POTTS_GPU=rocm).
@@ -95,7 +95,7 @@ KA.@kernel function devir_f32!(a)
     @inbounds a[i] = a[i] * 1.000000001f0
 end
 
-# --- the staged lifecycle's compile-only launch (lifecycle_device.jl, `_CompileOnly`) -----
+# --- the staged lifecycle's compile-only launch (lifecycle_planner.jl, `_CompileOnly`) ---
 # `Exec.compile!`: a launch of the kernel `Exec.launch!` runs, with `n = 0` (no work item
 # passes the guard). On ROCm: the hook sees the kernel, the array is untouched, and the
 # launch that follows compiles nothing new (`_kernel_instances` does not grow).

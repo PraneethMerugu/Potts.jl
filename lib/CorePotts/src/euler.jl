@@ -340,7 +340,7 @@ function _rebuild_euler!(stats, st, σ, lat, cap)
     return nothing
 end
 
-# device rebuild (`lifecycle_device.jl`): zero every slot, then sum the windows
+# device rebuild (`lifecycle_planner.jl`): zero every slot, then sum the windows
 @inline _ezero!(::Nothing, c) = nothing
 # c in 1:capacity (the launch range)
 @inline _ezero!(col, c) = (@inbounds col[c] = Int32(0); nothing)

@@ -193,7 +193,7 @@ function lifecycle_run(prob, fault::Bool; fused::Bool = true, backend = nothing)
         alg = fused ? CheckerboardCPM() : CheckerboardCPM(; fused_lifecycle_max_sites = 0)
         integ = init(prob, alg; saveat = 1, kw...)
         D = integ.lcache.device
-        @assert D isa CorePotts.DeviceLifecycle && (D.fused! !== nothing) == fused
+        @assert D isa CorePotts.LifecyclePlanner && (D.fused! !== nothing) == fused
         handover = -1
         while integ.t < last(prob.tspan)
             t = integ.t
