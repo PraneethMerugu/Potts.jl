@@ -587,24 +587,13 @@ end
             end
         end
         kind = (st, p, ctx, key, mcs, c) -> Int32(3 - st.cell.kind[c])
-        # this file also runs under the forced planner
-        prev = CorePotts._FORCE_DEVICE_LIFECYCLE[]
-        for force in (false, true)
-            CorePotts._FORCE_DEVICE_LIFECYCLE[] = force
-            try
-                @test_throws ArgumentError run_lifecycle(
-                    σ, kinds, lat, Lifecycle(bad; kind);
-                    tspan = (0, 2), alg = CheckerboardCPM()
-                )
-                u = run_lifecycle(
-                    σ, kinds, lat, Lifecycle(good; kind);
-                    tspan = (0, 2), alg = CheckerboardCPM()
-                ).u[end]
-                @test count(>(0), u.cell.volume) == length(kinds) + 1 &&
-                    u.cell.kind[1] == 3 - kinds[1]
-            finally
-                CorePotts._FORCE_DEVICE_LIFECYCLE[] = prev
-            end
+        for alg in (SequentialCPM(), CheckerboardCPM())
+            @test_throws ArgumentError run_lifecycle(
+                σ, kinds, lat, Lifecycle(bad; kind); tspan = (0, 2), alg
+            )
+            u = run_lifecycle(σ, kinds, lat, Lifecycle(good; kind); tspan = (0, 2), alg).u[end]
+            @test count(>(0), u.cell.volume) == length(kinds) + 1 &&
+                u.cell.kind[1] == 3 - kinds[1]
         end
     end
 end

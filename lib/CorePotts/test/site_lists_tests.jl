@@ -22,12 +22,12 @@ end
         @test CorePotts.site_index_type(Int64(typemax(Int32)) + 1) === Int64
         function forced(f, wide::Bool; device = false)
             CorePotts._FORCE_WIDE_SITES[] = wide
-            CorePotts._FORCE_DEVICE_LIFECYCLE[] = device
+            CorePotts._FORCE_FUSED_LIFECYCLE[] = device
             try
                 return f()
             finally
                 CorePotts._FORCE_WIDE_SITES[] = false
-                CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+                CorePotts._FORCE_FUSED_LIFECYCLE[] = false
             end
         end
         S = 10
@@ -37,8 +37,8 @@ end
             CPMFunction(gg_delta_H; temperature = gg_temperature), initial_state(σ, kinds),
             Lattice((30, 30)), (0, 15), gg_params()
         )
-        # (problem, algorithm, device lifecycle): a mask that a transition and a removal
-        # change (the host refresh's counters, the mobile-site list, the device planner's
+        # (problem, algorithm, fused lifecycle form): a mask that a transition and a removal
+        # change (the host refresh's counters, the mobile-site list, the planner's
         # counters), a static mask, and a lattice without one
         cases = [
             (fk_problem(fk_flip(S); kind = fk_swap), SequentialCPM(), false),

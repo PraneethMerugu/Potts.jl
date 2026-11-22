@@ -99,21 +99,11 @@ end
         # both models divide
         @test nw > 100 && nc > 10
         @test first(cs_site_sum_digests()) == r1
-        # The host lifecycle planner adds the same integer units as the device
-        # lifecycle, so the CPU's default path gives the same bits (weighted surface after
-        # 441 divisions, compartments after 34 cluster divisions). Control: with float
-        # atomics the host's float recompute and the device lifecycle's float deltas differ.
-        @test first(cs_site_sum_digests(; host = true)) == r1
-        ch, cd = first(cs_site_sum_digests(; ctl = true, host = true)),
-            first(cs_site_sum_digests(; ctl = true))
-        @test ch[1] == cd[1] && ch[2] != cd[2] && ch[4] != cd[4]
         # the trackers against a recount from σ, with a tolerance: copies add the float
         # weights and divisions their integer units, so a weighted tracker and a recount
         # differ in the last bits (`_weight_units`); rtol 1e-5 is a few Float32 ulps of the
         # sum
-        f0 = CorePotts._FORCE_DEVICE_LIFECYCLE[]
-        CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
-        try
+        let
             pw = PottsProblem(
                 CsWSurf(; name = :w), cs_wsurf_op(), (0, 80);
                 T = Float32, seed = 7, capacity = 2000
@@ -132,8 +122,6 @@ end
             @test Array(c.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(
                 Array(c.ownership), Array(c.cell.cluster), pc.lattice, CS_W
             ) rtol = 1.0e-5
-        finally
-            CorePotts._FORCE_DEVICE_LIFECYCLE[] = f0
         end
         # a state saved before the compound writes' scratch (no `#cv_w*` columns)
         # runs after `remake`, which adds them; its result equals the fresh problem's

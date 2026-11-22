@@ -186,9 +186,8 @@ Both kinds of division can happen in one MCS:
   that plane through the cluster centroid; `cluster_divide!` runs for each member. A
   portable `cluster_normal` reads `st.cell.volume`, `anchor`, `m1` and `m2` only at the
   root's index, any other cell column only as `generation`, `kind` or `cluster`, and not
-  `st.ownership`. The host planner passes a `σ` that holds cluster numbers and cluster
-  moments at every root; the device planner passes a `σ` that holds cell numbers, the full
-  cell columns, and the cluster's volume and moments at every index. The daughters form a
+  `st.ownership`. The planner passes a `σ` that holds cell numbers, the full cell columns,
+  and the cluster's volume and moments at every index. The daughters form a
   new cluster. A dividing cluster takes precedence over its members' own `EVENT_DIVIDE`.
 - [`EVENT_DIVIDE`](@ref) divides the cell alone along `normal`; `divide!` runs. A
   compartment's daughter (the parent shares its cluster with another live cell) stays in
@@ -217,13 +216,14 @@ its generation, so cell-addressed random draws never repeat.
 - `divide! = no_divide_rule`: `divide!(st, p, ctx, key, mcs, parent, daughter)`, the
   daughter state rule, run after the default copy of every non-tracker cell quantity (for
   example, to halve extensive quantities). [`no_divide_rule`](@ref) does nothing.
-- `rebuild!`: `rebuild!(st, p, ctx, backend)`, a host hook run after the built-in
-  trackers are rebuilt. Model trackers that the lifecycle cannot know, such as the arrays
-  of `commit_site_sum!` and `commit_site_min!`, must be recomputed here
-  (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or they go stale. On a
-  device, a lifecycle with `rebuild!` (or a model with a custom `remake_frozen` rule) runs
-  its planner on the host as on the CPU, with one synchronizing read-back per checked
-  MCS. Every other lifecycle runs entirely on the device. The default does nothing.
+- `rebuild!`: `rebuild!(st, p, ctx, backend)`, a host hook run after the planner on
+  every MCS with an event, once the built-in trackers are updated. Model trackers that the
+  lifecycle cannot know, such as the arrays of `commit_site_sum!` and `commit_site_min!`,
+  must be recomputed here (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or
+  they go stale. On a device, a lifecycle with `rebuild!` (or a model with a custom
+  `remake_frozen` rule or cell-scope `pieces`) reads the event flag once per checked MCS:
+  one synchronization and a 4-byte transfer. Every other lifecycle runs entirely on the
+  device. The default does nothing.
 - `every::Integer = 1`: check the triggers every `every` MCS.
 - `cluster_normal = normal`, `cluster_divide! = divide!`: `normal` and `divide!` for
   cluster divisions.
@@ -237,7 +237,8 @@ its generation, so cell-addressed random draws never repeat.
   lifecycle does not check), as a `CellPhase` that runs right before the lifecycle. It
   must write only cell `c`'s own columns. The trigger of cell `c` may read a column that
   `before` writes only at index `c`. The device lifecycle then runs `before` and the
-  trigger of each cell in one work item; the host planner runs `before` as its own launch.
+  trigger of each cell in one work item; on an MCS that the lifecycle does not check,
+  `before` runs as its own launch.
 - `release = nothing`: `release(st, c)`, the reset of a model's cell references. It runs
   for every cell `c` of an event round before any id is allocated (on a device in the
   copy stage, before the daughter column copies, while every volume is still the
@@ -327,7 +328,7 @@ function _assign_births!(stats, st, ds)
     return nothing
 end
 
-# `before` as its own launch (the host planner; MCS the lifecycle does not check)
+# `before` as its own launch (MCS the lifecycle does not check)
 _run_before(::Nothing, st, p, ctx, key, mcs, backend) = 0
 function _run_before(f::F, st, p, ctx, key, mcs, backend) where {F}
     return CellPhase(f)(st, p, ctx, key, mcs, backend)

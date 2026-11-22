@@ -110,13 +110,13 @@ end
             )
         end
         E(c, g) = Potts.CorePotts.cell_entity(c, g)
-        # host lifecycle planner (SequentialCPM), then the device planner on the CPU backend
-        for (label, alg, device) in (
-                ("host", SequentialCPM(), false), (
-                    "device planner", CheckerboardCPM(), true,
-                ),
+        # the lifecycle planner, staged on the CPU (both algorithms), then fused
+        for (label, alg, fused) in (
+                ("sequential", SequentialCPM(), false),
+                ("checkerboard", CheckerboardCPM(), false),
+                ("fused", CheckerboardCPM(), true),
             )
-            Potts.CorePotts._FORCE_DEVICE_LIFECYCLE[] = device
+            Potts.CorePotts._FORCE_FUSED_LIFECYCLE[] = fused
             try
                 st = solve(prob, alg; save_start = false).u[end].cell
                 gen, X, u = Array(st.generation), Array(st.X), Array(st.u)
@@ -151,7 +151,7 @@ end
                 @info "draw-address oracle ($label): $(length(daughters)) daughters, \
                     generations $(gen[daughters])"
             finally
-                Potts.CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+                Potts.CorePotts._FORCE_FUSED_LIFECYCLE[] = false
             end
         end
     end

@@ -166,18 +166,18 @@ end
             end
         end
 
-        @testset "host lifecycle rebuild (SequentialCPM)" begin
+        @testset "lifecycle under SequentialCPM" begin
             prob = eu_problem()
             sol = solve(prob, SequentialCPM(); saveat = 1)
             @test sol.stats.lifecycle.divisions >= 2
             @test sum(u -> eu_bad(u.cell, u.ownership, prob.lattice), sol.u) == 0
         end
-        @testset "device lifecycle on the CPU backend ($form)" for (form, sites) in (
+        @testset "the lifecycle planner forms ($form)" for (form, sites) in (
                 (
                     "fused", CheckerboardCPM().fused_lifecycle_max_sites,
                 ), ("staged", 0),
             )
-            CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
+            CorePotts._FORCE_FUSED_LIFECYCLE[] = true
             try
                 prob = eu_problem()
                 integ = init(
@@ -190,7 +190,7 @@ end
                 @test sol.stats.lifecycle.divisions >= 2
                 @test sum(u -> eu_bad(u.cell, u.ownership, prob.lattice), sol.u) == 0
             finally
-                CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+                CorePotts._FORCE_FUSED_LIFECYCLE[] = false
             end
         end
     end

@@ -198,18 +198,14 @@ end
 
 cs_bits(x) = string(hash(reinterpret(UInt32, Float32.(vec(Array(x))))); base = 16)
 # [w σ, w surface, comp σ, comp cluster surface, conv σ, conv tot, conv V_target]
-# in Float32 with CheckerboardCPM on `backend` (on the CPU with the device lifecycle, as a
-# device runs it; the weighted surface model staged, the compartments fused); `ctl = true`
+# in Float32 with CheckerboardCPM on `backend` (the lifecycle as a device runs it: the
+# weighted surface model staged, the compartments fused, forced on the CPU); `ctl = true`
 # restores the float atomics (negative control). Also returns the division counts (checked >
-# 0). `host = true`: on the CPU, the host lifecycle planner instead (the same unit
-# arithmetic, so the same bits)
-function cs_site_sum_digests(
-        backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80,
-        host::Bool = false
-    )
+# 0).
+function cs_site_sum_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80)
     CorePotts._FLOAT_ATOMICS[] = ctl
-    f0 = CorePotts._FORCE_DEVICE_LIFECYCLE[]
-    CorePotts._FORCE_DEVICE_LIFECYCLE[] = !host
+    f0 = CorePotts._FORCE_FUSED_LIFECYCLE[]
+    CorePotts._FORCE_FUSED_LIFECYCLE[] = true
     try
         # Pin `threads = false` so the 1-thread vs 4-thread comparison stays deterministic
         # regardless of `inline_max_blocks`.
@@ -233,7 +229,7 @@ function cs_site_sum_digests(
         return d, (sw.stats.lifecycle.divisions, sc.stats.lifecycle.divisions)
     finally
         CorePotts._FLOAT_ATOMICS[] = false
-        CorePotts._FORCE_DEVICE_LIFECYCLE[] = f0
+        CorePotts._FORCE_FUSED_LIFECYCLE[] = f0
     end
 end
 # [σ, tot, V_target] of the `@convert` model alone (the five-runs test on a device)

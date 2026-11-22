@@ -52,13 +52,11 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
     return f, p
 end
 
-"""Moment trackers of `u` exact: on the host planner equal to a recount from σ; on the
-device planner, which keeps the parent's anchor for a daughter (a representation choice),
-the same centroid and covariance of every live cell as the recount."""
+"""Moment trackers of `u` exact: the lifecycle planner keeps the parent's anchor for a
+daughter (a representation choice), so the same centroid and covariance of every live cell
+as a recount from σ."""
 function same_moments(u, lat::Lattice{N}, cap, alg) where {N}
     m = init_moments(u.ownership, lat, cap)
-    device = CorePotts._FORCE_DEVICE_LIFECYCLE[] && alg isa CheckerboardCPM
-    device || return u.cell.m1 == m.m1 && u.cell.m2 == m.m2
     ref = merge(m, (; volume = Int32[count(==(c), u.ownership) for c in 1:cap]))
     return all(1:cap) do c
         ref.volume[c] == 0 && return u.cell.volume[c] == 0

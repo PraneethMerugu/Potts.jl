@@ -392,23 +392,12 @@ end
             same[1] && @test h[2] == a[2]
             same[2] && @test h[4] == a[4]
             same[3] && @test h[6:7] == a[6:7]
-            # The CPU's host lifecycle planner adds the same integer units as the
-            # device lifecycle, so the two CPU paths agree in full (integer units, no float
-            # deltas)
-            hh, _ = cs_site_sum_digests(CorePotts.CPU(); host = true)
-            @test hh == h
-            # and across backends the same conditional reading: σ first, then the sums
-            hh[1] == a[1] && @test hh[2] == a[2]
-            hh[3] == a[3] && @test hh[4] == a[4]
             CorePotts._FLOAT_ATOMICS[] = true
             try
                 a0, _ = cs_site_sum_digests(backend; ctl = true)
                 b0, _ = cs_site_sum_digests(backend; ctl = true)
                 conv0 = [cs_conv_digests(backend; ctl = true) for _ in 1:5]
                 @test a0[[2, 4, 6, 7]] != a[[2, 4, 6, 7]]
-                h0, _ = cs_site_sum_digests(CorePotts.CPU(); ctl = true, host = true)
-                # the host's float recompute ≠ ROCm
-                @test h0[2] != a0[2] && h0[2] != a[2]
                 @info "negative control (float atomics): two ROCm runs" surface_equal = a0[
                     2,
                 ] == b0[2] cluster_surface_equal = a0[4] ==

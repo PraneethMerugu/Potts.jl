@@ -1,32 +1,22 @@
-# follow-ups of the launch fusion (D-101
-# notes). X4 (typed literals in generated code) is not covered here: it changes every
-# fingerprint and is batched with another fingerprint change.
+# Lifecycle launch fusion (D-101 follow-ups). X4 (typed literals in generated code) is not
+# covered here: it changes every fingerprint and is batched with another fingerprint change.
 #
 # What is pinned:
-#  (a) A device lifecycle whose staged form fails AFTER its first kernel ran (the trigger,
-#      which runs the fused `Lifecycle.before` cell update in the same work item) hands the
-#      MCS to the host planner with `before_ran[] = true`: the host planner must not run
-#      `before` a second time. Oracle: the unfused twin of the same problem (`before =
-#      nothing`, the update as the last after-MCS `CellPhase`, D-101's construction).
-#        - fused + fault  ==  unfused + the same fault: bitwise in σ, every cell column and
-#          the model state (both runs end on the host planner after the same handover);
-#        - fused + fault  ==  unfused without a fault (the device planner throughout):
-#          bitwise in σ, the model state and every cell column except the trackers
-#          `anchor`/`m1`/`m2`, whose representation the host planner chooses differently
-#          (D-089); those are checked against a recount from σ instead (centroid and
-#          covariance of every live cell), in both runs;
-#        - the same number of divisions, and divisions happen after the handover;
-#        - the handover really happened (the form ends as `_FORM_HOST`, the "cannot launch"
-#          warning is logged once) and the fused problem really is fused.
-#      Fault points: after the first kernel (trigger + `before`) and after the second (the
-#      planner), both before the lifecycle writes σ or any cell column.
-#      Negative control: a twin that applies the update twice at the handover MCS (what a
-#      host planner rerunning `before` would do) differs from the fused + fault run, so the
-#      comparison detects a double application.
-#      CPU: the device planner forced on the CPU backend (`_FORCE_DEVICE_LIFECYCLE`, as the
-#      CorePotts tests do), `CheckerboardCPM(; fused_lifecycle_max_sites = 0)` so the staged
-#      form is the one that runs. Metal (POTTS_GPU=metal with Metal loaded, Float32): the
-#      same comparisons.
+#  (a) A fused lifecycle form whose first launch fails (on a device: its workgroup exceeds
+#      the kernel's limit; simulated by `_LAUNCH_FAULT`) hands the MCS to the staged form
+#      before anything is enqueued, so the fused `Lifecycle.before` cell update runs once.
+#      Oracle: the unfused twin of the same problem (`before = nothing`, the update as the
+#      last after-MCS `CellPhase`, D-101's construction), run staged.
+#        - fused + fault  ==  unfused + the same fault  ==  unfused staged: bitwise in σ,
+#          every cell column and the model state (CPU);
+#        - the trackers equal a recount from σ (centroid and covariance of every live
+#          cell), and every run counts each division once;
+#        - the handover really happened (the form ends staged, at the first checked MCS;
+#          the "cannot launch" warning is logged) and the fused problem really is fused.
+#      Negative control: a twin that applies the update twice at the handover MCS differs
+#      from the fused + fault run, so the comparison detects a double application.
+#      CPU: the fused form forced on the CPU backend (`_FORCE_FUSED_LIFECYCLE`). A device
+#      (POTTS_GPU set): the same, without the run-to-run comparisons (D-271).
 #  (b) `generated_code(sys)` shows the lifecycle as Potts builds it. Contract: the result
 #      has a field `lifecycle`, `nothing` for a model without divisions, else a NamedTuple
 #      with at least `trigger` (the trigger's expression) and `before` (the expression of
@@ -35,35 +25,12 @@
 #      update is NOT among `phases`; when fusion is not legal (the trigger reads another
 #      cell's value of the written column; the update is not the last after-MCS phase),
 #      `lifecycle.before === nothing` and the update stays in `phases`. `generated_code` and
-#      `PottsProblem` agree for both scalar types. Fingerprints are unchanged (recorded on
-#      457104d8): showing the code differently must not change the code.
-#
-# Test-only hook the implementer adds (not public, not exported), next to `_LAUNCH_FAULT`
-# in `lib/CorePotts/src/lifecycle_device.jl`:
-#
-#     const _STAGED_FAULT_AFTER = Ref(0)
-#
-#   k = _STAGED_FAULT_AFTER[] > 0: the staged form's first (not yet proven) launch enqueues
-#   its first k kernels (k = 1: the trigger kernel, with `Lifecycle.before`; k = 2: also the
-#   planner) and then throws `ArgumentError` as if the next kernel's launch had failed, so
-#   `_form_failed!` runs with `before_ran[] == true` and the host planner takes the MCS.
-#   0 (the default) is off. Like `_LAUNCH_FAULT` it acts only on an unproven form, so it
-#   fires once per integrator.
-#
-# Today: (a) fails (the hook does not exist); (b) fails (`generated_code` has no `lifecycle`
-# and lists the fused update among `phases`). With the hook emulated by a shim (the
-# contract above, patched in at run time; not committed), (a) passes on the CPU and on
-# Metal except one target: Akeeb with the fault after kernel 2 counts 85 divisions against
-# the device planner's 72 (seed 1; fused and unfused twin alike, σ and every column still
-# equal): the planner kernel has already added this MCS's divisions to the device
-# accumulators when the host planner takes the MCS and counts them again. The Metal
-# testset runs where Metal is loaded with POTTS_GPU=metal (`test/gpu_acceptance_tests.jl`).
+#      `PottsProblem` agree for both scalar types.
 
 @testsetup module LifecycleLaunchFusionSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Potts: CorePotts
 const ON_DEVICE = PottsDevices.on_device()
-const HOOK = isdefined(CorePotts, :_STAGED_FAULT_AFTER)
 @potts_model Counter begin
     @kinds medium A
     @variables g(cell) = 0.0
@@ -214,30 +181,28 @@ function divisions_seen(sol)
     s = sol.stats.lifecycle
     return s.removals == 0 && s.divisions == births(sol) + s.empty_daughters
 end
-# Solve with the staged form forced and the fault at kernel `k` (0: none); returns the
-# solution, the final form and the MCS at which the form changed (or -1)
-function lifecycle_run(prob, k; backend = nothing, device_on_cpu = backend === nothing)
-    force = CorePotts._FORCE_DEVICE_LIFECYCLE[]
-    CorePotts._FORCE_DEVICE_LIFECYCLE[] = device_on_cpu
-    HOOK && (CorePotts._STAGED_FAULT_AFTER[] = k)
+# Solve with CheckerboardCPM: `fused = true` starts from the fused form (forced on the CPU),
+# `fault = true` makes its first launch fail; returns the solution, the final form and the
+# MCS at which the form changed (or -1)
+function lifecycle_run(prob, fault::Bool; fused::Bool = true, backend = nothing)
+    CorePotts._FORCE_FUSED_LIFECYCLE[] = fused
+    CorePotts._LAUNCH_FAULT[] = fault ? CorePotts._FORM_FUSED : 0
     try
         kw = backend === nothing ? (;) : (; backend)
-        integ = init(
-            prob, CheckerboardCPM(; fused_lifecycle_max_sites = 0); saveat = 1,
-            kw...
-        )
+        alg = fused ? CheckerboardCPM() : CheckerboardCPM(; fused_lifecycle_max_sites = 0)
+        integ = init(prob, alg; saveat = 1, kw...)
         D = integ.lcache.device
-        @assert D isa CorePotts.DeviceLifecycle && D.fused! === nothing
+        @assert D isa CorePotts.DeviceLifecycle && (D.fused! !== nothing) == fused
         handover = -1
         while integ.t < last(prob.tspan)
             t = integ.t
             step!(integ)
-            handover < 0 && D.form[] == CorePotts._FORM_HOST && (handover = t)
+            handover < 0 && fused && D.form[] == CorePotts._FORM_STAGED && (handover = t)
         end
         return solve!(integ), D.form[], handover
     finally
-        CorePotts._FORCE_DEVICE_LIFECYCLE[] = force
-        HOOK && (CorePotts._STAGED_FAULT_AFTER[] = 0)
+        CorePotts._FORCE_FUSED_LIFECYCLE[] = false
+        CorePotts._LAUNCH_FAULT[] = 0
     end
 end
 function cases(T)
@@ -260,37 +225,29 @@ function cases(T)
         ),
     ]
 end
-function check_handover(name, prob, k; backend = nothing)
+function check_handover(name, prob; backend = nothing)
     @test prob.f.lifecycle.before !== nothing                     # the problem is fused
     q = unfuse(prob)
     fa, form, at = @test_logs (
         :warn,
         r"cannot launch",
-    ) match_mode = :any lifecycle_run(prob, k; backend)
-    @test form == CorePotts._FORM_HOST && at >= 0                  # the handover happened
-    ua, uform, uat = lifecycle_run(q, k; backend)
-    @test uform == CorePotts._FORM_HOST && uat == at
-    un, nform, _ = lifecycle_run(q, 0; backend)
-    # the device planner throughout
-    @test nform != CorePotts._FORM_HOST
+    ) match_mode = :any lifecycle_run(prob, true; backend)
+    # the handover happened, at the first checked MCS
+    @test form == CorePotts._FORM_STAGED && first(prob.tspan) <= at < first(prob.tspan) + 2
+    ua, uform, uat = lifecycle_run(q, true; backend)
+    @test uform == CorePotts._FORM_STAGED && uat == at
+    un = first(lifecycle_run(q, false; fused = false, backend))
     # a device checkerboard is not reproducible (D-271): its runs are compared only through
     # the recount below; the CPU runs (phases inline) carry the run-to-run comparisons
     if backend === nothing
-        # the same path: bitwise in everything
-        @test same(fa, ua)
-        # against the device planner: bitwise except the trackers' representation …
-        @test same_but_trackers(fa, un)
+        @test same(fa, ua) && same(fa, un)
         @test fa.stats.lifecycle.divisions == un.stats.lifecycle.divisions ==
-            ua.stats.lifecycle.divisions
+            ua.stats.lifecycle.divisions > 0
     end
-    # … whose values equal a recount from σ
     @test trackers_exact(fa, prob.lattice) && trackers_exact(un, prob.lattice) &&
         trackers_exact(ua, prob.lattice)
     # each run counts the divisions it made, once
     @test divisions_seen(fa) && divisions_seen(ua) && divisions_seen(un)
-    # divisions after the handover (the host planner really planned some)
-    live(u) = count(>(0), u.cell.volume)
-    @test live(fa.u[end]) > live(fa.u[findfirst(>=(at), fa.t)])
     return fa, at
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
@@ -302,53 +259,48 @@ end
     :pottsmodels, :acceptance,
 ] begin
     @testset "lifecycle launch fusion: lifecycle follow-ups" begin
-        @testset "(a) staged form fails after the fused `before` ran (CPU, forced device \
-            planner)" begin
-            # CorePotts._STAGED_FAULT_AFTER (test-only hook)
-            @test HOOK
-            if HOOK
-                for (name, prob) in cases(Float64), k in (1, 2), seed in (1, 2)
-                    @testset "$name, fault after kernel $k, seed $seed" begin
-                        check_handover(name, remake(prob; seed), k)
-                    end
+        @testset "(a) a fused form that cannot launch hands over to the staged form (CPU)" begin
+            for (name, prob) in cases(Float64), seed in (1, 2)
+                @testset "$name, seed $seed" begin
+                    check_handover(name, remake(prob; seed))
                 end
-                # negative control: applying the update twice at the handover MCS (what a
-                # host planner that reruns `before` does) is detected by the comparison
-                prob = remake(last(cases(Float64)[1]); seed = 1)
-                fa, at = lifecycle_run(prob, 1)[[1, 3]]
-                up = prob.f.lifecycle.before
-                function twice(st, p, ctx, key, mcs, c)
-                    mcs == at && up(st, p, ctx, key, mcs, c)
-                    return nothing
-                end
-                dbl = lifecycle_run(
-                    unfuse(prob; extra = (CorePotts.CellPhase(twice),)),
-                    0
-                )[1]
-                @test !same_but_trackers(fa, dbl)
-                # control of the control: the wrapper is inert at an MCS the run never
-                # reaches
-                function never(st, p, ctx, key, mcs, c)
-                    mcs == -7 && up(st, p, ctx, key, mcs, c)
-                    return nothing
-                end
-                inert = lifecycle_run(
-                    unfuse(prob; extra = (CorePotts.CellPhase(never),)),
-                    0
-                )[1]
-                @test same_but_trackers(fa, inert)
             end
+            # negative control: applying the update twice at the handover MCS is detected
+            # by the comparison
+            prob = remake(last(cases(Float64)[1]); seed = 1)
+            fa, _, at = lifecycle_run(prob, true)
+            up = prob.f.lifecycle.before
+            function twice(st, p, ctx, key, mcs, c)
+                mcs == at && up(st, p, ctx, key, mcs, c)
+                return nothing
+            end
+            dbl = first(
+                lifecycle_run(
+                    unfuse(prob; extra = (CorePotts.CellPhase(twice),)), false;
+                    fused = false
+                )
+            )
+            @test !same_but_trackers(fa, dbl)
+            # control of the control: the wrapper is inert at an MCS the run never reaches
+            function never(st, p, ctx, key, mcs, c)
+                mcs == -7 && up(st, p, ctx, key, mcs, c)
+                return nothing
+            end
+            inert = first(
+                lifecycle_run(
+                    unfuse(prob; extra = (CorePotts.CellPhase(never),)), false;
+                    fused = false
+                )
+            )
+            @test same(fa, inert)
         end
 
         if ON_DEVICE
             @testset "(a) on the device" begin
-                @test HOOK
-                if HOOK
-                    backend = PottsDevices.device_backend()
-                    for (name, prob) in cases(Float32), k in (1, 2)
-                        @testset "$name, fault after kernel $k" begin
-                            check_handover(name, remake(prob; seed = 1), k; backend)
-                        end
+                backend = PottsDevices.device_backend()
+                for (name, prob) in cases(Float32)
+                    @testset "$name" begin
+                        check_handover(name, remake(prob; seed = 1); backend)
                     end
                 end
             end

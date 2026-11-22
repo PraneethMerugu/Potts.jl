@@ -207,10 +207,8 @@ function cr_dead_problem(; track = ())
     return remake(p; u0 = u)
 end
 
-# The reference reset of an event round on the device (D-066 item 5 (a)): the host planner
-# form launches `Lifecycle.release` as its own kernel (`CorePotts._release_body!`), which
-# the GPU group must compile (device IR coverage, D-157); the device forms run it inside the
-# copies stage. Compared with the CPU Float32 run.
+# The reference reset of an event round on the device (D-066 item 5 (a)): both lifecycle
+# forms run `Lifecycle.release` inside the copies stage. Compared with the CPU Float32 run.
 @potts_model CRRelease begin
     @kinds medium blob doomed
     @parameters begin
@@ -544,26 +542,24 @@ end
     end
 end
 
-@testitem "references are released on the device (host planner form; PottsDevices)" setup =
+@testitem "references are released on the device (PottsDevices)" setup =
     [CellRefsSetup] tags = [
     :potts, :cell_refs, :device,
 ] begin
-    @testset "references are released on the device (host planner form; PottsDevices)" begin
+    @testset "references are released on the device (PottsDevices)" begin
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             prob = cr_release_problem()
             cpu = cr_release_summary(solve(prob, CheckerboardCPM()).u[end])
             @test cpu == (; nalive = 4, slot3 = true, names2 = 2, names0 = 2, other = 0)
             integ = init(prob, CheckerboardCPM(); backend)
-            D = integ.lcache.device
-            @test D isa CorePotts.DeviceLifecycle
-            # the host planner: `_run_release!` launches on the device
-            D.form[] = CorePotts._FORM_HOST
+            @test integ.lcache.device isa CorePotts.DeviceLifecycle
+            # both forms (release inside the copies stage) agree with the CPU
             dev = cr_release_summary(solve!(integ).u[end])
             @test Symbol(integ.retcode) === :Success
             @test dev == cpu
-            # the device forms (release inside the copies stage) agree
-            @test cr_release_summary(solve(prob, CheckerboardCPM(); backend).u[end]) == cpu
+            staged = CheckerboardCPM(; fused_lifecycle_max_sites = 0)
+            @test cr_release_summary(solve(prob, staged; backend).u[end]) == cpu
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"
         end

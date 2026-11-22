@@ -1223,10 +1223,7 @@ Base.@nospecializeinfer function _init(
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     fused_limits = _fused_lifecycle_limits(alg)
     lcache = prob.f.lifecycle === nothing ? nothing :
-        LifecycleCache(
-            backend, ndims(lat), ncells(prob.u0), state,
-            _device_planned(backend, alg, prob.f); fused_limits
-        )
+        LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, true; fused_limits)
     integ = PottsIntegrator(
         prob, alg, _device_law(_law(alg, prob.f), backend), state, cache,
         lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
@@ -1390,7 +1387,6 @@ function _preflight(prob::PottsProblem, alg::AbstractCPMAlgorithm, ctx)
             )
         )
     end
-    _check_connectivity(prob, alg, ctx)
     return nothing
 end
 
@@ -1753,8 +1749,10 @@ function _run_entry!(integ::PottsIntegrator, ::LifecyclePhase)
     return nothing
 end
 
-# The host lifecycle path (CPU; host hooks on a device): events are known on the host, and
-# the frozen mask follows them at once (D-081; quiet MCS pay nothing)
+# The old host planner (D-035), kept for one A/B and unused: `_HOST_PLANNER[] = true` (not
+# public API) runs it on the CPU instead of the lifecycle planner. Events are known on the
+# host, and the frozen mask follows them at once (D-081; quiet MCS pay nothing)
+const _HOST_PLANNER = Ref(false)
 function _step_lifecycle!(integ, ::Nothing, before::Bool = true)
     launches, events = run_lifecycle!(
         integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx,
@@ -1764,50 +1762,69 @@ function _step_lifecycle!(integ, ::Nothing, before::Bool = true)
     events && _refresh_frozen!(integ)
     return nothing
 end
-# The device lifecycle (D-089): enqueued, nothing read; the mask refresh is enqueued with
-# it. When no device form can launch (`_FORM_HOST`), the host planner runs instead
+# The lifecycle planner (D-089, D-332): enqueued, with the standard-rule mask refresh; then
+# the host stage (`_host_stage!`) where the backend is the CPU or the model has host hooks
 function _step_lifecycle!(integ, D::DeviceLifecycle)
-    D.form[] == _FORM_HOST && return _step_lifecycle!(integ, nothing)
+    _HOST_PLANNER[] && integ.backend isa CPU && return _step_lifecycle!(integ, nothing)
     sc = integ.mscratch
     refresh = if sc === nothing
         nothing
     else
         (; integ.ctx.mobility.frozen, kinds = frozen_kinds(integ.f.sys))
     end
-    n = run_lifecycle_device!(
-        integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx, integ.key,
-        integ.t,
+    lc = integ.f.lifecycle
+    _stats(integ).launches += run_lifecycle_device!(
+        lc, integ.lcache, integ.state, integ.p, integ.ctx, integ.key, integ.t,
         integ.backend, refresh
     )
-    # handover: the host planner takes this MCS and every later one
-    if n < 0
-        D.before_ran[] && _drop_device_counts!(integ, D)
-        _stats(integ).launches += D.enqueued[]        # the failed form's kernels that ran
-        return _step_lifecycle!(integ, nothing, !D.before_ran[])
-    end
-    _stats(integ).launches += n
+    integ.t % lc.every == 0 && _host_stage!(integ, D, integ.backend)
     return nothing
 end
 
 """
-Whether `f`'s lifecycle is planned on the device: on every device backend, unless a
-host hook needs host decisions (a `Lifecycle` `rebuild!`, or a custom `remake_frozen` rule
-of a mask that follows the state). `_FORCE_DEVICE_LIFECYCLE[]` (tests only) selects the
-device planner on the CPU backend too, for `CheckerboardCPM` (`SequentialCPM` never runs on
-a device: its mobile-site list is host state, which the device planner does not maintain).
+The host stage after the lifecycle planner, on event rounds only. On the CPU the event flag
+is host memory: an event round folds the planner's counts at once (statistics, the mobile
+count and the `SequentialCPM` mobile-site list, so every CPU read of `stats.lifecycle` is
+current), then runs the host hooks. On a device only a model with host hooks reads the flag
+(one synchronization and a 4-byte transfer per checked MCS). The host hooks, in this order:
+the cell-scope `pieces` columns rebuilt from σ, `Lifecycle.rebuild!`, and a custom
+`remake_frozen` rule.
 """
-function _device_planned(backend, alg, f::CPMFunction)
-    lc = f.lifecycle
-    lc === nothing && return false
-    (backend isa CPU && !(_FORCE_DEVICE_LIFECYCLE[] && alg isa CheckerboardCPM)) &&
-        return false
-    lc.rebuild! === no_rebuild || return false
-    return !_custom_frozen(f.sys)
+function _host_stage!(integ, D, backend::CPU)
+    _events_on(_stats(integ), backend, D) || return nothing
+    _fold_lifecycle!(integ; now = integ.t + 1)
+    _host_hooks!(integ)
+    return nothing
 end
-const _FORCE_DEVICE_LIFECYCLE = Ref(false)
-# tests: the device lifecycle runs staged whatever the `CheckerboardCPM` limits (for test
-# files that build their own algorithms)
+function _host_stage!(integ, D, backend)
+    _has_host_hooks(integ.f, integ.state) || return nothing
+    _events_on(_stats(integ), backend, D) || return nothing
+    _host_hooks!(integ)
+    return nothing
+end
+
+_has_pieces(st) = haskey(st.cell, :pieces) || haskey(st.cell, :pieces_full)
+function _has_host_hooks(f::CPMFunction, st)
+    return _has_pieces(st) || f.lifecycle.rebuild! !== no_rebuild || _custom_frozen(f.sys)
+end
+
+function _host_hooks!(integ)
+    st, stats = integ.state, _stats(integ)
+    if _has_pieces(st)
+        sync!(stats, integ.backend)
+        σ = to_host(stats, st.ownership)
+        lat = host_lattice(stats, integ.ctx.lattice)
+        _rebuild_pieces!(stats, st, σ, lat, length(st.cell.kind))
+    end
+    integ.f.lifecycle.rebuild!(st, integ.p, integ.ctx, integ.backend)
+    _custom_frozen(integ.f.sys) && _refresh_frozen!(integ)
+    return nothing
+end
+
+# tests: the lifecycle runs staged whatever the `CheckerboardCPM` limits (for test files that
+# build their own algorithms); the fused form runs on the CPU too, within those limits
 const _FORCE_STAGED_LIFECYCLE = Ref(false)
+const _FORCE_FUSED_LIFECYCLE = Ref(false)
 # the sizes up to which the device lifecycle runs fused (`CheckerboardCPM` keywords;
 # validated here)
 _fused_lifecycle_limits(alg) = (;)
@@ -1861,21 +1878,6 @@ function _initial_stats(f)
             0
         end
     )
-end
-
-# Whole-cell connectivity on a device: a device lifecycle does not maintain the
-# `pieces` columns.
-function _check_connectivity(prob, alg, ctx)
-    h = prob.f.connectivity
-    h === nothing && return nothing
-    _ondevice(ctx.flood.mark) || return nothing
-    h.after_slots > 0 && prob.f.lifecycle !== nothing && throw(
-        ArgumentError(
-            "cell-scope `pieces`/`largest_piece` with a lifecycle run on the host only " *
-                "(CPU backend): the device lifecycle does not rebuild them"
-        )
-    )
-    return nothing
 end
 
 # Read point of the checkerboard track (D-140, the D-089 pattern): the per-site accumulator
