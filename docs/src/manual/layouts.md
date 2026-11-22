@@ -119,7 +119,8 @@ report[2]
 
 A `Bar(length, width)` is a straight band of sites, and a `Rod(n; length, width, link)` is
 `n` bars end to end, one cell each. `InsertUntil(shape; …)` places copies at random until
-they cover a site `density` of the region. Each draw picks an anchor site and, for a bar or
+they cover a site `density` of the region (a fraction of sites, where the host form's
+`fraction` counts cells). Each draw picks an anchor site and, for a bar or
 a rod, a direction: uniform, or drawn from `angles` (radians in 2D, direction vectors in
 3D). The bands are half-open, so an axis-aligned bar of integer size is exactly
 `length × width` sites (`length × width × width` in 3D). Copies wrap through periodic edges.
@@ -127,7 +128,7 @@ a rod, a direction: uniform, or drawn from `angles` (radians in 2D, direction ve
 | Keyword | Effect |
 |---|---|
 | `occupied = :all` | the cells a copy must not cover: `:all`, or a list of kinds (the copy paints over the others; `()` blocks nothing) |
-| `collective = true` | every copy paints the same cell: a matrix of fibers as one cell |
+| `collective = false` | one cell per copy; `true` paints every copy into the same cell (a matrix of fibers as one cell), and with `occupied = :all` those copies do not cross |
 | `partial = :reject` | redraw a copy that leaves the lattice, the domain or the region; `:clip` cuts it there |
 
 The density stops on the first copy that reaches it, so the result is at least `density`
@@ -149,8 +150,10 @@ report[2]
 `Chains(paths; segments, width, kinds, link)` lays one chain along each polyline, a vector
 of Cartesian `Point`s. Its sites are those within `width / 2` of the line, cut into
 `segments` cells of equal arc length from the first point, so cell 1 is the head. `kinds`
-is cycled from the head: `kinds = [:pinned, :segment, :segment]` on chains of three cells
-pins each head.
+is cycled over the segments from the head: `kinds = [:pinned; fill(:segment, s - 1)]` on
+chains of `s` cells pins each head. A rod in `InsertUntil` instead cycles `kinds` over the
+copies, so all its segments have one kind. Chains always paint over earlier layers; they
+have no `occupied` keyword.
 
 Rods and chains link consecutive cells in the relationship named by `link`. For an ordered
 relationship (`@relationship chain(cell, cell) ordered = true`) the head has rank 1. A

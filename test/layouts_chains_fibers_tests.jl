@@ -101,6 +101,46 @@ end
     @test 0.25 <= count(>(0), σ) / 400 < 0.25 + 5 / 400
 end
 
+@testitem "layouts: collective layers and bars on a hexagonal lattice" setup = [
+    LayoutsSetup,
+] tags = [:potts, :layouts] begin
+    using Potts.Layouts
+    # collective with occupied = :all: the shared cell blocks later copies, so no two
+    # copies cross and the cell holds every copy's sites
+    bars(; kw...) = InsertUntil(
+        Bar(6, 2); kinds = [:m], number = 10, angles = [0.0, π / 2], collective = true,
+        kw...
+    )
+    for seed in 1:4
+        σ = _op(layout(bars(; seed), (30, 30)), ownership)
+        @test maximum(σ) == 1 && count(==(1), σ) == 10 * 12
+    end
+    # negative control: occupied = () lets the copies cross
+    @test any(1:4) do seed
+        count(==(1), _op(layout(bars(; seed, occupied = ()), (30, 30)), ownership)) < 120
+    end
+    # hexagonal rows are √3/2 apart: every copy of a bar at one angle has the same sites
+    # (the slack keeps the rounding from dropping edge sites unevenly). Along the first
+    # axis a 4 × 1 bar is 4 sites of one row; across it, one site in each of 5 rows.
+    sys = HexLayoutProbe(; name = :h)                                  # 18 × 14, closed
+    for (θ, n) in ((0.0, 4), (π / 2, 5))
+        l = InsertUntil(Bar(4, 1); kinds = [:cell], number = 6, angles = [θ], seed = 2)
+        σ = _op(layout(l, sys), ownership)
+        @test [count(==(c), σ) for c in 1:6] == fill(n, 6)
+        rows(c) = length(unique(x[2] for x in _sites(σ, c)))
+        @test all(c -> rows(c) == (θ == 0 ? 1 : 5), 1:6)
+    end
+    σ = _op(
+        layout(
+            InsertUntil(
+                Bar(5, 2); kinds = [:cell], number = 6, angles = [π / 3],
+                seed = 4
+            ), sys
+        ), ownership
+    )
+    @test allequal(count(==(c), σ) for c in 1:6)
+end
+
 @testitem "layouts: InsertUntil shapes cross periodic seams" setup = [LayoutsSetup] tags = [
     :potts, :layouts,
 ] begin
@@ -258,6 +298,39 @@ end
     end
     @test tiles(; jitter = 2, seed = 1) != base
     @test tiles(; jitter = 0) == base                       # jitter 0 is the plain tiling
+    # with a region: whole boxes inside it, moved at most 1 site, at least spacing - 2j = 2
+    # medium sites apart
+    reg = (5:24, 5:24)
+    plain = tiles(; region = reg)
+    for seed in 1:4
+        σ = tiles(; region = reg, jitter = 1, seed)
+        @test maximum(σ) == maximum(plain) && all(c -> count(==(c), σ) == 9, 1:maximum(σ))
+        @test all(x -> σ[x] == 0 || all(in.(Tuple(x), reg)), CartesianIndices(σ))
+        @test all(c -> all(abs.(corner(σ, c) .- corner(plain, c)) .<= 1), 1:maximum(σ))
+        @test _separated(σ, 2)
+    end
+    # partial = :clip: boxes up to the lattice end, cut there, still 2 sites apart
+    for seed in 1:4
+        l = Tiling((3, 3); spacing = 4, kinds = [:c], partial = :clip, jitter = 1, seed)
+        σ = _op(layout(l, (15, 15)), ownership)
+        @test maximum(σ) == 9 && all(c -> 1 <= count(==(c), σ) <= 9, 1:9)
+        @test _separated(σ, 2)
+    end
+    # a periodic lattice (12 × 12): the gap holds across the seam too, and a jittered box
+    # never wraps
+    pdist(a, b) = maximum(min.(abs.(Tuple(a - b)), 12 .- abs.(Tuple(a - b))))
+    for seed in 1:6
+        l = Tiling((2, 2); spacing = 4, kinds = [:c], jitter = 1, seed)
+        σ = _op(layout(l, PeriodicLayoutProbe(; name = :p)), ownership)
+        n = maximum(σ)
+        @test n == 4 && all(c -> count(==(c), σ) == 4, 1:n)
+        span(c) = maximum(_sites(σ, c)) - minimum(_sites(σ, c))
+        @test all(c -> span(c) == CartesianIndex(1, 1), 1:n)
+        @test all(
+            minimum(pdist(x, y) for x in _sites(σ, a), y in _sites(σ, b)) > 2
+                for a in 1:n for b in (a + 1):n
+        )
+    end
     @test_throws ArgumentError Tiling(
         (3, 3); spacing = 4, jitter = 3, seed = 1, kinds = [:c]
     )

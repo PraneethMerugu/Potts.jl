@@ -155,6 +155,7 @@ const cluster = B.cluster
 export kind, cluster
 
 include("layouts.jl")
+include("layouts_bands.jl")
 # the initial-state vocabulary is opt-in: `using Potts.Layouts`
 public Layouts
 """
