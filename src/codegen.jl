@@ -611,14 +611,16 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             end
         )
     end
+    # one frame for every angle relationship
+    isempty(_angle_energies(c)) ||
+        push!(body, :(ˍafr = CorePotts.link_frame($T, st.cell, ctx.lattice, prop)))
     for (r, E) in _angle_energies(c)
         Ecode = lower(E, _angle_env(T, :ap, :aq, :an, :aθ, :aκ, rn))
         # every triple containing `old` or `new`, with both centroid shifts (CorePotts
         # `angle_at`); the energy inline, as for edges
         push!(
             body, quote
-                dH += let ˍfr = CorePotts.link_frame($T, st.cell, ctx.lattice, prop),
-                        ˍstore = $(_link_store(c, r)), ˍdH = zero($T)
+                dH += let ˍfr = ˍafr, ˍstore = $(_link_store(c, r)), ˍdH = zero($T)
 
                     for ˍj in 1:6
                         (aq, ap, an, ˍm, ˍg0, ˍg1) = CorePotts.angle_at(
@@ -3189,6 +3191,17 @@ function _live_roots_expr()
     end
 end
 
+# (angle, curvature) of the centroids of the alive cells `p – q – n` (an angle term's total)
+function _chain_triple_geometry(::Type{T}, cell, l, p, q, n) where {T}
+    cp = CorePotts.centroid(T, cell, l, p)
+    cq = CorePotts.centroid(T, cell, l, q)
+    cn = CorePotts.centroid(T, cell, l, n)
+    return (
+        CorePotts.pivot_angle(T, l, cp, cq, cn),
+        CorePotts.menger_curvature(T, l, cp, cq, cn),
+    )
+end
+
 function _total_energy_expr(c::CompiledPottsSystem, T)
     rn = getfield(c, :gather_names)
     body = Any[:(H = zero($T))]
@@ -3271,7 +3284,9 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
                         st.cell.volume[ap] > 0 && st.cell.volume[aq] > 0 &&
                             st.cell.volume[an] > 0
                     ) || continue
-                    aθ, aκ = Potts._triple_geometry($T, st.cell, ctx.lattice, ap, aq, an)
+                    aθ, aκ = Potts._chain_triple_geometry(
+                        $T, st.cell, ctx.lattice, ap, aq, an
+                    )
                     H += $Ecode
                 end
             end

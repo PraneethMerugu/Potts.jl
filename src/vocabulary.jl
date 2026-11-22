@@ -790,8 +790,8 @@ _centroid() = Num[_centroid(k) for k in 1:_lattice_dim()]
 lattice units, embedded on a hexagonal lattice, periodic axes wrapped into [1, L + 1). A
 dead referent or 0 reads 0. Between sweeps: cell and site updates, field equations,
 `@convert` decisions (`sibling(owner, k)` names a site's cluster member), division
-conditions and rules, `@observed`, folds; not in energies (no ΔH) or copy-step code (drives,
-constraints, on-copy updates).
+conditions and rules, `@observed`, folds. In copy scope only drives read it, as the centroid
+before the copy; not in energies (no ΔH), constraints or on-copy updates.
 """
 _centroid(c, k) = Symbolics.wrap(ref_centroid(_symarg(c), _symarg(k)))
 
@@ -1775,39 +1775,127 @@ end
 """
     prev(rel, c)
 
-The predecessor of cell `c` in the ordered relationship `rel`, or 0 for a head. A
-reference: read through it as `kind[prev(chain, id)]`, test it with `alive`. It reads the
-stored links, which change only between sweeps.
+Return the predecessor of cell `c` in the ordered relationship `rel`, or 0 when `c` is a
+head.
+
+The result is a reference, as a `CellRef` variable is: read through it as
+`kind[prev(chain, id)]` and test it with `alive`. It reads the stored links, which change
+only between sweeps. Available where references are read.
+
+# Arguments
+- `rel`: an ordered relationship (`@relationship rel(cell, cell) ordered = true`).
+- `c`: a cell: `old`, `new`, `id`, a reference, a fold's cell, `a`, `b` or `pivot`.
+
+# Returns
+- A cell reference: the predecessor, or 0.
+
+# Examples
+```julia
+@after_mcs ahead ~ prev(chain, id)       # `ahead(cell)::CellRef`
+```
+
+See also `next`, `rank`, `linked`.
 """
 _rel_prev(r, c) = _relationship_query(:prev, r, c)
 """
     next(rel, c)
 
-The successor of cell `c` in the ordered relationship `rel`, or 0 for a tail. A reference,
-as `prev`.
+Return the successor of cell `c` in the ordered relationship `rel`, or 0 when `c` is a
+tail.
+
+The result is a reference, as for `prev`.
+
+# Arguments
+- `rel`: an ordered relationship.
+- `c`: a cell, as for `prev`.
+
+# Returns
+- A cell reference: the successor, or 0.
+
+# Examples
+```julia
+@after_mcs gap ~ norm(separation(id, next(chain, id)))
+```
+
+See also `prev`, `rank`.
 """
 _rel_next(r, c) = _relationship_query(:next, r, c)
 """
     rank(rel, c)
 
-The position of cell `c` in its chain of the ordered relationship `rel`: 1 for a head, 2
-for its successor, and so on; 1 for a cell in no link and 0 for the reference 0.
+Return the position of cell `c` in its chain of the ordered relationship `rel`: 1 for a
+head, 2 for its successor, and so on.
+
+A cell in no link has rank 1, and the reference 0 has rank 0. The rank is not stored: each
+read walks the predecessors, so it costs one step per member ahead of `c`. In a drive that
+cost is paid at every copy attempt.
+
+# Arguments
+- `rel`: an ordered relationship.
+- `c`: a cell, as for `prev`.
+
+# Returns
+- The rank, an integer.
+
+# Examples
+```julia
+@after_mcs position_in_rod ~ rank(chain, id)
+```
+
+See also `prev`, `next`.
 """
 _rel_rank(r, c) = _relationship_query(:rank, r, c)
 """
     linked(rel, a, b)
 
-Whether cells `a` and `b` are linked in the relationship `rel` (any relationship).
+Return whether cells `a` and `b` are linked in the relationship `rel`.
+
+`rel` can be any relationship, ordered or not.
+
+# Arguments
+- `rel`: a relationship.
+- `a`, `b`: cells, as for `prev`.
+
+# Returns
+- `Bool`: `true` when the link exists.
+
+# Examples
+```julia
+@drive copy => -ε * linked(bond, old, new)
+```
+
+See also `prev`, `next`.
 """
 _rel_linked(r, a, b) = _relationship_query(:linked, r, a, b)
 _is_relationship_query(op, whats = (:prev, :next, :rank, :linked)) =
     op isa RelationshipQuery && op.what in whats
 
 """
-Energy domain `angles(rel)`: every member of the ordered relationship `rel` with both a
-predecessor and a successor, once; names `pivot` (the member), `a` (its predecessor), `b`
-(its successor), `angle` (the angle at the pivot between the centroids, in `[0, π]`) and
-`curvature` (1/R of the circle through the three centroids).
+    angles(rel) => E
+
+Energy domain: sum `E` over every member of the ordered relationship `rel` that has both a
+predecessor and a successor, once each.
+
+In `E`, `pivot` is the member, `a` its predecessor and `b` its successor. `angle` is the
+angle at the pivot between the centroids of `a` and `b`, in `[0, π]`, and `curvature` is
+`1/R` of the circle through the three centroids. Both use minimum-image vectors. A triple
+with a dead member adds nothing. The energy change of a copy is exact; only
+`SequentialCPM` runs a model with an angle term.
+
+# Arguments
+- `rel`: an ordered relationship.
+- `E`: an expression of parameters, the cell variables of `pivot`, `a` and `b`, `angle`
+  and `curvature`.
+
+# Returns
+- An energy domain (`AngleDomain`), used on the left of `=>` in `@energy`.
+
+# Examples
+```julia
+@energy angles(chain) => ξ * curvature^2
+```
+
+See also `edges`, `prev`, `next`.
 """
 struct AngleDomain
     relationship::Symbol

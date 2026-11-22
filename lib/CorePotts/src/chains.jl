@@ -66,8 +66,8 @@ end
 """
     chain_prev(store, c) -> Int32
 
-Return the predecessor of cell `c` in an ordered link store, or `0` when `c` is a head or
-`0`.
+Return the predecessor of cell `c` in an ordered link store, or `0` when `c` is a head, `0`
+or not a cell id of the store.
 
 # Arguments
 - `store`: an ordered link store (see [`add_chain_link!`](@ref)).
@@ -79,15 +79,15 @@ Return the predecessor of cell `c` in an ordered link store, or `0` when `c` is 
 See also [`chain_next`](@ref), [`chain_rank`](@ref).
 """
 @inline function chain_prev(cell, c)
-    # bounds: slot 1 of a cell id c ∈ 1:capacity
-    return c == 0 ? Int32(0) : Int32(@inbounds cell.links[1, c])
+    # bounds: slot 1 of a cell id checked in 1:capacity just before
+    return 0 < c <= size(cell.links, 2) ? Int32(@inbounds cell.links[1, c]) : Int32(0)
 end
 
 """
     chain_next(store, c) -> Int32
 
-Return the successor of cell `c` in an ordered link store, or `0` when `c` is a tail or
-`0`.
+Return the successor of cell `c` in an ordered link store, or `0` when `c` is a tail, `0`
+or not a cell id of the store.
 
 # Arguments
 - `store`: an ordered link store (see [`add_chain_link!`](@ref)).
@@ -99,18 +99,20 @@ Return the successor of cell `c` in an ordered link store, or `0` when `c` is a 
 See also [`chain_prev`](@ref), [`chain_rank`](@ref).
 """
 @inline function chain_next(cell, c)
-    # bounds: slot 2 of a cell id c ∈ 1:capacity
-    return c == 0 ? Int32(0) : Int32(@inbounds cell.links[2, c])
+    # bounds: slot 2 of a cell id checked in 1:capacity just before
+    return 0 < c <= size(cell.links, 2) ? Int32(@inbounds cell.links[2, c]) : Int32(0)
 end
 
 """
     chain_rank(store, c) -> Int32
 
 Return the position of cell `c` in its chain: `1` for a head (a cell without a
-predecessor), `2` for its successor, and so on. Return `0` for `c == 0`.
+predecessor), `2` for its successor, and so on. Return `0` for `c == 0` and for an id
+that is not a cell of the store.
 
 A cell in no link is the head of its own chain of one, so its rank is `1`. The rank is
-found by walking the predecessors, at most as many steps as there are cell slots.
+not stored: each call walks the predecessors, so it costs one step per member ahead of `c`
+(at most as many steps as there are cell slots).
 
 # Arguments
 - `store`: an ordered link store (see [`add_chain_link!`](@ref)).
@@ -122,7 +124,7 @@ found by walking the predecessors, at most as many steps as there are cell slots
 See also [`chain_prev`](@ref), [`add_chain_link!`](@ref).
 """
 @inline function chain_rank(cell, c)
-    c == 0 && return Int32(0)
+    0 < c <= size(cell.links, 2) || return Int32(0)
     r = Int32(1)
     q = chain_prev(cell, c)
     n = size(cell.links, 2)
@@ -185,7 +187,8 @@ Return the curvature `1/R` of the circle through the points `p`, `q` and `n`: th
 curvature `2 sin(θ) / |p − n|`, where `θ` is the angle at `q`.
 
 The arms are minimum-image vectors, as in [`pivot_angle`](@ref). Collinear points give
-`0`, and so do points of which two coincide (the circle is undefined).
+`0`. Coincident points also give `0` (the circle is undefined): `q` at `p` or at `n`, and
+`p` at `n`.
 
 # Arguments
 - `T::Type`: the float type of the result.

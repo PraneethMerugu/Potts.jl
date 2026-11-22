@@ -218,14 +218,16 @@ function lower(x, env::LowerEnv)
     if op === ref_centroid || op === ref_separation
         name = op === ref_centroid ? "centroid(c, k)" : "separation(a, b)"
         # between sweeps (cell, model and site scope: updates, field equations, `@convert`
-        # decisions, @observed); energies are refused before lowering
-        # (`_check_energy_geometry`)
-        env.mode in (:cell, :model, :site) || throw(
+        # decisions, @observed) and in drives, which read the centroids before the copy
+        # (D-330); energies are refused before lowering (`_check_energy_geometry`), and
+        # constraints, on-copy updates and the temperature in `mtkcompile`
+        # (`_check_copy_geometry`)
+        env.mode in (:cell, :model, :site, :proposal) || throw(
             PottsCompileError(
                 "`$name` reads cell centroids, which a copy changes: it is available " *
                     "between sweeps (cell and site updates, field equations, division \
                         conditions and rules, @convert, \
-                        @observed), not in $(_MODE_NAMES[env.mode])"
+                        @observed) and in drives, not in $(_MODE_NAMES[env.mode])"
             )
         )
         k = _literal_axis(op === ref_centroid ? "centroid" : "separation", args[end])
@@ -980,17 +982,6 @@ end
 @inline function _linked_slot(store, a, b)
     n = size(store.links, 2)
     return (0 < a <= n) & (0 < b <= n) && CorePotts.linked(store, a, b)
-end
-
-# (angle, curvature) of the centroids of the alive cells `p – q – n` (an angle term's total)
-function _triple_geometry(::Type{T}, cell, l, p, q, n) where {T}
-    cp = CorePotts.centroid(T, cell, l, p)
-    cq = CorePotts.centroid(T, cell, l, q)
-    cn = CorePotts.centroid(T, cell, l, n)
-    return (
-        CorePotts.pivot_angle(T, l, cp, cq, cn),
-        CorePotts.menger_curvature(T, l, cp, cq, cn),
-    )
 end
 
 # whether `x` is `value_at(_nonzero(v), …)` (or `value_at(Pre(_nonzero(v)), …)`): a Bool

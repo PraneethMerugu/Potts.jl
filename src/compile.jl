@@ -213,6 +213,13 @@ const _PROPOSAL_BUILTINS = (
 const _EDGE_BUILTINS = (:a, :b, :distance)
 const _ANGLE_BUILTINS = (:a, :b, :pivot, :angle, :curvature)
 const _LINK_BUILTINS = (:a, :b, :distance, :mcs)
+# bound only in an angle term
+const _ANGLE_ONLY = (:pivot, :angle, :curvature)
+function _angle_only_error(n, what)
+    return PottsCompileError(
+        "`$n` is bound only in angle terms (`angles(rel) => …`), not in $what"
+    )
+end
 
 # Replace population folds by placeholders; return them for separate checking.
 function _strip_populations(x)
@@ -286,12 +293,15 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
         n === :neighbor_site && !(n in allowed) &&
             throw(PottsCompileError("a primed site variable `x′` (its value at the pair's \
                 other site) is only available in contact terms, not in $what"))
+        n in _ANGLE_ONLY && !(n in allowed) && throw(_angle_only_error(n, what))
         n in allowed ||
             throw(PottsCompileError("`$n` is not available in $what \
                 (available: $(join(_visible(allowed), ", ")); index `owner`, `kind`, \
                     `volume` explicitly, e.g. `kind[new]`)"))
     end
     for (r, n) in _uses(x)
+        r === :builtin && n in _ANGLE_ONLY && !(n in allowed) &&
+            throw(_angle_only_error(n, what))
         r === :builtin && !(n in allowed) && !(n in _INDEXABLE) &&
             throw(PottsCompileError("`$n` is not available in $what \
                 (available: $(join(_visible(allowed), ", ")))"))
@@ -408,6 +418,16 @@ function _check_relationship_queries(exprs, relationships)
                         `ordered = true`"
                 )
             )
+            for c in arguments(y)
+                (_is_cell_index(c) || _sort(c) === :cell) || throw(
+                    PottsCompileError(
+                        "`$(Symbolics.wrap(y))`: `$(Symbolics.wrap(c))` is not a cell; \
+                            `$(op.what)` takes cells: `old`, `new`, `id`, a reference \
+                            (`partner[old]`, `prev($(op.relationship), id)`), a fold's \
+                            cell, `a`, `b` or `pivot`"
+                    )
+                )
+            end
         end
     end
     return nothing
@@ -616,12 +636,16 @@ function _compile_bound(
         c.kind === :expr && _located(
             () -> (
                 _check_names(c.expr, _PROPOSAL_BUILTINS, "a constraint");
+                _check_copy_geometry(c.expr, "a constraint");
                 _check_ref_sources(c.expr, "constraints")
             ), sys, c
         )
     end
     _located(
-        () -> _check_ref_sources(_p(sys, :sweep).temperature, "the @sweep temperature"),
+        () -> (
+            _check_copy_geometry(_p(sys, :sweep).temperature, "the @sweep temperature");
+            _check_ref_sources(_p(sys, :sweep).temperature, "the @sweep temperature")
+        ),
         sys, _p(sys, :sweep)
     )
 
@@ -641,6 +665,7 @@ function _compile_bound(
                     throw(PottsCompileError("`Every` does not apply to @on_copy updates: \
                         they run at every accepted copy"))
                 _check_names(u.eq.rhs, _PROPOSAL_BUILTINS, "an on-copy update")
+                _check_copy_geometry(u.eq.rhs, "an on-copy update")
                 _check_ref_sources(u.eq.rhs, "on-copy updates")
                 _is_ref(arguments(lhs)[2]) && throw(
                     PottsCompileError(
@@ -940,8 +965,12 @@ function _compile_bound(
             o.rhs
                 for o in _p(sys, :observed)
         )...,
-        convert_exprs..., last.(angle_terms)...,
+        convert_exprs...,
     ]
+    for x in scanned, n in _ANGLE_ONLY
+        _uses_builtin(x, n) && throw(_angle_only_error(n, "`$(Symbolics.wrap(x))`"))
+    end
+    append!(scanned, last.(angle_terms))
     _check_relationship_queries(scanned, relationships)
     uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
@@ -2260,6 +2289,20 @@ function _energy_centroid_error(name)
             "reads and that shift is not part of ΔH; read it in cell " *
             "updates or @observed, or use `displacement(c, k)` in a @drive"
     )
+end
+
+# `centroid(c, k)` and `separation` in copy scope: drives read them before the copy
+# (D-330); constraints, on-copy updates and the temperature do not
+function _check_copy_geometry(x, what)
+    for (op, name) in ((ref_centroid, "centroid(c, k)"), (ref_separation, "separation"))
+        _has_op(x, op) && throw(
+            PottsCompileError(
+                "`$name` is not available in $what: in copy scope it is read only in \
+                    drives (the centroids before the copy)"
+            )
+        )
+    end
+    return nothing
 end
 
 # The E7 helpers an energy may not read (D-243), refused before the reference checks so the

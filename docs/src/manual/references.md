@@ -101,7 +101,7 @@ The helpers below work in lattice units. They use the same centroid convention a
 
 | Form | Meaning | Where |
 |---|---|---|
-| `centroid(c, k)` | coordinate `k` of the centroid of the cell `c` names; 0 for a dead cell or 0 | between sweeps (not energies, drives, constraints, on-copy) |
+| `centroid(c, k)` | coordinate `k` of the centroid of the cell `c` names; 0 for a dead cell or 0 | between sweeps, and in drives as the centroid before the copy (not energies, constraints, on-copy) |
 | `separation(a, b)` | the minimum-image vector `centroid(a) − centroid(b)` (N components) | as `centroid(c, k)` |
 | `minimum_image(d, k)` | `d` wrapped to the image nearest 0 on axis `k` (`d` itself on a closed axis) | everywhere, energies and drives included |
 | `integral(x; over = cluster)` | the site expression `x` summed over the sites of the cluster's alive members | as `integral(x)` |
@@ -121,9 +121,11 @@ end
 
 - **`centroid(c, k)`** reads another cell's centroid. `c` is any reference: `sibling(k)`,
   a `CellRef` variable, `root(cluster)`, `owner` at a site, or a fold's cell
-  (`sum(centroid(c, 1) for c in cells(nucleus))`). It cannot be used in energies, because
-  a copy moves centroids and ΔH does not include that shift, or in other copy-step code.
-  For a centroid shift in a drive, use `displacement(c, k)`.
+  (`sum(centroid(c, 1) for c in cells(nucleus))`). A drive reads it too, as the centroid
+  before the copy, on every solver; an example is propulsion along a chain (see
+  [Relationships](@ref manual-relationships)). It cannot be used in energies, because a
+  copy moves centroids and ΔH does not include that shift, or in constraints and on-copy
+  updates. For the centroid shift a copy causes, use `displacement(c, k)` in a drive.
 - **`separation(a, b)`** is the vector between two centroids. Read one component with
   `separation(a, b)[k]`, or the distance with `norm(separation(a, b))`.
   - On a square lattice, component `k` is `minimum_image(centroid(a, k) − centroid(b, k), k)`.

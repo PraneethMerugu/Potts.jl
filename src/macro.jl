@@ -116,7 +116,7 @@ const _BOUND_BUILTINS = (
     :cluster, :cluster_volume, :cluster_surface,
     :time, :site, :major_length, :local_components, :ring_arcs,
     :ring_cells, :ring_medium, :direction, :euler,
-    :largest_piece, :birth,
+    :largest_piece, :birth, :pivot, :angle, :curvature,
 )
 # Primed spellings of `neighbor_kind` and `neighbor_owner`, bound as aliases in model bodies
 const _PRIMED_ALIASES = (
