@@ -673,7 +673,7 @@ Full runs are offline (D-146).
   - (2026-11-16) The checkerboard items above name the colored, claiming checkerboard. D-271 replaced it with the lockless block scheme, and `_color_order!` no longer exists, so they need restating before work starts.
 - [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
   SciMLBase callbacks, `@terminate`.
-  - (D-332) A host-planner form (D-035, CPU) and a D-089 device-planner form, tested together: retire into a collective, create at a site set and state kept across a transition run on the device; a quiet MCS stays at 0 syncs and 0 transfers (`research/parallel-mechanisms.md` §3).
+  - (D-332; first in the parallel-first build order) One KernelAbstractions lifecycle planner on the CPU backend and the device replaces the host and device planners; every rule, `@create` and `@convert` included, is built once in it. Retire into a collective, create at a site set and state kept across a transition run on the device. The host planner is deleted only after the acceptance bar of `research/parallel-mechanisms.md` §3: the five host behaviors, transfer counters (a quiet device MCS at 0 syncs and 0 transfers), D-029 statistics and a CPU A/B. The new rules follow the user rulings P1–P3 of §3 (2026-11-22): the event precedence table with bounded resolution of retirement chains and cycles, collectives with target updates in cell order, and a staged form that always launches with no host fallback.
   - (D-162) `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as MTK `SymbolicDiscreteCallback`s from the start, so `ModelingToolkitBase.discrete_events(sys)` lists them. Per-cell, per-site, per-copy and structural rules are never listed as callbacks.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
@@ -758,14 +758,15 @@ merges (phase-end checkpoint).
   - related centroids with declared footprints;
   - R2 `Chains`;
   - D-075: `ordered = true`, `prev`/`next`/`rank`/`linked`, `angles(rel)` energies. Gate: Y1, Y2.
-  - (D-332) Angle terms on `CheckerboardCPM` (CPU and device) through read-set claims over linked cells; tiers 0–2 of `research/parallel-mechanisms.md` §7. Replaces D-329's sequential-only refusal.
+  - (D-332) Angle terms on `CheckerboardCPM` (CPU and device) on the one model path: read sets over linked cells and the algorithm's read policy (`research/parallel-mechanisms.md` §5); tiers 0–2 of §7 at the region the model's sweep picks. D-329's refusal is lifted when the read layer lands.
 - **P6.7** Zajac:
   - R7 tensor ΔH;
   - R11a `neighbors`/`contact`;
   - R11b exact pair trackers (D-051 item 3);
   - D-075: `interfaces(k, k)` sequential-exact first; the checkerboard form behind an A/B
-    (D-332: no D-051 item 5 exception; read-set claims over both cells and their contact
-    neighbors, exact; the phase-snapshot form only as a documented deviation after tier 2);
+    (D-332: no D-051 item 5 exception; one model path; moments from integer running sums,
+    the per-pair contact store, read sets over both cells and their contact neighbors, exact
+    under `reads = :exact`; `:snapshot` and `:live` only as documented deviations after tier 2);
     `count = true`;
   - the 12a Eq 7 unit test. Labelled as a reconstruction.
 - **P6.7b** the 14c chemotaxis variant: R12 `Pre(x, k)` on cell variables.
@@ -791,8 +792,10 @@ merges (phase-end checkpoint).
     - state the extra launches: 4 per MCS in 2D;
     - a late-state benchmark via `benchmark/ab.jl`;
     - record `exp(−α/T)` for 05 and 11. Where it fails, widen `W` or fall back to
-      sequential (superseded by D-332: no sequential fallback; widen `W`, defer to the
-      serial list, or a documented close-to-exact form);
+      sequential (superseded by D-332: one model path, no sequential fallback; local-test
+      failures defer to the serial list, the named exception to the order law of
+      `reads = :exact`; cluster-aggregate reads are read sets and follow
+      `reads = :exact | :snapshot | :live`, exact only under `:exact` priority rounds);
   - R8 `@create`;
   - R16 branch and loop detection. B2 resolved (D-235); the §8b screens (about 45 min, 2D) run on the PC once P6.8 and P6.9 exist.
 - **P6.10** Jafari Nivlouei:
@@ -817,8 +820,9 @@ merges (phase-end checkpoint).
     08b conservation test, and the checkerboard form (`region` widened by the write radius,
     D-332) in the same item, with tier 0–2 checks and an A/B. The item is not done until
     both land. Gate: X5.
-  - (D-332) random-order FBA with write-back runs in conflict rounds derived from the
-    permutation (equal to the sequential result); FBA solves stay on the host.
+  - (D-332) random-order FBA with write-back runs in priority rounds over cells (asymmetric
+    read/write conflict test, LPs started per cell), equal to the sequential result for the
+    same permutation; FBA solves stay on the host.
 
 ## Field compiler: LatticeFields and LatticePDE (D-256 onward)
 
