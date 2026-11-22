@@ -96,7 +96,8 @@ end
     for m in shapes
         s = AN.skeletonize(m)
         @test all(m[s])
-        @test !any(all(s[i:(i + 1), j:(j + 1)]) for i in 1:(size(s, 1) - 1), j in 1:(size(s, 2) - 1))
+        m1, n1 = size(s) .- 1
+        @test !any(all(s[i:(i + 1), j:(j + 1)]) for i in 1:m1, j in 1:n1)
         @test ncomp8(s) == ncomp8(m)
     end
 end
@@ -142,7 +143,7 @@ end
         end
         return out
     end
-    face = [CartesianIndex(1, 0), CartesianIndex(-1, 0), CartesianIndex(0, 1), CartesianIndex(0, -1)]
+    face = CartesianIndex.([(1, 0), (-1, 0), (0, 1), (0, -1)])
     full = [o for o in CartesianIndices((-1:1, -1:1)) if o != CartesianIndex(0, 0)]
     rng = MersenneTwister(7)
     for p in (0.4, 0.55, 0.7), rep in 1:10, axis in (1, 2)

@@ -9,9 +9,10 @@ Return the skeleton of a 2D mask by Zhang–Suen thinning.
 The thinning removes boundary sites in two alternating sub-steps until none changes, and
 keeps the connectivity of each component (8-connected). Sites outside the array count as
 unset. The result is a one-site-wide line along the middle of each component, ending
-about half a width short of each end, with a closed line around each hole. Like every thinning on the square lattice, it has
-artifacts: a component of 2 × 2 sites vanishes, and short spurs can grow at corners of
-thick shapes, so pass `min_length` to [`skeleton_counts`](@ref) to ignore them.
+about half a width short of each end, with a closed line around each hole. Like every
+thinning on the square lattice, it has artifacts: a component of 2 × 2 sites vanishes,
+and short spurs can grow at corners of thick shapes, so pass `min_length` to
+[`skeleton_counts`](@ref) to ignore them.
 
 # Arguments
 - `mask::AbstractMatrix{Bool}`: the sites of the shape.
@@ -241,7 +242,8 @@ function skeleton_counts(skel::AbstractMatrix{Bool}; min_length::Real = 0)
         len >= min_length && (tip(a) && junction(b) || tip(b) && junction(a))
     end
     return (;
-        tips = count(tip, eachindex(g.nodes)), junctions = count(junction, eachindex(g.nodes)),
+        tips = count(tip, eachindex(g.nodes)),
+        junctions = count(junction, eachindex(g.nodes)),
         branches, g.loops,
     )
 end

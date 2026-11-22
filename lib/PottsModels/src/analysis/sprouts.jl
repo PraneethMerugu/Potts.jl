@@ -28,8 +28,11 @@ julia> sprout_length(m; from = 3)
 
 See also [`sprout_thickness`](@ref), [`width_profile`](@ref).
 """
-function sprout_length(mask::AbstractArray{Bool, N}; axis::Integer = 1, from::Integer = 0) where {N}
-    1 <= axis <= N || throw(ArgumentError("sprout_length: `axis` must be in 1:$N, got $axis"))
+function sprout_length(
+        mask::AbstractArray{Bool, N}; axis::Integer = 1, from::Integer = 0
+    ) where {N}
+    1 <= axis <= N ||
+        throw(ArgumentError("sprout_length: `axis` must be in 1:$N, got $axis"))
     far = maximum((x[axis] for x in CartesianIndices(mask) if mask[x]); init = 0)
     return max(0, far - from)
 end
@@ -62,7 +65,8 @@ julia> width_profile(Bool[1 1 0 1 1 1 1; 0 0 0 0 0 0 0])
 See also [`sprout_thickness`](@ref).
 """
 function width_profile(mask::AbstractMatrix{Bool}; axis::Integer = 1)
-    axis in (1, 2) || throw(ArgumentError("width_profile: `axis` must be 1 or 2, got $axis"))
+    axis in (1, 2) ||
+        throw(ArgumentError("width_profile: `axis` must be 1 or 2, got $axis"))
     m = axis == 1 ? mask : permutedims(mask)
     out = fill(NaN, size(m, 1))
     for k in axes(m, 1)

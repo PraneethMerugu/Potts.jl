@@ -114,7 +114,9 @@ true
 See also [`spanning_cluster`](@ref).
 """
 percolates(mask::AbstractArray{Bool}; kwargs...) = any(spanning_cluster(mask; kwargs...))
-percolates(f::F, σ::AbstractArray; kwargs...) where {F} = any(spanning_cluster(f, σ; kwargs...))
+function percolates(f::F, σ::AbstractArray; kwargs...) where {F}
+    return any(spanning_cluster(f, σ; kwargs...))
+end
 
 """
     pair_graph(pred, n::Integer) -> Vector{Vector{Int}}

@@ -37,10 +37,9 @@ See also [`clone_sizes`](@ref).
 """
 function lineage(records)
     ps = collect(records)
-    T0 = mapreduce(
-        p -> p.second === nothing ? typeof(p.first) : promote_type(typeof.((p.first, p.second))...),
-        promote_type, ps; init = Union{}
-    )
+    label(p) = p.second === nothing ? typeof(p.first) :
+        promote_type(typeof(p.first), typeof(p.second))
+    T0 = mapreduce(label, promote_type, ps; init = Union{})
     T = T0 === Union{} ? Int : T0
     parent = Dict{T, T}()
     children = Dict{T, Vector{T}}()

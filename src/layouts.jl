@@ -380,8 +380,8 @@ function link!(op::LayoutState, name::Symbol, a::Integer, b::Integer)
         throw(ArgumentError("link!: called outside a layer's paint!; invoke only inside \
             `Potts.paint!`"))
     (1 <= a <= ncells(op) && 1 <= b <= ncells(op) && a != b) ||
-        throw(ArgumentError("link!: cells $a and $b must be distinct allocated cells (ncells \
-            = $(ncells(op))); use new_cell!"))
+        throw(ArgumentError("link!: cells $a and $b must be distinct allocated cells \
+            (ncells = $(ncells(op))); use new_cell!"))
     push!(op.links, (name, Int(a), Int(b)))
     return nothing
 end
@@ -2812,7 +2812,8 @@ function InsertUntil(
     number === nothing || (number isa Integer && number >= 0) ||
         throw(ArgumentError("$what: `number` must be a non-negative integer, got $number"))
     partial in (:reject, :clip) ||
-        throw(ArgumentError("$what: `partial` must be :reject or :clip, got $(repr(partial))"))
+        throw(ArgumentError("$what: `partial` must be :reject or :clip, got \
+            $(repr(partial))"))
     _check_seed(seed, what)
     ks = collect(Any, _kinds_arg(kinds, what))
     collective && length(ks) != 1 &&
@@ -2893,7 +2894,10 @@ function _normals(u::SVector{3, Float64})
     e = SVector{3, Float64}(ntuple(d -> Float64(d == k), Val(3)))
     n1 = e - (e' * u) * u
     n1 = n1 / sqrt(n1' * n1)
-    n2 = SVector(u[2] * n1[3] - u[3] * n1[2], u[3] * n1[1] - u[1] * n1[3], u[1] * n1[2] - u[2] * n1[1])
+    n2 = SVector(
+        u[2] * n1[3] - u[3] * n1[2], u[3] * n1[1] - u[1] * n1[3],
+        u[1] * n1[2] - u[2] * n1[1]
+    )
     return (n1, n2)
 end
 function _normals(::SVector{N, Float64}) where {N}
@@ -2906,7 +2910,9 @@ function _index_box(lo::SVector{N, Float64}, hi::SVector{N, Float64}, Ei) where 
     mn = fill(Inf, N)
     mx = fill(-Inf, N)
     for k in 0:(2^N - 1)
-        c = SVector{N, Float64}(ntuple(d -> ((k >> (d - 1)) & 1) == 1 ? hi[d] : lo[d], Val(N)))
+        c = SVector{N, Float64}(
+            ntuple(d -> ((k >> (d - 1)) & 1) == 1 ? hi[d] : lo[d], Val(N))
+        )
         x = Ei * c
         for d in 1:N
             mn[d] = min(mn[d], x[d])
@@ -3000,7 +3006,8 @@ function _draw_direction(rng, angles, ::Val{3})
     return SVector{3, Float64}(v)
 end
 function _draw_direction(rng, angles, ::Val{N}) where {N}
-    throw(ArgumentError("InsertUntil: bars and rods are 2D or 3D; the lattice is $(N)D"))
+    throw(ArgumentError("InsertUntil: bars and rods are 2D or 3D; the lattice is \
+        $(N)D"))
 end
 
 function _check_shape_dim(s::_Round, N)
@@ -3008,7 +3015,8 @@ function _check_shape_dim(s::_Round, N)
 end
 function _check_shape_dim(::Union{Bar, Rod}, N)
     N in (2, 3) ||
-        throw(ArgumentError("InsertUntil: bars and rods are 2D or 3D; the lattice is $(N)D"))
+        throw(ArgumentError("InsertUntil: bars and rods are 2D or 3D; the lattice is \
+            $(N)D"))
     return nothing
 end
 
@@ -3016,7 +3024,9 @@ function _placement_done(l::InsertUntil, copies, covered, total)
     return l.number >= 0 ? copies >= l.number : covered >= l.placement.density * total
 end
 
-function paint!(op::LayoutState, l::InsertUntil{Nothing, <:_Placement}, lat::LatticeSpec{N}) where {N}
+function paint!(
+        op::LayoutState, l::InsertUntil{Nothing, <:_Placement}, lat::LatticeSpec{N}
+    ) where {N}
     pl = l.placement
     dims = size(lat)
     per = _periodic(lat)
@@ -3125,8 +3135,8 @@ with `type = :Fibers`.
 ```julia
 # 2 × 6 bundles at the angles 0, ±30, ±45, ±60 and 90 degrees on 40% of a fluid background
 angles = deg2rad.([0, 30, -30, 45, -45, 60, -60, 90])
-overlay(Fill(:fluid), Fibers(:matrix; length = 6, width = 2, angles, density = 0.4, seed = 1,
-    splits = :allow))
+overlay(Fill(:fluid), Fibers(:matrix; length = 6, width = 2, angles, density = 0.4,
+    seed = 1, splits = :allow))
 ```
 
 See also [`Bar`](@ref), [`Fill`](@ref).

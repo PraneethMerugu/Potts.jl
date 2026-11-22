@@ -6,28 +6,30 @@
 ] begin
     using Potts.Layouts
     cells_of(σ) = [count(==(c), σ) for c in 1:maximum(σ; init = 0)]
+    σ_of(l, x) = _op(layout(l, x), ownership)
+    disk = Circle(Point(0.0, 0.0), 2.0)
     # an axis-aligned bar of integer size is exactly length × width sites, wherever it lies
     for θ in (0.0, π / 2), seed in 1:5
-        σ = _op(layout(InsertUntil(Bar(6, 2); kinds = [:f], number = 3, angles = [θ], seed), (20, 20)), ownership)
+        l = InsertUntil(Bar(6, 2); kinds = [:f], number = 3, angles = [θ], seed)
+        σ = σ_of(l, (20, 20))
         @test cells_of(σ) == [12, 12, 12]
         # the long side runs along the drawn direction
-        ext = maximum(i[θ == 0 ? 1 : 2] for i in _sites(σ, 1)) -
-            minimum(i[θ == 0 ? 1 : 2] for i in _sites(σ, 1))
-        @test ext == 5
+        ax = θ == 0 ? 1 : 2
+        @test -(extrema(i[ax] for i in _sites(σ, 1))...) == -5
     end
     for dir in ([0, 0, 1], [1, 0, 0])
-        σ = _op(layout(InsertUntil(Bar(6, 2); kinds = [:f], number = 2, angles = [dir], seed = 3), (12, 12, 12)), ownership)
-        @test cells_of(σ) == [24, 24]
+        l = InsertUntil(Bar(6, 2); kinds = [:f], number = 2, angles = [dir], seed = 3)
+        @test cells_of(σ_of(l, (12, 12, 12))) == [24, 24]
     end
     # a round shape is the sites of the shape at the anchor: 13 sites for r = 2
-    σ = _op(layout(InsertUntil(Circle(Point(0.0, 0.0), 2.0); kinds = [:c], number = 4, seed = 2), (30, 30)), ownership)
-    @test cells_of(σ) == fill(13, 4)
+    @test cells_of(σ_of(InsertUntil(disk; kinds = [:c], number = 4, seed = 2), (30, 30))) ==
+        fill(13, 4)
     # density: at least ρ, and less than ρ plus one copy's share; copies never overlap
-    for (shape, big) in ((Bar(6, 2), 21), (Circle(Point(0.0, 0.0), 2.0), 13)), ρ in (0.1, 0.3), seed in 1:3
-        op, rep = layout(InsertUntil(shape; kinds = [:a, :b], density = ρ, seed), (40, 40); report = true)
+    for (shape, big) in ((Bar(6, 2), 21), (disk, 13)), ρ in (0.1, 0.3), seed in 1:3
+        l = InsertUntil(shape; kinds = [:a, :b], density = ρ, seed)
+        op, rep = layout(l, (40, 40); report = true)
         σ = _op(op, ownership)
-        f = count(>(0), σ) / 1600
-        @test ρ <= f < ρ + big / 1600
+        @test ρ <= count(>(0), σ) / 1600 < ρ + big / 1600
         r = only(rep)
         @test r.counted == r.painted == maximum(σ) && r.dropped == 0
         @test all(<=(big), cells_of(σ))
@@ -45,46 +47,56 @@ end
 ] begin
     using Potts.Layouts
     hosts = Tiling((4, 4); spacing = 4, kinds = [:host])
-    bars = InsertUntil(Bar(6, 1); kinds = [:f], number = 20, seed = 1)
-    op = layout(overlay(hosts, bars), (40, 40))
-    σ, ks = _op(op, ownership), _op(op, kind)
-    # occupied = :all (default): no host loses a site
-    @test all(c -> count(==(c), σ) == 16, findall(==(:host), ks))
-    # occupied = [] paints over the hosts, which then lose sites (negative control)
-    op = layout(overlay(hosts, InsertUntil(Bar(6, 1); kinds = [:f], number = 20, occupied = (), seed = 1, splits = :allow)), (40, 40))
-    σ, ks = _op(op, ownership), _op(op, kind)
-    @test any(c -> count(==(c), σ) < 16, findall(==(:host), ks))
+    bars(; kw...) = InsertUntil(Bar(6, 1); kinds = [:f], number = 20, seed = 1, kw...)
+    function host_sizes(op)
+        σ = _op(op, ownership)
+        return [count(==(c), σ) for c in findall(==(:host), _op(op, kind))]
+    end
+    # occupied = :all (the default): no host loses a site
+    @test all(==(16), host_sizes(layout(overlay(hosts, bars()), (40, 40))))
+    # occupied = () paints over the hosts, which then lose sites (negative control)
+    op = layout(overlay(hosts, bars(; occupied = (), splits = :allow)), (40, 40))
+    @test any(<(16), host_sizes(op))
     # occupied blocks only the kinds named: walls stay, the fluid is painted over
-    op = layout(
-        overlay(Fill(:fluid), Frame(:wall), InsertUntil(Bar(6, 2); kinds = [:f], number = 10, angles = [0.0], occupied = [:wall], seed = 2, splits = :allow)),
-        (30, 30)
+    f = InsertUntil(
+        Bar(6, 2); kinds = [:f], number = 10, angles = [0.0], occupied = [:wall], seed = 2,
+        splits = :allow
     )
+    op = layout(overlay(Fill(:fluid), Frame(:wall), f), (30, 30))
     σ, ks = _op(op, ownership), _op(op, kind)
     @test count(i -> ks[σ[i]] == :wall, eachindex(σ)) == 30 * 30 - 28 * 28
     @test count(i -> ks[σ[i]] == :f, eachindex(σ)) == 10 * 12
     # a fully blocked region jams: a typed error naming the cause
-    err = ly_throws(ArgumentError, [], () -> layout(overlay(Fill(:fluid), bars), (20, 20)))
+    jam = () -> layout(overlay(Fill(:fluid), bars()), (20, 20))
+    err = ly_throws(ArgumentError, [], jam)
     @test occursin("jammed", err.msg)
     # collective: every copy paints one cell; with occupied = () the copies may overlap
-    op, rep = layout(InsertUntil(Bar(6, 2); kinds = [:m], density = 0.3, occupied = (), collective = true, seed = 3), (30, 30); report = true)
+    m = InsertUntil(
+        Bar(6, 2); kinds = [:m], density = 0.3, occupied = (), collective = true, seed = 3
+    )
+    op, rep = layout(m, (30, 30); report = true)
     σ = _op(op, ownership)
     @test maximum(σ) == 1 && count(==(1), σ) >= 0.3 * 900 && only(rep).painted == 1
     @test only(rep).counted > 0.3 * 900 / 12              # overlaps need more copies
     # partial: :reject keeps every copy whole on a closed lattice, :clip cuts at the edge
     function whole(partial)
-        l = InsertUntil(Bar(6, 2); kinds = [:f], number = 12, angles = [0.0], partial, seed = 7)
+        l = InsertUntil(
+            Bar(6, 2); kinds = [:f], number = 12, angles = [0.0], partial, seed = 7
+        )
         σ = _op(layout(l, (14, 30)), ownership)
         return [count(==(c), σ) for c in 1:12]
     end
     @test all(==(12), whole(:reject))
     @test any(<(12), whole(:clip))
     # a domain: copies stay in it
-    sys = DomainLayoutProbe(; name = :d)
-    σ = _op(layout(InsertUntil(Bar(3, 1); kinds = [:cell], number = 6, seed = 1), sys), ownership)
+    l = InsertUntil(Bar(3, 1); kinds = [:cell], number = 6, seed = 1)
+    σ = _op(layout(l, DomainLayoutProbe(; name = :d)), ownership)
     @test all(i -> i[1] <= 5, findall(>(0), σ))
     # a region: copies stay in it and the density is of the region
-    op = layout(InsertUntil(Bar(4, 1); kinds = [:f], density = 0.25, region = (11:30, 1:20), seed = 1), (30, 30))
-    σ = _op(op, ownership)
+    l = InsertUntil(
+        Bar(4, 1); kinds = [:f], density = 0.25, region = (11:30, 1:20), seed = 1
+    )
+    σ = _op(layout(l, (30, 30)), ownership)
     @test all(i -> i[1] >= 11 && i[2] <= 20, findall(>(0), σ))
     @test 0.25 <= count(>(0), σ) / 400 < 0.25 + 5 / 400
 end
@@ -93,16 +105,18 @@ end
     :potts, :layouts,
 ] begin
     using Potts.Layouts
-    sys = PeriodicLayoutProbe(; name = :p)            # 12 × 12, periodic
-    op = layout(InsertUntil(Bar(6, 2); kinds = [:cell], number = 8, angles = [0.0, π / 2], seed = 5), sys)
-    σ = _op(op, ownership)
+    l = InsertUntil(Bar(6, 2); kinds = [:cell], number = 8, angles = [0.0, π / 2], seed = 5)
+    σ = _op(layout(l, PeriodicLayoutProbe(; name = :p)), ownership)     # 12 × 12, periodic
     # every copy is whole (no edge to clip at), and some copy runs across a seam
     @test [count(==(c), σ) for c in 1:8] == fill(12, 8)
-    across(c) = (s = _sites(σ, c); any(d -> 1 in getindex.(s, d) && 12 in getindex.(s, d), 1:2))
+    function across(c)
+        s = _sites(σ, c)
+        return any(d -> 1 in getindex.(s, d) && 12 in getindex.(s, d), 1:2)
+    end
     @test any(across, 1:8)
     # the channel: periodic along 1, closed along 2; :reject never cuts at the closed edge
-    sys = ChannelLayoutProbe(; name = :c)              # 11 × 11
-    σ = _op(layout(InsertUntil(Bar(5, 1); kinds = [:cell], number = 10, angles = [π / 2], seed = 1), sys), ownership)
+    l = InsertUntil(Bar(5, 1); kinds = [:cell], number = 10, angles = [π / 2], seed = 1)
+    σ = _op(layout(l, ChannelLayoutProbe(; name = :c)), ownership)      # 11 × 11
     @test [count(==(c), σ) for c in 1:10] == fill(5, 10)
 end
 
@@ -111,13 +125,13 @@ end
 ] begin
     using Potts.Layouts
     rod = Rod(4; length = 3, width = 2, link = :chain)
-    op, rep = layout(InsertUntil(rod; kinds = [:seg], number = 5, angles = [0.0], seed = 2), (40, 40); report = true)
+    l = InsertUntil(rod; kinds = [:seg], number = 5, angles = [0.0], seed = 2)
+    op, rep = layout(l, (40, 40); report = true)
     σ = _op(op, ownership)
     # 5 rods of 4 segments, each 3 × 2 sites
     @test maximum(σ) == 20 && [count(==(c), σ) for c in 1:20] == fill(6, 20)
     @test only(rep).counted == 5 && only(rep).painted == 20
-    links = _op(op, :chain)
-    @test links == [(4(r - 1) + i, 4(r - 1) + i + 1) for r in 1:5 for i in 1:3]
+    @test _op(op, :chain) == [(4(r - 1) + i, 4(r - 1) + i + 1) for r in 1:5 for i in 1:3]
     # the head is at the front along the direction (+axis 1 for angle 0)
     cx(c) = sum(i[1] for i in _sites(σ, c)) / count(==(c), σ)
     @test all(r -> issorted([cx(4(r - 1) + i) for i in 1:4]; rev = true), 1:5)
@@ -125,10 +139,11 @@ end
     op = layout(InsertUntil(rod; kinds = [:seg], density = 0.2, seed = 3), (40, 40))
     @test 0.2 <= count(>(0), _op(op, ownership)) / 1600 < 0.2 + 30 / 1600
     # no link argument, no links
-    op = layout(InsertUntil(Rod(3; length = 2, width = 1); kinds = [:seg], number = 2, seed = 1), (20, 20))
-    @test !any(p -> isequal(first(p), :chain), op)
+    l = InsertUntil(Rod(3; length = 2, width = 1); kinds = [:seg], number = 2, seed = 1)
+    @test !any(p -> isequal(first(p), :chain), layout(l, (20, 20)))
     # 3D rods
-    σ = _op(layout(InsertUntil(rod; kinds = [:seg], number = 2, angles = [[0, 1, 0]], seed = 1), (16, 16, 16)), ownership)
+    l = InsertUntil(rod; kinds = [:seg], number = 2, angles = [[0, 1, 0]], seed = 1)
+    σ = _op(layout(l, (16, 16, 16)), ownership)
     @test [count(==(c), σ) for c in 1:8] == fill(12, 8)
 end
 
@@ -145,7 +160,8 @@ end
         @sweep Metropolis(; temperature = 2.0)
     end
     sys = RodChainProbe(; name = :r)
-    op = layout(InsertUntil(Rod(4; length = 3, width = 2, link = :chain); kinds = [:seg], number = 3, seed = 3), sys)
+    rod = Rod(4; length = 3, width = 2, link = :chain)
+    op = layout(InsertUntil(rod; kinds = [:seg], number = 3, seed = 3), sys)
     u = solve(PottsProblem(sys, op, (0, 1)), SequentialCPM()).u[end]
     s = CorePotts.link_store(u.cell, :chain)
     @test CorePotts.chain_rank.(Ref(s), 1:12) == repeat(1:4, 3)
@@ -155,10 +171,10 @@ end
     using Potts.Layouts
     angles = deg2rad.([0, 30, -30, 45, -45, 60, -60, 90])
     for ρ in (0.1, 0.4), seed in 1:2
-        op, rep = layout(
-            overlay(Fill(:fluid), Fibers(:matrix; length = 6, width = 2, angles, density = ρ, seed, splits = :allow)),
-            (50, 50); report = true
+        fib = Fibers(
+            :matrix; length = 6, width = 2, angles, density = ρ, seed, splits = :allow
         )
+        op, rep = layout(overlay(Fill(:fluid), fib), (50, 50); report = true)
         σ, ks = _op(op, ownership), _op(op, kind)
         f = count(i -> σ[i] > 0 && ks[σ[i]] == :matrix, eachindex(σ)) / 2500
         @test ρ <= f < ρ + 21 / 2500
@@ -167,91 +183,116 @@ end
     end
     # the same layer as InsertUntil with a Bar and the Fibers defaults
     a = Fibers(:m; length = 6, width = 2, angles, density = 0.3, seed = 1)
-    b = InsertUntil(Bar(6, 2); kinds = [:m], density = 0.3, angles, occupied = (), collective = true, partial = :clip, seed = 1)
+    b = InsertUntil(
+        Bar(6, 2); kinds = [:m], density = 0.3, angles, occupied = (), collective = true,
+        partial = :clip, seed = 1
+    )
     @test _same(layout(a, (30, 30)), layout(b, (30, 30)))
-    @test_throws ArgumentError Fibers(:m; length = 6, seed = 1)                  # no stop rule
+    @test_throws ArgumentError Fibers(:m; length = 6, seed = 1)             # no stop rule
     @test_throws ArgumentError Fibers(:m; length = 0, density = 0.1, seed = 1)
     @test_throws ArgumentError Fibers([:m, :n]; length = 6, density = 0.1, seed = 1)
 end
 
-@testitem "layouts: Chains along polylines" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: Chains along polylines" setup = [LayoutsSetup] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
+    chains(p, x; kw...) = layout(Chains(p; kinds = [:seg], kw...), x; report = true)
     # a straight chain on lattice lines: 12 × 2 sites in 4 equal cells, linked head first
     line = [Point(4.5, 10.5), Point(16.5, 10.5)]
-    op, rep = layout(Chains(line; segments = 4, width = 2, kinds = [:seg], link = :chain), (20, 20); report = true)
+    op, rep = chains(line, (20, 20); segments = 4, width = 2, link = :chain)
     σ = _op(op, ownership)
     @test [count(==(c), σ) for c in 1:4] == fill(6, 4)
     @test _op(op, :chain) == [(1, 2), (2, 3), (3, 4)]
     @test all(i -> i[1] in 5:7, _sites(σ, 1))                # cell 1 at the first point
     @test only(rep).clipped == 0
     # kinds cycle along each chain from the head: a pinned head
-    op = layout(Chains([line, line .+ Ref(Point(0.0, 5.0))]; segments = 3, width = 1, kinds = [:pin, :seg, :seg]), (20, 20))
+    two = [line, line .+ Ref(Point(0.0, 5.0))]
+    op = layout(Chains(two; segments = 3, width = 1, kinds = [:pin, :seg, :seg]), (20, 20))
     @test _op(op, kind) == [:pin, :seg, :seg, :pin, :seg, :seg]
-    # a U: every cell gets a share, links follow the path
+    # a U: every cell gets a share
     u = [Point(30.0, 10.5), Point(10.0, 10.5), Point(10.0, 22.5), Point(30.0, 22.5)]
-    op = layout(Chains(u; segments = 13, width = 2, kinds = [:seg], link = :chain), (40, 40))
-    σ = _op(op, ownership)
+    σ = _op(first(chains(u, (40, 40); segments = 13, width = 2)), ownership)
     @test maximum(σ) == 13 && all(c -> count(==(c), σ) > 0, 1:13)
     @test 100 <= count(>(0), σ) <= 104                       # 52 × 2, less a corner or two
     # the first chain wins a crossing; the second keeps the rest
     cross = [[Point(2.5, 10.5), Point(18.5, 10.5)], [Point(10.5, 2.5), Point(10.5, 18.5)]]
-    σ = _op(layout(Chains(cross; segments = 1, width = 1, kinds = [:seg]), (20, 20)), ownership)
+    σ = _op(first(chains(cross, (20, 20); segments = 1, width = 1)), ownership)
     @test count(==(1), σ) == 16 && count(==(2), σ) == 15
     # periodic: a chain wraps through the seam; closed: the part beyond the edge is clipped
     seam = [Point(8.5, 6.5), Point(16.5, 6.5)]
-    σ = _op(layout(Chains(seam; segments = 2, width = 1, kinds = [:cell]), PeriodicLayoutProbe(; name = :p)), ownership)
+    op, _ = chains(seam, PeriodicLayoutProbe(; name = :p); segments = 2, width = 1)
+    σ = _op(op, ownership)
     @test count(>(0), σ) == 8 && σ[1, 7] > 0 && σ[12, 7] > 0
-    op, rep = layout(Chains(seam; segments = 2, width = 1, kinds = [:cell]), (12, 12); report = true)
+    op, rep = chains(seam, (12, 12); segments = 2, width = 1)
     @test count(>(0), _op(op, ownership)) == 4 && only(rep).clipped == 4
     # 3D: a square cross-section
-    σ = _op(layout(Chains([Point(3.5, 6.5, 6.5), Point(9.5, 6.5, 6.5)]; segments = 2, width = 2, kinds = [:seg]), (12, 12, 12)), ownership)
+    rod3 = [Point(3.5, 6.5, 6.5), Point(9.5, 6.5, 6.5)]
+    σ = _op(first(chains(rod3, (12, 12, 12); segments = 2, width = 2)), ownership)
     @test [count(==(c), σ) for c in 1:2] == [12, 12]
-    # a later layer that empties a cell drops its links, with one warning
-    w = _warnings(() -> layout(overlay(Chains(line; segments = 4, width = 2, kinds = [:seg], link = :chain), Fill(:seg; region = (5:7, 1:20))), (20, 20)))
+    # a later layer that empties a cell drops its links, with a warning
+    c = Chains(line; segments = 4, width = 2, kinds = [:seg], link = :chain)
+    w = _warnings(() -> layout(overlay(c, Fill(:seg; region = (5:7, 1:20))), (20, 20)))
     @test any(m -> occursin("dropped", m), w)
-    @test_throws ArgumentError Chains([Point(1.0, 1.0)]; segments = 1, width = 1, kinds = [:a])
-    @test_throws ArgumentError Chains([Point(1.0, 1.0), Point(1.0, 1.0)]; segments = 1, width = 1, kinds = [:a])
+    p1 = Point(1.0, 1.0)
+    @test_throws ArgumentError Chains([p1]; segments = 1, width = 1, kinds = [:a])
+    @test_throws ArgumentError Chains([p1, p1]; segments = 1, width = 1, kinds = [:a])
     @test_throws ArgumentError Chains(line; segments = 0, width = 1, kinds = [:a])
     @test_throws ArgumentError Chains(line; segments = 1, width = 0, kinds = [:a])
 end
 
 @testitem "layouts: jittered Tiling" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
     using Potts.Layouts
-    base = _op(layout(Tiling((3, 3); spacing = 4, kinds = [:c]), (40, 40)), ownership)
+    function tiles(; kw...)
+        l = Tiling((3, 3); spacing = 4, kinds = [:c], kw...)
+        return _op(layout(l, (40, 40)), ownership)
+    end
+    base = tiles()
     n = maximum(base)
     corner(σ, c) = Tuple(minimum(_sites(σ, c)))
     for seed in 1:4
-        σ = _op(layout(Tiling((3, 3); spacing = 4, jitter = 2, seed, kinds = [:c]), (40, 40)), ownership)
+        σ = tiles(; jitter = 2, seed)
         # the same boxes, each whole and moved at most 2 sites per axis
         @test maximum(σ) == n && all(c -> count(==(c), σ) == 9, 1:n)
         @test all(c -> all(abs.(corner(σ, c) .- corner(base, c)) .<= 2), 1:n)
     end
-    moved = _op(layout(Tiling((3, 3); spacing = 4, jitter = 2, seed = 1, kinds = [:c]), (40, 40)), ownership)
-    @test moved != base
-    # jitter 0 is the plain tiling
-    @test _op(layout(Tiling((3, 3); spacing = 4, jitter = 0, kinds = [:c]), (40, 40)), ownership) == base
-    @test_throws ArgumentError Tiling((3, 3); spacing = 4, jitter = 3, seed = 1, kinds = [:c])
+    @test tiles(; jitter = 2, seed = 1) != base
+    @test tiles(; jitter = 0) == base                       # jitter 0 is the plain tiling
+    @test_throws ArgumentError Tiling(
+        (3, 3); spacing = 4, jitter = 3, seed = 1, kinds = [:c]
+    )
     @test_throws ArgumentError Tiling((3, 3); spacing = 4, jitter = 1, kinds = [:c])
 end
 
-@testitem "layouts: InsertUntil shape arguments" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: InsertUntil shape arguments" setup = [LayoutsSetup] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     b = Bar(6, 2)
+    ins(shape = b; kw...) = InsertUntil(shape; kinds = [:f], seed = 1, kw...)
     @test_throws ArgumentError Bar(0, 2)
     @test_throws ArgumentError Bar(6, Inf)
     @test_throws ArgumentError Rod(0; length = 2, width = 1)
-    @test_throws ArgumentError InsertUntil(b; kinds = [:f], seed = 1)
-    @test_throws ArgumentError InsertUntil(b; kinds = [:f], density = 0.1, number = 2, seed = 1)
-    @test_throws ArgumentError InsertUntil(b; kinds = [:f], density = 1.5, seed = 1)
-    @test_throws ArgumentError InsertUntil(b; kinds = [:f, :g], number = 1, collective = true, seed = 1)
-    @test_throws ArgumentError InsertUntil(Rod(2; length = 2, width = 1); kinds = [:f], number = 1, collective = true, seed = 1)
-    @test_throws ArgumentError InsertUntil(b; kinds = [:f], number = 1, partial = :trim, seed = 1)
-    @test_throws ArgumentError InsertUntil(b; kinds = [:f], number = 1, angles = [], seed = 1)
-    @test_throws ArgumentError InsertUntil(b; kinds = [:f], number = 1, occupied = :wall, seed = 1)
+    @test_throws ArgumentError ins()                                     # no stop rule
+    @test_throws ArgumentError ins(; density = 0.1, number = 2)
+    @test_throws ArgumentError ins(; density = 1.5)
+    @test_throws ArgumentError InsertUntil(
+        b; kinds = [:f, :g], number = 1, collective = true, seed = 1
+    )
+    rod = Rod(2; length = 2, width = 1)
+    @test_throws ArgumentError ins(rod; number = 1, collective = true)
+    @test_throws ArgumentError ins(; number = 1, partial = :trim)
+    @test_throws ArgumentError ins(; number = 1, angles = [])
+    @test_throws ArgumentError ins(; number = 1, occupied = :wall)
     # bars are 2D or 3D; the round shape must match the lattice
-    @test_throws ArgumentError layout(InsertUntil(b; kinds = [:f], number = 1, seed = 1), (10,))
-    @test_throws ArgumentError layout(InsertUntil(Circle(Point(0.0, 0.0), 2.0); kinds = [:f], number = 1, seed = 1), (10, 10, 10))
-    # remake keeps the layer
-    l = InsertUntil(b; kinds = [:f], density = 0.2, seed = 1)
+    @test_throws ArgumentError layout(ins(; number = 1), (10,))
+    @test_throws ArgumentError layout(
+        ins(Circle(Point(0.0, 0.0), 2.0); number = 1), (10, 10, 10)
+    )
+    # remake rebuilds the layer with a keyword changed
+    l = ins(; density = 0.2)
     @test _same(layout(remake(l; seed = 1), (20, 20)), layout(l, (20, 20)))
+    l2 = InsertUntil(b; kinds = [:f], density = 0.2, seed = 2)
+    @test _same(layout(remake(l; seed = 2), (20, 20)), layout(l2, (20, 20)))
+    @test !_same(layout(remake(l; seed = 2), (20, 20)), layout(l, (20, 20)))
 end
