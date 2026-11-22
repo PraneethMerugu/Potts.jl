@@ -222,7 +222,8 @@ replicate:
 
 `Π[k]` is the polarization at the start of the window that begins at sample `k`. A
 window whose `Π` or displacement is the zero vector has no angle; it is left out of `ξ`
-and `σθ` (`n_angles` counts the rest).
+and `σθ` (`n_angles` counts the rest). A window whose `Π` is not finite (a NaN marks an
+absent compartment) counts only in `u` and `ε`; so does one with `Π = 0` when `unit = true`.
 
 # Arguments
 - `Π`: the polarization series (2D vectors), one per track: a series or a vector of them.
@@ -268,6 +269,7 @@ function polarization_statistics(Π, tracks, lag::Integer; dt::Real = 1.0, unit:
             a, v = P[k], u[k]
             push!(speeds, hypot(v...))
             na = hypot(a...)
+            (isfinite(na) && !(unit && na == 0)) || continue
             push!(par, (a[1] * v[1] + a[2] * v[2]) / (unit ? na : 1.0))
             (na > 0 && hypot(v...) > 0) || continue
             θ = atan(a[1] * v[2] - a[2] * v[1], a[1] * v[1] + a[2] * v[2])

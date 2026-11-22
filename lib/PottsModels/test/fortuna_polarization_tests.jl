@@ -188,6 +188,11 @@ end
     Π0 = copy(Π)
     Π0[1] = (0.0, 0.0)
     @test polarization_statistics(Π0, tr, 1).n_angles == 9
+    # a NaN polarization (an absent compartment) keeps only the speed
+    ΠN = copy(Π)
+    ΠN[1] = (NaN, NaN)
+    sN = polarization_statistics(ΠN, tr, 1; dt = 0.5)
+    @test sN.u ≈ 4 && sN.n_angles == 9 && isfinite(sN.u_parallel) && isfinite(sN.ξ)
     @test_throws ArgumentError polarization_statistics(Π[1:10], tr, 1)
     @test_throws ArgumentError polarization_statistics([Π, Π], [tr], 1)
     @test_throws ArgumentError mean_velocity(tr, 11)
