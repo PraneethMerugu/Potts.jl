@@ -179,9 +179,13 @@ See also [`fortuna_lattice`](@ref), [`fortuna_layout`](@ref).
     end
     # Eq 7: the F-actin term on an extension (a lamellipodium copied into the medium); the
     # variant also applies it to a retraction (the medium copied into a lamellipodium)
-    if _structural_choice(
-            drive, (:extension_only, :extension_retraction), "FortunaMigration", :drive
-        ) === :extension_only
+    drive in (:extension_only, :extension_retraction) || throw(
+        ArgumentError(
+            "FortunaMigration: `drive` must be one of :extension_only, \
+            :extension_retraction, got $(repr(drive))"
+        )
+    )
+    if drive === :extension_only
         @drive copy => ifelse(
             (kind[new] == lamellipodium) & (old == 0), λ_F * (F[target] - F[source]), 0.0
         )
