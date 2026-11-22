@@ -84,8 +84,10 @@ function transfer_hook_problem(; T = Float32)
     lc = CorePotts.Lifecycle(
         trigger; normal = CorePotts.AlongMinorAxis{T}(), rebuild! = hook
     )
+    # the closures capture a value of type T, not the type (a captured type is not isbits)
+    z = zero(T)
     f = CorePotts.CPMFunction(
-        (st, p, prop, ctx) -> zero(T); temperature = (st, p, prop, ctx) -> zero(T),
+        (st, p, prop, ctx) -> z; temperature = (st, p, prop, ctx) -> z,
         constraint = (st, p, prop, ctx) -> false, lifecycle = lc
     )
     return CorePotts.PottsProblem(f, st, lat, (0, 6), (;))
