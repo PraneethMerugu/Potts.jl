@@ -29,7 +29,7 @@ Throws an `ArgumentError` unless `Δτ > 0` and `0 ≤ S < 1`.
 ```jldoctest
 julia> using PottsModels.Analysis
 
-julia> furth_exponent(1.0e-6, 0.0) ≈ 2
+julia> isapprox(furth_exponent(1.0e-6, 0.0), 2; rtol = 1.0e-6)
 true
 ```
 
