@@ -211,7 +211,7 @@ Policy: statistical/qualitative agreement (D-029). 12b gives **one** archetypal 
 
 ## 6. Required general features
 
-**Parallel form (D-332, 2026-11-22).** The exact per-copy ΔH also runs on `CheckerboardCPM`, CPU and device: moments from running sums, the contact energy re-evaluated over the boundary links of both cells (O(1) per pair only under the mean-point reading, pending Q-Z6), and read-set claims over both cells and their contact neighbors. No sequential-only exception. The phase-snapshot form (a one-phase lag) is allowed only as a documented deviation after tier 2. The per-MCS lagged director remains a model change, tested by the §5 acceptance test. See `../parallel-mechanisms.md` §5–§6.
+**Parallel form (D-332, 2026-11-22).** The model has one code path, which runs on `SequentialCPM` and on `CheckerboardCPM`, CPU and device. No sequential-only exception. Moments come from integer running sums (N, Σx, Σy, Σx², Σy², Σxy). The contact energy is re-evaluated over the boundary links of both cells; it is O(1) per pair only under the mean-point reading, pending Q-Z6. The compiler emits read sets over both cells and their contact neighbors, from the per-pair contact store. `CheckerboardCPM(reads = :exact)` runs priority rounds, so the phase equals a sequential run of its work items in a random order and every ΔH is exact. `reads = :snapshot` (a one-phase lag) and `reads = :live` (version counters) are allowed only as documented deviations after tier 2. The region comes from a measured sweep and is recorded here. The per-MCS lagged director remains a model change, tested by the §5 acceptance test. See `../parallel-mechanisms.md` §5–§6.
 
 | ID | Needed? | Use |
 |---|---|---|

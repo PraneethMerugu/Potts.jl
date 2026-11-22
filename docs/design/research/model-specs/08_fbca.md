@@ -261,7 +261,7 @@ Policy: ensemble or statistical agreement, no bitwise parity. FBA optima can be 
 
 ## 6. Required general features
 
-**Parallel form (D-332, 2026-11-22).** The random-order solves with write-back (08b p.287) run in conflict rounds derived from the drawn permutation: a cell waits only for earlier cells whose site sets overlap its own, so the result equals the sequential order. Neighbor-site writes at copy time run on `CheckerboardCPM` with `region` widened by the write radius. FBA solves stay on the host. See `../parallel-mechanisms.md` §4 and §6.
+**Parallel form (D-332, 2026-11-22).** The model has one code path, which runs on `SequentialCPM` and on `CheckerboardCPM`, CPU and device. The random-order solves with write-back (08b p.287) run in priority rounds over cells: each round runs every remaining cell with no remaining conflicting cell earlier in the drawn permutation. Two cells conflict when the write site set of one meets the read or write site set of the other. The result equals the sequential result for the same permutation. Each LP starts cold or from its own cell's last solution. Neighbor-site writes at copy time run with `region` widened by the write radius, so writes of two work items never overlap. Copy-time terms that read other cells follow `CheckerboardCPM(reads = :exact | :snapshot | :live)`; only `:exact` (priority rounds) is exact. FBA solves stay on the host. See `../parallel-mechanisms.md` §4–§6.
 
 | ID | Need in FBCA | Notes |
 |---|---|---|

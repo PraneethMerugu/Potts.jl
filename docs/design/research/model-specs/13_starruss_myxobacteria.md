@@ -190,7 +190,7 @@ Policy: agreement is statistical, over ensembles. Bitwise parity is not expected
 
 ## 6. Required general features
 
-**Parallel form (D-332, 2026-11-22).** The angle terms (D-329) and the Eq 9 propulsion run on `CheckerboardCPM`, CPU and device, through read-set claims over linked cells (two links from each changed cell). D-329's sequential-only refusal stays until the claims land. See `../parallel-mechanisms.md` §5–§6.
+**Parallel form (D-332, 2026-11-22).** The model has one code path, which runs on `SequentialCPM` and on `CheckerboardCPM`, CPU and device. The angle terms (D-329) and the Eq 9 propulsion read through compiler-emitted read sets over linked cells (two links from each changed cell). `CheckerboardCPM(reads = :exact)` runs priority rounds and is exact; `reads = :snapshot` and `reads = :live` are documented deviations after tier 2. The Eq 9 drive reads are live and unprotected today on both backends; under the read layer they follow the chosen policy. D-329's refusal is lifted when the read layer lands. See `../parallel-mechanisms.md` §5–§6.
 
 Rule: models declare needs only through general public features. The core has no model-specific hooks.
 

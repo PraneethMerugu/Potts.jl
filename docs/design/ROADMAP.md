@@ -792,8 +792,10 @@ merges (phase-end checkpoint).
     - state the extra launches: 4 per MCS in 2D;
     - a late-state benchmark via `benchmark/ab.jl`;
     - record `exp(−α/T)` for 05 and 11. Where it fails, widen `W` or fall back to
-      sequential (superseded by D-332: no sequential fallback; widen `W`, defer to the
-      serial list, or a documented close-to-exact form);
+      sequential (superseded by D-332: one model path, no sequential fallback; local-test
+      failures defer to the serial list, the named exception to the order law of
+      `reads = :exact`; cluster-aggregate reads are read sets and follow
+      `reads = :exact | :snapshot | :live`, exact only under `:exact` priority rounds);
   - R8 `@create`;
   - R16 branch and loop detection. B2 resolved (D-235); the §8b screens (about 45 min, 2D) run on the PC once P6.8 and P6.9 exist.
 - **P6.10** Jafari Nivlouei:
