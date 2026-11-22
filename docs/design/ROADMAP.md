@@ -823,6 +823,10 @@ merges (phase-end checkpoint).
   - (D-332) random-order FBA with write-back runs in priority rounds over cells (asymmetric
     read/write conflict test, LPs started per cell), equal to the sequential result for the
     same permutation; FBA solves stay on the host.
+- **P6.13** division log: a daughter-only `Int32` parent column next to `birth` (or a
+  per-division record), written by the lifecycle planner, so `lineage` no longer needs a
+  `mother` cell variable, dense saves, or self-record filtering, and keeps records of cells
+  that die between saves. Exact on every backend (no Float32 2^24 limit).
 
 ## Field compiler: LatticeFields and LatticePDE (D-256 onward)
 
