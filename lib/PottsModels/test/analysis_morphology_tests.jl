@@ -54,6 +54,14 @@
     two[:, 1:15] .= ring
     two[:, 16:30] .= ring
     @test AN.skeleton_graph(two).loops == 2
+    # a cycle inside a cluster of junction sites still counts: a diamond of 4 sites around a
+    # one-site hole, each with an outward tail (every diamond site is a junction)
+    diamond = canvas()
+    diamond[7, 8] = diamond[9, 8] = diamond[8, 7] = diamond[8, 9] = true
+    diamond[3:6, 8] .= diamond[10:13, 8] .= true
+    diamond[8, 3:6] .= diamond[8, 10:13] .= true
+    @test AN.skeleton_counts(diamond) ==
+        (; tips = 4, junctions = 1, branches = 4, loops = 1)
 end
 
 @testitem "Analysis: skeletonize keeps topology" setup = [AnalysisSetup] tags = [
@@ -102,6 +110,60 @@ end
     end
 end
 
+@testitem "Analysis: skeleton loops of random bar networks" setup = [AnalysisSetup] tags = [
+    :pottsmodels, :core,
+] begin
+    # oracle: the holes of the mask, its background components under 4-adjacency that do
+    # not touch the border (the mask itself is 8-connected, as the skeleton keeps it)
+    function holes(m)
+        lab = falses(size(m))
+        n = 0
+        for x in CartesianIndices(m)
+            (m[x] || lab[x]) && continue
+            lab[x] = true
+            stack = [x]
+            border = false
+            while !isempty(stack)
+                y = pop!(stack)
+                (y[1] in (1, size(m, 1)) || y[2] in (1, size(m, 2))) && (border = true)
+                for o in CartesianIndex.(((1, 0), (-1, 0), (0, 1), (0, -1)))
+                    z = y + o
+                    (checkbounds(Bool, m, z) && !m[z] && !lab[z]) || continue
+                    lab[z] = true
+                    push!(stack, z)
+                end
+            end
+            border || (n += 1)
+        end
+        return n
+    end
+    # random networks of thick bars at any angle, the border left clear
+    rng = MersenneTwister(1)
+    looped = 0
+    for _ in 1:40
+        m = falses(60, 60)
+        for _ in 1:rand(rng, 4:10)
+            c = rand(rng, 8:52, 2)
+            θ = rand(rng) * π
+            len, w = rand(rng, 10:30), rand(rng, 2:5)
+            for x in CartesianIndices(m)
+                v = Tuple(x) .- c
+                s = v[1] * cos(θ) + v[2] * sin(θ)
+                n = -v[1] * sin(θ) + v[2] * cos(θ)
+                abs(s) <= len / 2 && abs(n) <= w / 2 && (m[x] = true)
+            end
+        end
+        m[[1, end], :] .= false
+        m[:, [1, end]] .= false
+        s = AN.skeletonize(m)
+        @test !any(all(s[i:(i + 1), j:(j + 1)]) for i in 1:59, j in 1:59)
+        @test AN.skeleton_counts(s).loops == holes(m)
+        holes(m) > 0 && (looped += 1)
+    end
+    # the networks hold loops (the oracle is not trivially 0)
+    @test looped >= 10
+end
+
 @testitem "Analysis: spanning clusters against a flood-fill oracle" setup = [
     AnalysisSetup,
 ] tags = [
@@ -109,7 +171,9 @@ end
 ] begin
     # oracle: grow the set reachable from the first slice by repeated dilation within the
     # mask, then keep the clusters that reach the last slice
-    function oracle(m, axis, offs)
+    # (`wrap`: axis 1 is periodic)
+    function oracle(m, axis, offs; wrap = false)
+        step(y, o) = (z = y + o; wrap ? CartesianIndex(mod1(z[1], size(m, 1)), z[2]) : z)
         reach = falses(size(m))
         for x in CartesianIndices(m)
             x[axis] == 1 && m[x] && (reach[x] = true)
@@ -118,7 +182,7 @@ end
         while changed
             changed = false
             for x in CartesianIndices(m), o in offs
-                y = x + o
+                y = step(x, o)
                 (reach[x] && checkbounds(Bool, m, y) && m[y] && !reach[y]) || continue
                 reach[y] = true
                 changed = true
@@ -134,7 +198,7 @@ end
             while !isempty(stack)
                 y = pop!(stack)
                 for o in offs
-                    z = y + o
+                    z = step(y, o)
                     (checkbounds(Bool, m, z) && reach[z] && !out[z]) || continue
                     out[z] = true
                     push!(stack, z)
@@ -150,6 +214,14 @@ end
         m = rand(rng, 12, 15) .< p
         @test AN.spanning_cluster(m; axis) == oracle(m, axis, face)
         @test AN.spanning_cluster(m; axis, adjacency = :full) == oracle(m, axis, full)
+    end
+    # periodic axis 1, spanning axis 2: the oracle steps through the seam
+    for p in (0.4, 0.55, 0.7), rep in 1:10
+        m = rand(rng, 12, 15) .< p
+        kw = (; axis = 2, periodic = (true, false))
+        @test AN.spanning_cluster(m; kw...) == oracle(m, 2, face; wrap = true)
+        @test AN.spanning_cluster(m; kw..., adjacency = :full) ==
+            oracle(m, 2, full; wrap = true)
     end
     # a diagonal staircase spans only with corner neighbors (negative control: :face)
     stair = Bool[1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1]
@@ -239,5 +311,14 @@ end
     @test AN.lineage([3 => 1, 3 => 1]).depth[3] == 1
     @test_throws ArgumentError AN.lineage([3 => 1, 3 => 2])
     @test_throws ArgumentError AN.lineage([1 => 2, 2 => 3, 3 => 1])
+    # a self record (a division rule copies `birth` into the parent too) has its own error
+    err = try
+        AN.lineage([1 => nothing, 2 => 1, 1 => 1])
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("own parent", err.msg)
+    # with the self records dropped, the same records form the tree
+    @test AN.lineage([1 => nothing, 2 => 1]).depth[2] == 1
     @test_throws ArgumentError AN.clone_sizes(lin, [8])
 end

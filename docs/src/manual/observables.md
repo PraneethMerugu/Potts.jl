@@ -64,12 +64,21 @@ Morphology helpers work on masks, such as `σ .> 0` or the sites of one kind:
 
 | Function | Returns |
 |---|---|
-| `skeletonize(mask)` | the one-site-wide skeleton of a 2D mask (Zhang–Suen thinning) |
-| `skeleton_counts(skel; min_length)` | the tips, junctions, branches (tip-to-junction edges of at least `min_length`) and loops of a skeleton; `skeleton_graph` has the nodes and edges |
+| `skeletonize(mask)` | the skeleton of a 2D mask (Zhang–Suen thinning, then a pass that removes 2 × 2 blocks); its lines end about half a width short of each tip |
+| `skeleton_counts(skel; min_length)` | the tips, junctions, branches (tip-to-junction edges of at least `min_length`, measured on the skeleton) and loops (independent cycles) of a skeleton; `skeleton_graph` has the nodes and edges |
 | `spanning_cluster(f, σ; axis, adjacency, periodic)`, `percolates` | the sites of the clusters where `f` holds that reach both ends of `axis` |
 | `pair_graph(pred, n)` | the graph of a pairwise predicate on items `1:n`; `components` of it are the clusters under its transitive closure |
 | `sprout_length(mask; axis, from)`, `width_profile`, `sprout_thickness` | how far a mask reaches past a base slice, and its mean width per slice |
 | `lineage(records)`, `clone_sizes` | the lineage forest of `child => parent` birth records, with each cell's founder and depth |
+
+To record births, copy the parent's built-in serial `birth` into a cell variable at
+division (`@variables mother(cell) = 0.0` and the rule `mother => birth`). The rule sets
+the value in both daughters, so the parent, which keeps its `birth`, then holds the self
+record `birth => birth`. Read `sol[:birth][k][c] => sol[:mother][k][c]` for the living
+cells of every saved state, drop the self records, and map `mother = 0` to `nothing`.
+Save at least at every MCS where the rule can fire, so that each cell is saved before its
+first division. The [`lineage`](@ref) docstring has the full loop. For clone sizes alone,
+a founder label in a cell variable is enough, because daughters copy it.
 
 ```@example observables
 using PottsModels.Analysis: skeletonize, skeleton_counts, percolates

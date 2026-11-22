@@ -12,8 +12,40 @@ run: a cell number that a later division reuses needs a new label, such as `(mcs
 # Arguments
 - `records`: an iterable of `child => parent` pairs (`parent` may be `nothing`).
 
-Throws an `ArgumentError` when a child has two different parents or the records hold a
-cycle.
+Throws an `ArgumentError` when a record names a cell as its own parent, a child has two
+different parents, or the records hold a cycle.
+
+# Recording births in a model
+The built-in `birth` of a cell is a serial that no other cell of the run shares; the
+initial cells take 1, 2, … and each daughter the next free serial. A division rule copies
+the parent's serial into a cell variable:
+
+```julia
+@variables mother(cell) = 0.0
+@divide cells(cell) when = …, mother => birth
+```
+
+A division rule sets its value in both daughters, and the parent keeps its cell number
+and its `birth`. After a division the parent therefore holds the self record
+`birth => birth`, and its true record is the one saved before. Read the records from
+saved states, and drop the self records:
+
+```julia
+recs = Pair{Int, Union{Int, Nothing}}[]
+for k in eachindex(sol.u), c in findall(sol[:volume][k] .> 0)
+    b, m = Int(sol[:birth][k][c]), Int(sol[:mother][k][c])
+    b == m || push!(recs, b => (m == 0 ? nothing : m))
+end
+lin = lineage(unique!(recs))
+```
+
+Each cell must be saved at least once between its birth and its first division, so save
+at least at every MCS where the rule can fire (the default `save_everystep = true` does
+it). Pass the `birth` of the living cells to [`clone_sizes`](@ref).
+
+For clone sizes alone, `lineage` is not needed: a cell variable that holds the founder's
+label is copied to every daughter (state without a division rule is copied). `lineage`
+adds the depth of each cell and the tree.
 
 # Returns
 A `NamedTuple`, with `T` the label type:
@@ -50,6 +82,8 @@ function lineage(records)
         c = add(T(p.first))
         p.second === nothing && continue
         a = add(T(p.second))
+        c == a && throw(ArgumentError("lineage: a cell cannot be its own parent \
+            ($(repr(c)) => $(repr(c))); drop the records with child == parent"))
         if haskey(parent, c)
             parent[c] == a && continue
             throw(ArgumentError("lineage: $(repr(c)) has two parents, $(repr(parent[c])) \

@@ -7,11 +7,15 @@
 Return the skeleton of a 2D mask by Zhang–Suen thinning.
 
 The thinning removes boundary sites in two alternating sub-steps until none changes, and
-keeps the connectivity of each component (8-connected). Sites outside the array count as
-unset. The result is a one-site-wide line along the middle of each component, ending
-about half a width short of each end, with a closed line around each hole. Like every
-thinning on the square lattice, it has artifacts: a component of 2 × 2 sites vanishes,
-and short spurs can grow at corners of thick shapes, so pass `min_length` to
+keeps the connectivity of each component (8-connected) and its holes. Sites outside the
+array count as unset. Zhang–Suen alone can leave 2 × 2 blocks of sites, so a post-pass
+then removes a site of each block wherever the removal keeps the topology. The result is
+a line along the middle of each component, with a closed line around each hole. It is one
+site wide except where a 2 × 2 block cannot lose a site without a break, such as where
+four diagonal lines meet. Each line ends about half a width short of the end of its
+shape, so lengths measured on the skeleton are short by that much. Like every thinning
+on the square lattice, it has artifacts: a component of 2 × 2 sites vanishes, and short
+spurs can grow at corners of thick shapes, so pass `min_length` to
 [`skeleton_counts`](@ref) to ignore them.
 
 # Arguments
@@ -64,6 +68,25 @@ function skeletonize(mask::AbstractMatrix{Bool})
             end
         end
     end
+    # Zhang–Suen can leave 2 × 2 blocks; remove a site of each block whose removal keeps
+    # the topology (a simple site, Yokoi number 1), until no such site is left.
+    simple(i, j) = count(1:2:7) do k
+        q(t) = !at(i + offs[mod1(t, 8)][1], j + offs[mod1(t, 8)][2])
+        q(k) && !(q(k) && q(k + 1) && q(k + 2))
+    end == 1
+    changed = true
+    while changed
+        changed = false
+        for i in 1:(m - 1), j in 1:(n - 1)
+            (s[i, j] && s[i + 1, j] && s[i, j + 1] && s[i + 1, j + 1]) || continue
+            for (a, b) in ((i, j), (i, j + 1), (i + 1, j), (i + 1, j + 1))
+                simple(a, b) || continue
+                s[a, b] = false
+                changed = true
+                break
+            end
+        end
+    end
     return s
 end
 
@@ -108,7 +131,10 @@ A `NamedTuple`:
 - `nodes::Vector{Vector{CartesianIndex{2}}}`: the sites of each node.
 - `edges::Vector{Tuple{Int, Int, Float64}}`: `(a, b, length)` per edge, `a ≤ b`.
 - `degree::Vector{Int}`: the edge ends at each node (a self-loop counts twice).
-- `loops::Int`: the independent cycles, `edges − nodes + components`.
+- `loops::Int`: the independent cycles of the site graph (m-adjacent pairs − sites +
+  components). The merged nodes do not enter this count, so a cycle inside a cluster of
+  junction sites still counts. With no 2 × 2 block in `skel`, it equals the number of
+  holes.
 
 # Examples
 ```jldoctest
@@ -187,15 +213,21 @@ function skeleton_graph(skel::AbstractMatrix{Bool})
         push!(edges, (k, k, len))
     end
     degree = zeros(Int, length(nodes))
-    adj = [Int[] for _ in nodes]
     for (a, b, _) in edges
         degree[a] += 1
         degree[b] += 1
-        push!(adj[a], b)
-        push!(adj[b], a)
     end
-    ncomp = length(components(adj, eachindex(nodes)))
-    return (; nodes, edges, degree, loops = length(edges) - length(nodes) + ncomp)
+    return (; nodes, edges, degree, loops = _cycle_rank(nbr))
+end
+
+# The independent cycles of the site graph: m-adjacent pairs − sites + components. The
+# merged junction nodes above would hide a cycle that lies inside a junction cluster.
+function _cycle_rank(nbr::Dict{CartesianIndex{2}, Vector{CartesianIndex{2}}})
+    sites = sort!(collect(keys(nbr)))
+    index = Dict(x => k for (k, x) in enumerate(sites))
+    adj = [[index[y] for y in nbr[x]] for x in sites]
+    pairs = sum(length, adj; init = 0) ÷ 2
+    return pairs - length(sites) + length(components(adj, eachindex(sites)))
 end
 
 """
@@ -208,13 +240,18 @@ The counts are read from [`skeleton_graph`](@ref): `tips` are the nodes of degre
 `junctions` the nodes of degree 3 or more, and `loops` the independent cycles. A
 *branch* is an edge from a tip to a junction, the side shoot of a branched line, and it
 counts only when its length is at least `min_length`. Pass `min_length` in sites (for
-example a bud length of 10 µm over the site size) to ignore short spurs.
+example a bud length of 10 µm over the site size) to ignore short spurs. The length is
+measured on the skeleton: it runs from the junction, on the center line of the main body,
+to a tip about half the branch width short of the real tip (see [`skeletonize`](@ref)).
+For a bud length measured from the edge of the main body to the real tip, the skeleton
+length is about the bud length plus the half width of the body minus the half width of
+the bud, so shift the threshold by these half widths.
 
 # Arguments
 - `skel::AbstractMatrix{Bool}`: the skeleton sites.
 
 # Keywords
-- `min_length::Real = 0`: the shortest branch that counts.
+- `min_length::Real = 0`: the shortest branch that counts, as a skeleton length.
 
 # Returns
 - `NamedTuple{(:tips, :junctions, :branches, :loops), NTuple{4, Int}}`.
