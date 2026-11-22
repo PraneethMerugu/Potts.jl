@@ -41,7 +41,11 @@ lin = lineage(unique!(recs))
 
 Each cell must be saved at least once between its birth and its first division, so save
 at least at every MCS where the rule can fire (the default `save_everystep = true` does
-it). Pass the `birth` of the living cells to [`clone_sizes`](@ref).
+it). If the rule fires every `n` MCS, `saveat = n` is enough and keeps memory low. Pass
+the `birth` of the living cells to [`clone_sizes`](@ref).
+
+A `Float64` `mother` holds every `birth` serial exactly. With `Float32` state (common on a
+GPU), serials above 2^24 (about 17 million births) are no longer exact.
 
 For clone sizes alone, `lineage` is not needed: a cell variable that holds the founder's
 label is copied to every daughter (state without a division rule is copied). `lineage`
