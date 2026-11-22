@@ -27,7 +27,8 @@ const P14 = FortunaProtocol
 # AR(1) velocity plus Brownian increments of D_fast = DS/(1 − S), in units of R; the
 # polarization is `pol` sites along the velocity (`mode = :velocity`) or along a fresh
 # random direction each MCS (`mode = :random`), and the lamellipodium leads the nucleus by
-# `lead`. The CN center sits at the nucleus plus the polarization.
+# `lead`. As `record_run` does, cx, cy are the cytoplasm centroid r_N + Π (V_C + V_N)/V_C,
+# not r_CN = r_N + Π, so a protocol that read them as the CN track would fail.
 function synthetic_run(
         rng; S, D, P, R = 15, L = 120, n = 100_001, pol = 2.0, lead = 5.0,
         mode = :velocity
@@ -37,14 +38,15 @@ function synthetic_run(
     rec = (
         t = collect(0:(n - 1)), nx = zeros(n), ny = zeros(n), cx = zeros(n), cy = zeros(n),
         lx = zeros(n), ly = zeros(n), Πx = zeros(n), Πy = zeros(n), vl = ones(n),
-        lam_cyto = ones(n),
+        vc = fill(3.0, n), vn = ones(n), lam_cyto = ones(n),
     )
     for k in 1:n
         e = mode === :velocity ? v ./ hypot(v...) : (c = 2π * rand(rng); (cos(c), sin(c)))
         rec.nx[k], rec.ny[k] = mod.(R .* x, L)
         rec.Πx[k], rec.Πy[k] = pol .* e
         rec.lx[k], rec.ly[k] = mod.(R .* x .+ lead .* e, L)
-        rec.cx[k], rec.cy[k] = mod.(R .* x .+ pol .* e, L)
+        f = (rec.vc[k] + rec.vn[k]) / rec.vc[k]
+        rec.cx[k], rec.cy[k] = 1 .+ mod.(R .* x .+ f .* pol .* e .- 1, L)
         x = x .+ v .+ sb .* (randn(rng), randn(rng))
         v = a .* v .+ (sv * sqrt(1 - a^2)) .* (randn(rng), randn(rng))
     end
@@ -84,7 +86,7 @@ end
     t = collect(0:(n - 1))
     nx = mod.(1.0 .+ t, 20)
     rec = (
-        t, nx, ny = fill(5.0, n), cx = mod.(nx .+ 0.5, 20), cy = fill(5.0, n),
+        t, nx, ny = fill(5.0, n), cx = mod.(nx .+ 2.0, 20), cy = fill(5.0, n),
         lx = mod.(nx .- 3, 20), ly = fill(5.0, n),
         Πx = fill(0.5, n), Πy = fill(0.0, n), vl = [k == 1002 ? 0.0 : 1.0 for k in 1:n],
         lam_cyto = [k == 1003 ? 0.0 : 1.0 for k in 1:n],
@@ -92,6 +94,7 @@ end
     s = PP.stationary(rec, 10, 20)
     @test s.t == 1000:1009
     @test all(k -> s.track[k + 1][1] - s.track[k][1] ≈ 0.1, 1:9)   # unwrapped, units of R
+    # the CN track is r_N + Π_CN−N, not the cytoplasm centroid cx, cy
     @test all(k -> collect(s.cn_track[k] .- s.track[k]) ≈ [0.05, 0.0], 1:10)
     @test s.Π.CN_N[1] == (0.05, 0.0)
     @test collect(s.Π.L_N[1]) ≈ [-0.3, 0.0]                                # minimum image
@@ -253,6 +256,22 @@ end
     @test !W["upar/R15/φ0.2/λ175"].ok && !W["udiv/R15/φ0.2/λ175"].ok
     @test W["upar/R15/φ0.2/λ150"].ok && W["upar/R15/φ0.2/λ200"].ok
     @test W["upar/R15/φ0.1/λ150"].ok
+    # a non-finite gating value gives a FAIL row, never a dropped one
+    rows, curves = good()
+    rows[PP.FIG4_POLARIZED] = merge(rows[PP.FIG4_POLARIZED], (; dtau = NaN, xi_CN_N = NaN))
+    rows[(15, 0.2, 175)] = merge(rows[(15, 0.2, 175)], (; upar10 = NaN))
+    rows[(15, 0.3, 200)] = merge(rows[(15, 0.3, 200)], (; u = NaN))
+    cs = curves[(15, 0.2, 150)]
+    curves[(15, 0.2, 150)] = [c.lag == 10 ? merge(c, (; u = NaN)) : c for c in cs]
+    N = Dict(v.id => v for v in PP.verdicts(rows, curves))
+    @test count(v -> v.kind === :row, values(N)) == length(gating)
+    for id in (
+            "dtau/R15/φ0.1/λ200", "xi_peak/R15/φ0.1/λ200", "xi_best/R15/φ0.1/λ200",
+            "upar/R15/φ0.2/λ175", "trend/R15/u_vs_pi", "udiv/R15/φ0.2/λ150",
+        )
+        @test !N[id].ok
+    end
+    @test !PP.upar_ok(1.0, NaN, 1.0) && !PP.upar_ok(NaN, 1.0, 1.0)
     @test PP.kendall([1, 2, 3, 4], [4, 3, 2, 1]) == -1
     @test PP.kendall([1, 2, 3, 4], [1, 2, 3, 4]) == 1
 end

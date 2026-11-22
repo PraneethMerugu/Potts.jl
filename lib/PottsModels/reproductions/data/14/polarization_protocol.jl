@@ -21,8 +21,9 @@
 # - Stationary part: t ≥ 1000 MCS (p. 8: "we have waited 1000 MCS before recording").
 # - Tracked point ("the cell position" ρ, Eq 13): the nucleus center of mass in xy,
 #   periodic-unwrapped, over R, the point Fortuna et al. fitted S, P and D on (their S1
-#   §S3; Fig 5 uses those S values). The paper does not name it. The CN center of mass is
-#   in the tracks too; u_∥ on the CN track is an info column (`upar_cn1`, `upar_cn10`),
+#   §S3; Fig 5 uses those S values). The paper does not name it. The CN track,
+#   r_CN = r_N + Π_CN−N (from nx, ny, Πx, Πy; not the cx, cy columns, which are the
+#   cytoplasm centroid), gives u_∥ as an info column (`upar_cn1`, `upar_cn10`),
 #   because Π_CN−N contains −r_N and short-time nucleus jitter enters u_∥ on the nucleus
 #   track.
 # - Fit: the modified Fürth fit of the Fortuna protocol, `furth_fit(50 .* (1:200), m;
@@ -130,6 +131,7 @@ const DTAU_REF_SD = Dict(FIG4_POLARIZED => 0.187, FIG4_WEAK => 0.151)   # the Δ
 const BOOT_B = 200                                   # bootstrap resamples of Δτ_opt
 const BOOT_SEED = 1_420_999_000
 const UPAR_BAND = 0.1
+const UPAR_SE_MULT = 1.0                             # the u_∥ band's SE multiplier (P6)
 const CLOUD_SETS = ((15, 0.05, 200), (15, 0.3, 150))                   # Fig 6D, 7A inset
 # name => (x column, y column, expected sign of Kendall's τ)
 const TRENDS = (
@@ -160,7 +162,8 @@ minimum_image(d, L) = d - L * round(d / L)
 
 The stationary part of one recorded run (`t ≥ warmup`, every MCS): the nucleus track and
 the CN track (`cn_track`) in units of R (xy, unwrapped) and the three polarizations in
-units of R. `rec` has the columns t, nx, ny, cx, cy, lx, ly, Πx, Πy, vl and lam_cyto.
+units of R. The CN track is r_N + Π_CN−N. `rec` has the columns t, nx, ny, lx, ly, Πx,
+Πy, vl and lam_cyto.
 `detached` is the fraction of samples with a lamellipodium but no lamellipodium–cytoplasm
 contact.
 """
@@ -171,7 +174,7 @@ function stationary(rec, R, L; warmup = WARMUP)
     all(==(EVERY), diff(t)) || throw(ArgumentError("stationary: the samples are not every MCS"))
     unwrap(x, y) = [p ./ R for p in A.unwrap_track(collect(zip(x[w], y[w])), (L, L), true)]
     track = unwrap(rec.nx, rec.ny)
-    cn_track = unwrap(rec.cx, rec.cy)
+    cn_track = unwrap(rec.nx .+ rec.Πx, rec.ny .+ rec.Πy)       # r_CN = r_N + Π_CN−N
     cn = [(x, y) ./ R for (x, y) in zip(rec.Πx[w], rec.Πy[w])]
     ln = map(w) do j
         rec.vl[j] > 0 || return (NaN, NaN)
@@ -238,10 +241,11 @@ end
 """
     upar_ok(a, b, se) -> Bool
 
-The u_∥ convergence band: `|a − b| ≤ UPAR_BAND |b|` or `|a − b| < se`.
+The u_∥ convergence band: `|a − b| ≤ UPAR_BAND |b|` or `|a − b| < UPAR_SE_MULT se`.
+Non-finite inputs fail.
 """
 upar_ok(a, b, se) = isfinite(a) && isfinite(b) &&
-    (abs(a - b) <= UPAR_BAND * abs(b) || (isfinite(se) && abs(a - b) < se))
+    (abs(a - b) <= UPAR_BAND * abs(b) || (isfinite(se) && abs(a - b) < UPAR_SE_MULT * se))
 
 """
     analyze_set(runs; B = BOOT_B) -> NamedTuple
@@ -390,10 +394,9 @@ function verdicts(rows, curves)
     end
     for (s, r) in rows
         s[1] == 15 || continue
-        isfinite(r.upar10) || continue
         rel = abs(r.upar1 - r.upar10) / abs(r.upar10)
         add!(
-            "upar/" * set_id(s), :row, rel, "≤ 0.10, or Δ < SE $(round(r.upar_dse; sigdigits = 3))",
+            "upar/" * set_id(s), :row, rel, "≤ 0.10, or Δ < $(UPAR_SE_MULT) SE = $(round(r.upar_dse; sigdigits = 3))",
             upar_ok(r.upar1, r.upar10, r.upar_dse)
         )
         rc = abs(r.upar_cn1 - r.upar_cn10) / abs(r.upar_cn10)
