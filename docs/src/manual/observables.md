@@ -73,7 +73,7 @@ Morphology helpers work on masks, such as `σ .> 0` or the sites of one kind:
 
 ```@example observables
 using PottsModels.Analysis: skeletonize, skeleton_counts, percolates
-mask = σ .> 0
+mask = ownership(sol.u[end]) .> 0
 skeleton_counts(skeletonize(mask)), percolates(mask; axis = 1)
 ```
 
