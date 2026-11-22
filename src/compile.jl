@@ -50,6 +50,8 @@ struct CompiledPottsSystem <: ModelingToolkitBase.AbstractSystem
     relationships::Vector{RelationshipSpec}           # in declaration order
     # (relationship, E(a, b, distance, its edge vars))
     edge_terms::Vector{Tuple{Symbol, Any}}
+    # (ordered relationship, E(a, pivot, b, angle, curvature))
+    angle_terms::Vector{Tuple{Symbol, Any}}
     edge_vars::Dict{Symbol, Vector{Any}}              # relationship → its edge variables
     link_rules::Vector{LinkRule}
     uses_surface::Bool
@@ -209,6 +211,7 @@ const _PROPOSAL_BUILTINS = (
     :direction, :position, :mcs,
 )
 const _EDGE_BUILTINS = (:a, :b, :distance)
+const _ANGLE_BUILTINS = (:a, :b, :pivot, :angle, :curvature)
 const _LINK_BUILTINS = (:a, :b, :distance, :mcs)
 
 # Replace population folds by placeholders; return them for separate checking.
@@ -351,6 +354,65 @@ function _relationships(sys::PottsSystem)
     return rels, edge_vars, edge_rel
 end
 
+# An angle term reads the triple's static values and its geometry: no edge variable (a
+# triple has two links), nothing a copy changes, no references
+function _check_angle_term(E, d, relationships)
+    r = findfirst(x -> x.name === d.relationship, relationships)
+    r === nothing &&
+        throw(PottsCompileError("angles($(d.relationship)): no @relationship \
+            $(d.relationship)"))
+    relationships[r].ordered || throw(
+        PottsCompileError(
+            "angles($(d.relationship)): the relationship is not ordered; declare it \
+                `@relationship $(d.relationship)(cell, cell) ordered = true` so each \
+                member has a predecessor and a successor"
+        )
+    )
+    _check_names(E, _ANGLE_BUILTINS, "an angle term")
+    _check_static(_strip_populations(E)[1], "an angle term")
+    for (role, n) in _uses(E)
+        role === :edge && throw(
+            PottsCompileError(
+                "angles($(d.relationship)) reads the edge variable `$n`; an angle term \
+                    spans two links, so it reads no edge variable"
+            )
+        )
+    end
+    isempty(_gathers(E)) || throw(
+        PottsCompileError(
+            "angle terms reading neighbors are not supported; read neighbors in a \
+                `cells(…)` or `contacts` term instead"
+        )
+    )
+    return nothing
+end
+
+# `prev`, `next`, `rank` read an ordered relationship; `linked` any relationship
+function _check_relationship_queries(exprs, relationships)
+    for x in exprs
+        _walk(x) do y
+            iscall(y) || return
+            op = operation(y)
+            op isa RelationshipQuery || return
+            r = findfirst(z -> z.name === op.relationship, relationships)
+            r === nothing && throw(
+                PottsCompileError(
+                    "`$(op.what)($(op.relationship), …)`: no @relationship \
+                        $(op.relationship)"
+                )
+            )
+            op.what === :linked || relationships[r].ordered || throw(
+                PottsCompileError(
+                    "`$(op.what)($(op.relationship), …)` reads the order of a chain, but \
+                        @relationship $(op.relationship) is not ordered; declare it with \
+                        `ordered = true`"
+                )
+            )
+        end
+    end
+    return nothing
+end
+
 # An edge term or link rule of relationship `r` reads only `r`'s edge variables (another
 # relationship's payload has no slot for this link).
 function _check_edge_vars(x, r, edge_rel, what)
@@ -434,13 +496,14 @@ function _compile_bound(
     contact_terms = Dict{Symbol, Any}()
     site_terms = Any[]
     edge_terms = Tuple{Symbol, Any}[]
+    angle_terms = Tuple{Symbol, Any}[]
     relationships, edge_vars, edge_rel = _relationships(sys)
     copy_sites, copy_cells = _copy_written_vars(sys)
     for e in _p(sys, :energies)
         d = e.domain
         _located(sys, e) do
             _check_energy_geometry(e.expr)
-            d isa Union{CellDomain, EdgeDomain, ContactDomain} &&
+            d isa Union{CellDomain, EdgeDomain, ContactDomain, AngleDomain} &&
                 _check_copy_reads(e.expr, d, copy_sites, copy_cells)
             _check_energy_refs(e.expr, d)
             if d isa CellDomain
@@ -481,6 +544,9 @@ function _compile_bound(
                     "edges($(d.relationship))"
                 )
                 push!(edge_terms, (d.relationship, e.expr))
+            elseif d isa AngleDomain
+                _check_angle_term(e.expr, d, relationships)
+                push!(angle_terms, (d.relationship, e.expr))
             elseif d isa SiteDomain
                 _check_names(e.expr, _SITE_BUILTINS, "a site term")
                 _check_static(_strip_populations(e.expr)[1], "a site term")
@@ -493,7 +559,7 @@ function _compile_bound(
                 push!(site_terms, e.expr)
             else
                 throw(PottsCompileError("unknown energy domain `$d`; expected `cells(…)`, \
-                    `clusters(…)`, `contacts(…)`, `edges(…)` or `sites`"))
+                    `clusters(…)`, `contacts(…)`, `edges(…)`, `angles(…)` or `sites`"))
             end
         end
     end
@@ -509,7 +575,7 @@ function _compile_bound(
         i = info(x)
         i === nothing && continue
         readers = Any[
-            (E for (_, E) in cluster_terms)..., last.(edge_terms)...,
+            (E for (_, E) in cluster_terms)..., last.(edge_terms)..., last.(angle_terms)...,
             (
                 if i.role === :cell
                     (site_terms..., values(contact_terms)...)
@@ -874,8 +940,9 @@ function _compile_bound(
             o.rhs
                 for o in _p(sys, :observed)
         )...,
-        convert_exprs...,
+        convert_exprs..., last.(angle_terms)...,
     ]
+    _check_relationship_queries(scanned, relationships)
     uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
     uses_euler = any(x -> _uses_builtin(x, :euler), scanned)
@@ -1017,6 +1084,7 @@ function _compile_bound(
     contact_terms = Dict{Symbol, Any}(r => snap(E) for (r, E) in contact_terms)
     site_terms = Any[snap(E) for E in site_terms]
     edge_terms = Any[snap(E) for E in edge_terms]
+    angle_terms = Any[snap(E) for E in angle_terms]
     update_pops = Pair{Symbol, Any}[]
     schedule = Dict{Symbol, Vector{Stage}}()
     pre_snapshots = Dict{Symbol, Vector{Tuple{Symbol, Symbol}}}()
@@ -1078,7 +1146,7 @@ function _compile_bound(
     return CompiledPottsSystem(
         sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         _p(sys, :constraints), updates, fields, cell_odes, model_odes,
-        _p(sys, :divisions), relationships, edge_terms, edge_vars,
+        _p(sys, :divisions), relationships, edge_terms, angle_terms, edge_vars,
         _p(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, uses_euler,
         uses_euler_full,
         euler_full_column, cluster_division,
@@ -1586,7 +1654,9 @@ function _check_copy_reads(E, d, sites, cells)
     # `neighbor_kind`), indexed copy-varying cell quantities in cell terms, and copy-written
     # site variables at an explicit site, in every domain (a contact term's bare `x`, `x′`
     # read the pair and stay allowed)
-    r = _copy_varying_read(E, sites, d isa CellDomain ? cells : nothing; mode = :explicit)
+    r = _copy_varying_read(
+        E, sites, d isa Union{CellDomain, AngleDomain} ? cells : nothing; mode = :explicit
+    )
     r === nothing || throw(_copy_read_error(r..., ""))
     # gather bodies and filters: also copy-written site variables
     _walk(E) do y
@@ -1974,6 +2044,8 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
                 lower(e.expr, _site_env(T, :i, rn))
             elseif d isa EdgeDomain
                 lower(e.expr, _edge_env(T, :ea, :eb, :ek, :ed, rn))
+            elseif d isa AngleDomain
+                lower(e.expr, _angle_env(T, :ap, :aq, :an, :aθ, :aκ, rn))
             else
                 nothing
             end

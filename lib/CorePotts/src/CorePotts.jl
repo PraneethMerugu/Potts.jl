@@ -53,7 +53,8 @@ export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_DIVIDE_CLUSTER, EVENT_REMOVE,
     principal_axis, rebuild_trackers!, with_capacity
 export empty_links, linked, link_count, link_slot, add_link!, remove_link!,
     remove_incident!,
-    centroid_distance, centroid_separation, link_delta, HostPhase
+    centroid_distance, centroid_separation, link_delta, HostPhase, add_chain_link!,
+    chain_prev, chain_next, chain_rank, pivot_angle, menger_curvature
 export cluster_of, same_cluster, init_clusters, recompute_cluster_volume,
     recompute_cluster_surface, commit_cluster_volume!, cluster_volume_delta,
     cluster_surface_change, cluster_surface_delta, commit_cluster_surface!
@@ -88,7 +89,7 @@ public Part, BindingScratch, coordinates, shift, interior, neighbor_index, linea
 # page lists it apart).
 const MODEL_COMPILER_INTERFACE = (
     :AbstractBoundary, :AbstractRelationSpec, :run_phases, :link_frame, :link_at,
-    :maxdegree,
+    :maxdegree, :angle_at, :check_algorithm,
     :derived, :snapshot, :run_phase, :sync!, :counted_copy!, :adapt_host, :host_leaves,
     :host_buffer, :adjacency_name, :always, :is_symmetric, :has_origin,
     :MODEL_STATUS, :bump!, :atomic_add!, :cv_write!, :to_host, :report_run, :no_bias,
@@ -114,6 +115,7 @@ include("euler.jl")
 include("pieces.jl")
 include("spatial.jl")
 include("relationships.jl")
+include("chains.jl")
 include("compartments.jl")
 include("lifecycle.jl")
 include("lifecycle_device.jl")

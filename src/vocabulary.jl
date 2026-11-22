@@ -85,7 +85,7 @@ const BUILTIN_NAMES = (
     :major_length, :local_components, :ring_arcs,
     :ring_cells, :ring_medium, :direction, :euler, :euler_full, :pieces, :pieces_full,
     :largest_piece,
-    :largest_piece_full, :birth,
+    :largest_piece_full, :birth, :pivot, :angle, :curvature,
 )
 
 # A built-in is an MTK input `name(t)`: the CPM supplies its value wherever it is read.
@@ -1710,14 +1710,116 @@ _domain(d) = d
 
 """
 `@relationship name(cell, cell) capacity = k`: a symmetric link set, at most `k` per cell.
+With `ordered = true` (capacity 2) each member has a predecessor and a successor: the links
+form chains, read with `prev`, `next` and `rank`.
 """
 struct RelationshipSpec
     name::Symbol
     capacity::Int
+    ordered::Bool
 end
-relationship(name::Symbol; capacity::Integer = 4) = RelationshipSpec(name, Int(capacity))
+RelationshipSpec(name::Symbol, capacity::Integer) = RelationshipSpec(name, capacity, false)
+function relationship(
+        name::Symbol; ordered::Bool = false, capacity::Integer = ordered ? 2 : 4
+    )
+    ordered && capacity != 2 && throw(
+        ArgumentError(
+            "@relationship $name: an ordered relationship links each member to one \
+                predecessor and one successor, so its capacity is 2 (got $capacity); \
+                drop `capacity` or set `capacity = 2`"
+        )
+    )
+    return RelationshipSpec(name, Int(capacity), ordered)
+end
 struct RelationshipRef
     name::Symbol
+end
+
+# Ordered relationships: `prev`, `next`, `rank`, `linked` (any relationship) and the
+# energy domain `angles`
+"""
+`RelationshipQuery(relationship, what)`: the symbolic operation of `prev`, `next`, `rank`
+(`what` = `:prev`, `:next`, `:rank`; one cell argument) and `linked` (two cells) on the
+relationship named `relationship`. Symbolic only; lowered to reads of its link store.
+"""
+struct RelationshipQuery
+    relationship::Symbol
+    what::Symbol
+end
+Base.nameof(q::RelationshipQuery) = q.what
+Base.show(io::IO, q::RelationshipQuery) = print(io, q.what, "{", q.relationship, "}")
+function (q::RelationshipQuery)(args...)
+    throw(ArgumentError("`$(q.what)` is symbolic-only"))
+end
+# a scalar (`linked` a Bool, the others a cell id or a rank), also when a substitution
+# rebuilds the term
+function SymbolicUtils.promote_symtype(q::RelationshipQuery, args...)
+    return q.what === :linked ? Bool : Real
+end
+function SymbolicUtils.promote_shape(::RelationshipQuery, ::SymbolicUtils.ShapeT...)
+    return SymbolicUtils.ShapeVecT()
+end
+function _relationship_query(what, r, cells...)
+    r isa RelationshipRef || throw(
+        ArgumentError(
+            "`$what`: the first argument is a relationship declared with \
+                `@relationship`, got $(repr(r))"
+        )
+    )
+    return Symbolics.wrap(
+        SymbolicUtils.term(
+            RelationshipQuery(r.name, what), map(c -> _unwrap(_symarg(c)), cells)...
+        )
+    )
+end
+"""
+    prev(rel, c)
+
+The predecessor of cell `c` in the ordered relationship `rel`, or 0 for a head. A
+reference: read through it as `kind[prev(chain, id)]`, test it with `alive`. It reads the
+stored links, which change only between sweeps.
+"""
+_rel_prev(r, c) = _relationship_query(:prev, r, c)
+"""
+    next(rel, c)
+
+The successor of cell `c` in the ordered relationship `rel`, or 0 for a tail. A reference,
+as `prev`.
+"""
+_rel_next(r, c) = _relationship_query(:next, r, c)
+"""
+    rank(rel, c)
+
+The position of cell `c` in its chain of the ordered relationship `rel`: 1 for a head, 2
+for its successor, and so on; 1 for a cell in no link and 0 for the reference 0.
+"""
+_rel_rank(r, c) = _relationship_query(:rank, r, c)
+"""
+    linked(rel, a, b)
+
+Whether cells `a` and `b` are linked in the relationship `rel` (any relationship).
+"""
+_rel_linked(r, a, b) = _relationship_query(:linked, r, a, b)
+_is_relationship_query(op, whats = (:prev, :next, :rank, :linked)) =
+    op isa RelationshipQuery && op.what in whats
+
+"""
+Energy domain `angles(rel)`: every member of the ordered relationship `rel` with both a
+predecessor and a successor, once; names `pivot` (the member), `a` (its predecessor), `b`
+(its successor), `angle` (the angle at the pivot between the centroids, in `[0, π]`) and
+`curvature` (1/R of the circle through the three centroids).
+"""
+struct AngleDomain
+    relationship::Symbol
+end
+function _angles(r)
+    r isa RelationshipRef || throw(
+        ArgumentError(
+            "`angles`: the argument is an ordered relationship declared with \
+                `@relationship name(cell, cell) ordered = true`, got $(repr(r))"
+        )
+    )
+    return AngleDomain(r.name)
 end
 """
 Energy domain `edges(rel)`: every link once; names `a`, `b` (cells), `distance`, edge
@@ -2800,7 +2902,8 @@ const DSL = (;
     dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean,
     CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer,
     Pairs, minimum_image = _minimum_image, separation = _separation, ismember,
-    neighbor = _primed,
+    neighbor = _primed, angles = _angles, prev = _rel_prev, next = _rel_next,
+    rank = _rel_rank, linked = _rel_linked,
 )
 
 # ---------------------------------------------------------------------------------------

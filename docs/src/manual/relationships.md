@@ -79,3 +79,62 @@ count_links(u, name) = sum(c -> CorePotts.link_count(CorePotts.link_store(u.cell
 `CorePotts.link_store(u.cell, :name)` is the link table of a saved state;
 `CorePotts.linked(store, a, b)` and `CorePotts.link_count(store, c)` query it. The edge
 variable values of a relationship's links are stored as cell arrays (`u.cell.link_len`).
+
+## Ordered relationships and angle terms
+
+An **ordered** relationship links its members into chains. Each member has at most one
+predecessor and one successor, so its capacity is 2.
+
+```julia
+@relationship chain(cell, cell) ordered = true
+```
+
+| Expression | Meaning |
+|---|---|
+| `prev(chain, c)` | the predecessor of cell `c`, or 0 for a head |
+| `next(chain, c)` | the successor of cell `c`, or 0 for a tail |
+| `rank(chain, c)` | the position of `c` in its chain: 1 for a head (and for a cell in no link) |
+| `linked(chain, a, b)` | whether `a` and `b` are linked (any relationship) |
+| `angles(chain) => E` | an energy summed over each member with both neighbors |
+
+`prev` and `next` are references, as a `CellRef` variable is: read through them as
+`kind[prev(chain, id)]`, and test them with `alive(next(chain, id))`. All four read the
+stored links, so they are available where references are: cell energies, drives,
+constraints, updates, link rules and `@observed`. The links change only between sweeps.
+
+In the operating point, a pair `(x, y)` makes `y` the successor of `x`:
+`:chain => [(1, 2), (2, 3), (3, 4)]` is a chain of four with head 1. A pair that gives a
+cell a second predecessor or successor, or closes a chain on itself, is an `ArgumentError`.
+`@link chain when = cond` links a touching pair from the cell for which `cond(a, b)` holds
+(`a`) to the other (`b`), and does not make a link that would branch or close a chain.
+
+Unlinking changes the order at once. When `@unlink` removes the link `x → y`, `y` becomes
+the head of the rest of its chain, which is ranked again from 1. A cell squeezed out by
+copies (volume 0) keeps its place until the next link phase drops its links: `prev` and
+`next` still name it and `rank` counts it, but `alive` is false and its triples add no
+energy. Then the chain splits there. A cell removed by the lifecycle loses its links at
+once, and daughters start unlinked.
+
+In an angle term, `pivot` is the member, `a` its predecessor and `b` its successor.
+`angle` is the angle at the pivot between the centroids of `a` and `b`, in `[0, π]`, so a
+straight triple has `angle = π`. `curvature` is `1/R`, the inverse radius of the circle
+through the three centroids, which is `2 sin(angle) / |a − b|`. Both use minimum-image
+vectors on periodic axes and the embedded geometry on a hexagonal lattice. A triple whose
+centroids coincide in pairs has `curvature = 0`, and `angle = π` when the pivot coincides
+with an end. A bending energy on the inverse radius of curvature and a stretching energy on
+the links are
+
+```julia
+@energy begin
+    angles(chain) => ξ * curvature^2
+    edges(chain) => ζ * (distance - D)^2
+end
+```
+
+The energy change of a copy is exact: the copy moves the centroids of `old` and `new`, and
+every triple that contains either is evaluated again with both shifts. An angle term reads
+parameters and the cell variables of its three cells that no `@on_copy` update writes
+(`stiffness[pivot]`), but no edge variable, nothing a copy changes and no references. Only
+`SequentialCPM` runs a model with an angle term: `CheckerboardCPM`, on the CPU or a GPU, is
+an `ArgumentError`, because another block can move the two-hop neighbors whose centroids
+the energy change reads.

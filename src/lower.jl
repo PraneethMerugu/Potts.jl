@@ -27,6 +27,7 @@ const _MODE_NAMES = Dict(
     :contact => "a contact term (`contacts => …`)",
     :model => "a model-scope expression (model update, observed)",
     :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)",
+    :angle => "an angle term (`angles(rel) => …`)",
     :edge_update => "an edge update (`@before_mcs`/`@after_mcs` writing an edge variable)",
     :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)"
 )
@@ -162,6 +163,7 @@ function lower(x, env::LowerEnv)
         return :(Potts._sibling_counted(st.cell, $cl, Int32($k), $(ctr[1]), $(ctr[2])))
     end
     op === as_ref && return :(Int32($(lower(args[1], env))))
+    op isa RelationshipQuery && return _lower_relationship_query(op, args, env)
     if op === outer_value
         haskey(env.bind, :__outer) ||
             throw(PottsCompileError("`members(…)` is a fold domain: write `sum(… for m in \
@@ -688,6 +690,7 @@ function _is_ref(x)
     iscall(x) || return false
     op = operation(x)
     (op === cluster_sibling || op === as_ref) && return true
+    _is_relationship_query(op, (:prev, :next)) && return true
     op isa ModelingToolkitBase.Pre && return _is_ref(arguments(x)[1])
     # `ifelse(c, a, b)` with a reference in a branch: read as a reference (guarded),
     # whichever branch is taken (a plain cell index such as `id` reads the same through the
@@ -948,7 +951,8 @@ function _sort(x)
         i.role === :bound_cell && return :cell
         if i.role === :builtin
             i.name in (:source, :target, :site, :neighbor_site) && return :site
-            i.name in (:old, :new, :owner, :neighbor_owner, :id, :a, :b) && return :cell
+            i.name in (:old, :new, :owner, :neighbor_owner, :id, :a, :b, :pivot) &&
+                return :cell
             return :unknown
         end
     end
@@ -958,6 +962,34 @@ function _sort(x)
         a !== nothing && a.role === :builtin && a.name === :owner && return :cell
     end
     return :unknown
+end
+
+# `prev`, `next`, `rank` and `linked` read relationship `q.relationship`'s link store in
+# the state referents are read in (CorePotts `chains.jl`, `relationships.jl`); `mtkcompile`
+# checks the relationship exists and, but for `linked`, is ordered
+function _lower_relationship_query(q::RelationshipQuery, args, env)
+    store = :((; links = $(_refst(env)).cell.$(CorePotts.adjacency_name(q.relationship))))
+    c = map(a -> :(Int32($(lower(a, env)))), args)
+    q.what === :prev && return :(CorePotts.chain_prev($store, $(c[1])))
+    q.what === :next && return :(CorePotts.chain_next($store, $(c[1])))
+    q.what === :rank && return :(CorePotts.chain_rank($store, $(c[1])))
+    q.what === :linked && return :(Potts._linked_slot($store, $(c[1]), $(c[2])))
+    throw(PottsCompileError("cannot lower `$q`"))
+end
+# `linked` of two cell ids (0 or out of range: false)
+@inline function _linked_slot(store, a, b)
+    n = size(store.links, 2)
+    return (0 < a <= n) & (0 < b <= n) && CorePotts.linked(store, a, b)
+end
+
+# (angle, curvature) of the centroids of the alive cells `p – q – n` (an angle term's total)
+function _triple_geometry(::Type{T}, cell, l, p, q, n) where {T}
+    cp = CorePotts.centroid(T, cell, l, p)
+    cq = CorePotts.centroid(T, cell, l, q)
+    cn = CorePotts.centroid(T, cell, l, n)
+    return (
+        CorePotts.pivot_angle(T, l, cp, cq, cn), CorePotts.menger_curvature(T, l, cp, cq, cn),
+    )
 end
 
 # whether `x` is `value_at(_nonzero(v), …)` (or `value_at(Pre(_nonzero(v)), …)`): a Bool

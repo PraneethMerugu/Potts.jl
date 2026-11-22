@@ -36,6 +36,36 @@ function CorePotts.copy_step_relations(mi::PottsModelInfo, f)
 end
 _same_temperature(t, g) = t === g      # (and `anneal`'s `_ZeroTemperature`, analysis.jl)
 
+# An angle term's exact ΔH reads the centroids of two-hop chain neighbors, which another
+# checkerboard block may change during the same sweep: only the sequential solver runs it
+function CorePotts.check_algorithm(mi::PottsModelInfo, alg)
+    alg isa CorePotts.SequentialCPM && return nothing
+    terms = getfield(mi.csys, :angle_terms)
+    isempty(terms) && return nothing
+    throw(
+        ArgumentError(
+            "this model has an angle term (`angles($(first(first(terms)))) => …`), whose \
+                exact energy change reads the centroids of two-hop chain neighbors; \
+                only the sequential solver evaluates it exactly: solve with \
+                `SequentialCPM()` (on the CPU), not $(nameof(typeof(alg)))"
+        )
+    )
+end
+
+# An initial link `x => y` of an ordered relationship: `y` follows `x`
+function _add_initial_chain_link!(store, r, x, y, ncell, defaults)
+    ok = x isa Integer && y isa Integer && 0 < x <= ncell && 0 < y <= ncell
+    ok && CorePotts.add_chain_link!(store, x, y; defaults...) && return true
+    throw(
+        ArgumentError(
+            "$(r.name): cannot link cell $x to its successor $y. In an ordered \
+                relationship each pair is (predecessor, successor) and the links form \
+                chains: a cell has at most one predecessor and one successor, and no \
+                chain closes on itself. Pass distinct ids in 1:$ncell along each chain"
+        )
+    )
+end
+
 """
     generated_code(sys; T = Float64, field_solver = nothing, ode_solver = ExplicitEuler(),
         solvers = (), discretization = nothing)
@@ -1683,6 +1713,8 @@ function _initial_state(
             (info(x).name => T(_edge_initial(x, opd, pvals, r.name)) for x in vars)...,
         )
         for (x, y) in get(opd, r.name, ())
+            r.ordered && _add_initial_chain_link!(store, r, x, y, ncell, defaults) &&
+                continue
             CorePotts.add_link!(store, x, y; defaults...) || throw(
                 ArgumentError(
                     "$(r.name): cannot link cells $x and $y (out-of-range id, full row " *
