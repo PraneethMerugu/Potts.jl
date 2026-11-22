@@ -366,9 +366,10 @@ end
                     save_end = false, save_everystep = false
                 )
                 step!(integ)
+                # the CPU folds the counts after the event round: the warning comes at once
+                @test_logs (:warn, r"moment scratch") step!(integ)
                 step!(integ)
-                step!(integ)
-                u = @test_logs (:warn, r"moment scratch") current_state(integ)
+                u = current_state(integ)
                 @test integ.stats.lifecycle.divisions == 0
                 @test integ.stats.lifecycle.deferred == 2         # cell 1 and cluster 2
                 @test u.ownership == σs && u.cell.volume[1:3] == Int32[48, 4, 48]

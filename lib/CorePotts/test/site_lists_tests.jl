@@ -80,7 +80,9 @@ end
                 integ.mscratch === nothing || @test eltype(integ.mscratch.host) === T
                 dl = integ.lcache === nothing ? nothing : integ.lcache.device
                 dl === nothing || @test eltype(dl.dv.mcnt) === T
-                @test device == (dl !== nothing)
+                # every lifecycle runs the planner; the fused form only where forced
+                @test (dl !== nothing) == (integ.lcache !== nothing)
+                dl === nothing || @test device == (dl.fused! !== nothing)
             end
         end
     end

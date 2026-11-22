@@ -560,13 +560,13 @@ end
 end
 
 # `transitioning` is kernel-safe (no throw, it runs in the trigger); a transition bit on an
-# event other than a division is refused on the host, by both planners
-@testitem "transitioning: checked on the host, by both planners" setup = [
+# event other than a division is refused on the host, by both algorithms
+@testitem "transitioning: checked on the host, by both algorithms" setup = [
     CP_lifecycle,
 ] tags = [
     :corepotts, :lifecycle,
 ] begin
-    @testset "transitioning: checked on the host, by both planners" begin
+    @testset "transitioning: checked on the host, by both algorithms" begin
         @test CorePotts.transitioning(EVENT_DIVIDE) == EVENT_DIVIDE | Int32(0x10)
         # no throw in a kernel
         @test CorePotts.transitioning(EVENT_REMOVE) isa Int32
