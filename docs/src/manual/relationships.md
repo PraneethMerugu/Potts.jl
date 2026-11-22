@@ -79,3 +79,101 @@ count_links(u, name) = sum(c -> CorePotts.link_count(CorePotts.link_store(u.cell
 `CorePotts.link_store(u.cell, :name)` is the link table of a saved state;
 `CorePotts.linked(store, a, b)` and `CorePotts.link_count(store, c)` query it. The edge
 variable values of a relationship's links are stored as cell arrays (`u.cell.link_len`).
+
+## Ordered relationships and angle terms
+
+An **ordered** relationship links its members into chains. Each member has at most one
+predecessor and one successor, so its capacity is 2.
+
+```julia
+@relationship chain(cell, cell) ordered = true
+```
+
+| Expression | Meaning |
+|---|---|
+| `prev(chain, c)` | the predecessor of cell `c`, or 0 for a head |
+| `next(chain, c)` | the successor of cell `c`, or 0 for a tail |
+| `rank(chain, c)` | the position of `c` in its chain: 1 for a head (and for a cell in no link); each read walks the chain, one step per member ahead of `c` |
+| `linked(chain, a, b)` | whether `a` and `b` are linked (any relationship) |
+| `angles(chain) => E` | an energy summed over each member with both neighbors |
+
+`prev` and `next` are references, as a `CellRef` variable is: read through them as
+`kind[prev(chain, id)]`, and test them with `alive(next(chain, id))`. All four read the
+stored links, so they are available where references are: cell energies, drives,
+constraints, updates, link rules and `@observed`. The links change only between sweeps.
+Their arguments must be cells (`old`, `new`, `id`, a reference, a fold's cell); anything
+else is a `PottsCompileError`. The rank is not stored, so a read costs one step per member
+ahead of `c`. In a drive that cost is paid at every copy attempt, so keep chains short or
+read `rank` between sweeps.
+
+In the operating point, a pair `(x, y)` makes `y` the successor of `x`:
+`:chain => [(1, 2), (2, 3), (3, 4)]` is a chain of four with head 1. A pair that gives a
+cell a second predecessor or successor, or closes a chain on itself, is an `ArgumentError`.
+`@link chain when = cond` links a touching pair from the cell for which `cond(a, b)` holds
+(`a`) to the other (`b`), and does not make a link that would branch or close a chain.
+When the condition holds both ways, as `new_contact(a, b)` does, the link runs from the
+cell with the lower id. Write an asymmetric condition to choose the direction.
+
+Unlinking changes the order at once. When `@unlink` removes the link `x → y`, `y` becomes
+the head of the rest of its chain, which is ranked again from 1. A cell squeezed out by
+copies (volume 0) keeps its place until the next `@link` or `@unlink` phase of the
+relationship drops its links: `prev` and `next` still name it and `rank` counts it, but
+`alive` is false and its triples add no energy. Then the chain splits there. A
+relationship with no `@link` or `@unlink` rule never drops it, as for any relationship. A
+cell removed by the lifecycle loses its links at once, and daughters start unlinked.
+
+In an angle term, `pivot` is the member, `a` its predecessor and `b` its successor.
+`angle` is the angle at the pivot between the centroids of `a` and `b`, in `[0, π]`, so a
+straight triple has `angle = π`. `curvature` is `1/R`, the inverse radius of the circle
+through the three centroids, which is `2 sin(angle) / |a − b|`. Both use minimum-image
+vectors on periodic axes and the embedded geometry on a hexagonal lattice. A triple whose
+centroids coincide in pairs has `curvature = 0`, and `angle = π` when the pivot coincides
+with an end. A bending energy on the inverse radius of curvature and a stretching energy on
+the links are
+
+```julia
+@energy begin
+    angles(chain) => ξ * curvature^2
+    edges(chain) => ζ * (distance - D)^2
+end
+```
+
+The energy change of a copy is exact: the copy moves the centroids of `old` and `new`, and
+every triple that contains either is evaluated again with both shifts. An angle term reads
+parameters and the cell variables of its three cells that no `@on_copy` update writes
+(`stiffness[pivot]`), but no edge variable, nothing a copy changes and no references. Only
+`SequentialCPM` runs a model with an angle term: `CheckerboardCPM`, on the CPU or a GPU, is
+an `ArgumentError`, because another block can move the two-hop neighbors whose centroids
+the energy change reads.
+
+`prev`, `next`, `rank`, `linked` and `angles` are vocabulary names, and `pivot`, `angle`
+and `curvature` are bound only in angle terms. None of the eight can name a parameter or a
+variable.
+
+A drive can read the centroids of a member's neighbors before the copy, through
+`separation` and `centroid(c, k)` (see [References](@ref manual-references)). This gives
+propulsion along a chain, as in Starruß et al. (2007): each segment moves along its local
+chord, the unit vector from its successor toward its predecessor. The head uses the chord
+of its successor and the tail that of its predecessor. A plain Julia function builds the
+term from the vocabulary:
+
+```julia
+# θ(c) ⋅ (dx, dy): θ is the unit chord from the member after c to the member before it
+function chord_dot(chain, c, dx, dy)
+    p, n = prev(chain, c), next(chain, c)
+    back = ifelse(alive(p), ifelse(alive(n), p, prev(chain, p)), c)    # tail: one back
+    front = ifelse(alive(p), ifelse(alive(n), n, c), next(chain, n))   # head: one ahead
+    s = separation(back, front)              # 0 for the medium or an unlinked cell
+    len = sqrt(s[1]^2 + s[2]^2)
+    return ifelse(len > 0, (s[1] * dx + s[2] * dy) / len, 0.0)
+end
+
+@drive copy => -ω * (
+    chord_dot(chain, old, direction[1], direction[2]) +
+        chord_dot(chain, new, direction[1], direction[2])
+)
+```
+
+Pass the components `direction[1]` and `direction[2]`, not `direction`. The drive runs on
+every solver, `CheckerboardCPM` included, because drives already read state that other
+blocks change.

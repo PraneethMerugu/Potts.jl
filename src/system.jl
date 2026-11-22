@@ -1579,11 +1579,13 @@ function _component_systems(components)
 end
 
 # The link endpoints `a`, `b` (bound in edge terms and link rules) are reserved globally
-# (D-075 Q8); `@potts_model` rejects them at expansion (`_declare!`), this at construction.
-const _ENDPOINT_NAMES = (:a, :b)
+# (D-075 Q8), and so are the names an angle term binds (`pivot`, `angle`, `curvature`);
+# `@potts_model` rejects them at expansion (`_declare!`), this at construction.
+const _ENDPOINT_NAMES = (:a, :b, :pivot, :angle, :curvature)
 function _endpoint_message(what, k)
     return "$what `$k`: `$k` is reserved (`a` and `b` are the link endpoints in edge " *
-        "terms and link rules); choose another name, e.g. `$(k)₀`"
+        "terms and link rules; `pivot`, `angle` and `curvature` are bound in angle terms); \
+        choose another name, e.g. `$(k)₀`"
 end
 
 function _check_reserved_names(sys)
@@ -2254,4 +2256,5 @@ function _domain_string(d::ContactDomain)
 end
 _domain_string(::SiteDomain) = "sites"
 _domain_string(d::EdgeDomain) = "edges($(d.relationship))"
+_domain_string(d::AngleDomain) = "angles($(d.relationship))"
 _domain_string(d) = string(d)

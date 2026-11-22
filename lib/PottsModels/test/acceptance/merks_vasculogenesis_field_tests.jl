@@ -5,8 +5,8 @@
 # faces of the closed lattice and no border ring, 15 explicit substeps per MCS clipped at
 # `c ≥ 0` (`ExplicitEuler(substeps = 15, lower_bound = 0.0)`), and no `@schedule`, so the
 # field step comes after the sweep and sees the σ that the sweep left. The oracle is
-# `merks_split_field` (shared/merks_field_oracle.jl), the one the `Merks2006` and `Merks2008`
-# field tests use, with the clip on and the ring off.
+# `merks_split_field` (shared/merks_field_oracle.jl), the one the `Merks2006` and
+# `Merks2008` field tests use, with the clip on and the ring off.
 #
 # Negative controls, each of which must miss the oracle: no clip, 14 and 16 substeps, the
 # field step before the sweep, and the authors' absorbing border (c = 0 on the outer ring)

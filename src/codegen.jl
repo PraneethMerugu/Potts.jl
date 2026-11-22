@@ -227,6 +227,23 @@ function _edge_env(T, a, b, k, d, relname; mcs = nothing, mode = :edge)
     )
 end
 
+# An angle term's environment: the triple `a – pivot – b` and its geometry
+function _angle_env(T, p, q, n, θ, κ, relname)
+    return LowerEnv(
+        T, :angle,
+        Dict{Symbol, Any}(:a => p, :b => n, :pivot => q, :angle => θ, :curvature => κ),
+        relname
+    )
+end
+# Angle energies grouped by relationship, in declaration order.
+function _angle_energies(c::CompiledPottsSystem)
+    return [
+        (r.name, sum(E for (q, E) in getfield(c, :angle_terms) if q === r.name))
+            for r in getfield(c, :relationships)
+            if any(t -> first(t) === r.name, getfield(c, :angle_terms))
+    ]
+end
+
 # Relationship `r`'s link store in cell state `cell` (CorePotts `relationships.jl`): a
 # NamedTuple view of its adjacency and, with `payloads`, its edge-variable columns.
 _adjacency(r::Symbol, cell = :(st.cell)) = :($cell.$(CorePotts.adjacency_name(r)))
@@ -585,6 +602,36 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
                         end
                         ˍdH += ˍm == 1 ? -ˍe0 : (
                                 let ed = ˍd1
+                                    $Ecode
+                            end
+                            ) - ˍe0
+                    end
+                    ˍdH
+                end
+            end
+        )
+    end
+    # one frame for every angle relationship
+    isempty(_angle_energies(c)) ||
+        push!(body, :(ˍafr = CorePotts.link_frame($T, st.cell, ctx.lattice, prop)))
+    for (r, E) in _angle_energies(c)
+        Ecode = lower(E, _angle_env(T, :ap, :aq, :an, :aθ, :aκ, rn))
+        # every triple containing `old` or `new`, with both centroid shifts (CorePotts
+        # `angle_at`); the energy inline, as for edges
+        push!(
+            body, quote
+                dH += let ˍfr = ˍafr, ˍstore = $(_link_store(c, r)), ˍdH = zero($T)
+
+                    for ˍj in 1:6
+                        (aq, ap, an, ˍm, ˍg0, ˍg1) = CorePotts.angle_at(
+                            $T, ˍfr, st.cell, ctx.lattice, ˍstore, ˍj
+                        )
+                        ˍm == 0 && continue
+                        ˍe0 = let (aθ, aκ) = ˍg0
+                            $Ecode
+                        end
+                        ˍdH += ˍm == 1 ? -ˍe0 : (
+                                let (aθ, aκ) = ˍg1
                                     $Ecode
                             end
                             ) - ˍe0
@@ -2347,6 +2394,9 @@ function _drop_dead_links()
     end
 end
 
+_ordered(c::CompiledPottsSystem, r::Symbol) =
+    any(x -> x.name === r && x.ordered, getfield(c, :relationships))
+
 function _link_phases(c::CompiledPottsSystem, T)
     rn = getfield(c, :gather_names)
     out = Any[]
@@ -2387,6 +2437,20 @@ function _link_phases(c::CompiledPottsSystem, T)
                     ), rn
                 )
             )
+            ordered = _ordered(c, r.relationship)
+            add = if ordered
+                # an ordered link runs from the end the condition holds for (`a`) to
+                # the other; a link that would branch the chain or close a cycle is not made
+                :(
+                    (
+                        $ab && CorePotts.add_chain_link!(store, ea, eb; $(defaults...))
+                    ) || (
+                        $ba && CorePotts.add_chain_link!(store, eb, ea; $(defaults...))
+                    )
+                )
+            else
+                :(($ab || $ba) && CorePotts.add_link!(store, ea, eb; $(defaults...)))
+            end
             quote
                 store = $store
                 $(_drop_dead_links())
@@ -2400,7 +2464,7 @@ function _link_phases(c::CompiledPottsSystem, T)
                         eb > ea || continue
                         CorePotts.linked(store, ea, eb) && continue
                         ed = CorePotts.centroid_distance($T, cell, ctx.lattice, ea, eb)
-                        ($ab || $ba) && CorePotts.add_link!(store, ea, eb; $(defaults...))
+                        $add
                     end
                 end
             end
@@ -3127,6 +3191,17 @@ function _live_roots_expr()
     end
 end
 
+# (angle, curvature) of the centroids of the alive cells `p – q – n` (an angle term's total)
+function _chain_triple_geometry(::Type{T}, cell, l, p, q, n) where {T}
+    cp = CorePotts.centroid(T, cell, l, p)
+    cq = CorePotts.centroid(T, cell, l, q)
+    cn = CorePotts.centroid(T, cell, l, n)
+    return (
+        CorePotts.pivot_angle(T, l, cp, cq, cn),
+        CorePotts.menger_curvature(T, l, cp, cq, cn),
+    )
+end
+
 function _total_energy_expr(c::CompiledPottsSystem, T)
     rn = getfield(c, :gather_names)
     body = Any[:(H = zero($T))]
@@ -3191,6 +3266,27 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
                     # both ends alive (D-066 item 5)
                     (st.cell.volume[ea] > 0 && st.cell.volume[eb] > 0) || continue
                     ed = CorePotts.centroid_distance($T, st.cell, ctx.lattice, ea, eb)
+                    H += $Ecode
+                end
+            end
+        )
+    end
+    for (r, E) in _angle_energies(c)
+        Ecode = lower(E, _angle_env(T, :ap, :aq, :an, :aθ, :aκ, rn))
+        L = _adjacency(r)
+        push!(
+            body, quote
+                for aq in 1:length(st.cell.kind)
+                    ap, an = $L[1, aq], $L[2, aq]
+                    (ap != 0 && an != 0) || continue
+                    # every member alive (D-066 item 5)
+                    (
+                        st.cell.volume[ap] > 0 && st.cell.volume[aq] > 0 &&
+                            st.cell.volume[an] > 0
+                    ) || continue
+                    aθ, aκ = Potts._chain_triple_geometry(
+                        $T, st.cell, ctx.lattice, ap, aq, an
+                    )
                     H += $Ecode
                 end
             end

@@ -1171,6 +1171,7 @@ Base.@nospecializeinfer function _init(
         fresh::Bool,
         backend, opts::PottsOptions, @nospecialize(callback)
     )
+    check_algorithm(prob.f.sys, alg)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM \
             on $(typeof(backend))"))
@@ -1344,6 +1345,27 @@ it (Potts does). It must return `nothing` when `f` carries a function it did not
 See also [`CPMFunction`](@ref).
 """
 copy_step_relations(sys, f) = nothing
+
+"""
+    check_algorithm(sys, alg) -> nothing
+
+Throw an `ArgumentError` when the model `sys` cannot run under the algorithm `alg`.
+
+`init` and `solve` call it before anything else. The default accepts every algorithm. A
+symbolic layer extends it for the models whose generated code only one algorithm executes
+correctly (Potts does, for energies over three consecutive chain members, which only
+`SequentialCPM` evaluates exactly).
+
+# Arguments
+- `sys`: the model description (`f.sys`).
+- `alg::AbstractCPMAlgorithm`: the algorithm.
+
+# Returns
+- `nothing`.
+
+See also [`copy_step_relations`](@ref copy_step_relations).
+"""
+check_algorithm(sys, alg) = nothing
 
 """
 Reject combinations no algorithm can execute correctly. (The checkerboard spacing covers the

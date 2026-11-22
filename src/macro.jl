@@ -116,7 +116,7 @@ const _BOUND_BUILTINS = (
     :cluster, :cluster_volume, :cluster_surface,
     :time, :site, :major_length, :local_components, :ring_arcs,
     :ring_cells, :ring_medium, :direction, :euler,
-    :largest_piece, :birth,
+    :largest_piece, :birth, :pivot, :angle, :curvature,
 )
 # Primed spellings of `neighbor_kind` and `neighbor_owner`, bound as aliases in model bodies
 const _PRIMED_ALIASES = (
@@ -1278,7 +1278,9 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@energy")
         for (l, lln) in _lines_ln(args, ln)
             e = _located_push(:__energies, :($P.energy($(rewrite(l)))), lln)
-            push!(code, _is_edges(l) ? _edge_scope(e) : e)
+            push!(
+                code, _is_edges(l) ? _edge_scope(e) : _is_angles(l) ? _angle_scope(e) : e
+            )
         end
     elseif sec === Symbol("@observed")
         for l in _lines(args)
@@ -1637,10 +1639,22 @@ function _edge_scope(ex)
     )
 end
 
-function _is_edges(l)
+function _is_edges(l, domain = :edges)
     return l isa Expr && l.head === :call && l.args[1] === :(=>) &&
-        l.args[2] isa Expr && l.args[2].head === :call && l.args[2].args[1] === :edges
+        l.args[2] isa Expr && l.args[2].head === :call && l.args[2].args[1] === domain
 end
+
+# Angle terms see the chain triple `a – pivot – b` and its `angle` and `curvature` (bound
+# only there; reserved like `a`, `b`)
+function _angle_scope(ex)
+    return :(
+        let a = Potts.B.a, b = Potts.B.b, pivot = Potts.B.pivot, angle = Potts.B.angle,
+                curvature = Potts.B.curvature
+            $ex
+        end
+    )
+end
+_is_angles(l) = _is_edges(l, :angles)
 
 function _replace_copy(ex)
     if ex isa Expr && ex.head === :call && ex.args[1] === :(=>) && ex.args[2] === :copy

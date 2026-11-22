@@ -79,6 +79,13 @@ end
         boundary = Periodic(), neighborhood = hex ? Hex(1) : Moore(1)
     )
     @energy cells => (volume - 4.0)^2
+    if mode === :energy_c
+        @energy cells => 0.1 * centroid(partner, 1)
+    elseif mode === :con_s
+        @constraint separation(partner[old], partner[new])[1] > 0.0
+    elseif mode === :oncopy_c
+        @on_copy w[new] ~ centroid(partner[old], 1)
+    end
     if mode === :drive_c
         @drive copy => 0.1 * centroid(partner[old], 1)
     elseif mode === :drive_s
@@ -100,7 +107,13 @@ end
     if mode === :ok
         @observed o(cell) ~ norm(separation(id, partner))
     end
-    @sweep Metropolis(; temperature = 1.0)
+    if mode === :temp_s
+        @sweep Metropolis(;
+            temperature = 1.0 + 0.001 * separation(partner[old], partner[new])[1]
+        )
+    else
+        @sweep Metropolis(; temperature = 1.0)
+    end
 end
 
 function rh_build_error(; hex = false, mode = :ok)
@@ -533,11 +546,15 @@ end
     @testset "E7 helpers: copy-scope and hexagonal refusals" begin
         # control: the template builds
         @test rh_build_error(; hex = false, mode = :ok) === nothing
-        # centroid(c, k) and separation read centroids a copy moves: not in drives
-        e = rh_build_error(; hex = false, mode = :drive_c)
-        @test e isa Potts.PottsCompileError
-        e = rh_build_error(; hex = false, mode = :drive_s)
-        @test e isa Potts.PottsCompileError
+        # a drive reads centroid(c, k) and separation before the copy
+        @test rh_build_error(; hex = false, mode = :drive_c) === nothing
+        @test rh_build_error(; hex = false, mode = :drive_s) === nothing
+        # energies, constraints, on-copy updates and the temperature do not
+        for mode in (:energy_c, :con_s, :oncopy_c, :temp_s)
+            e = rh_build_error(; hex = false, mode)
+            @test e isa Potts.PottsCompileError
+            @test occursin(r"centroid|separation", sprint(showerror, e))
+        end
         # minimum_image is a pure function: allowed in a drive (control)
         @test rh_build_error(; hex = false, mode = :drive_m) === nothing
         # on a hexagonal lattice minimum_image is refused (D-243 open: use separation),

@@ -50,6 +50,8 @@ struct CompiledPottsSystem <: ModelingToolkitBase.AbstractSystem
     relationships::Vector{RelationshipSpec}           # in declaration order
     # (relationship, E(a, b, distance, its edge vars))
     edge_terms::Vector{Tuple{Symbol, Any}}
+    # (ordered relationship, E(a, pivot, b, angle, curvature))
+    angle_terms::Vector{Tuple{Symbol, Any}}
     edge_vars::Dict{Symbol, Vector{Any}}              # relationship → its edge variables
     link_rules::Vector{LinkRule}
     uses_surface::Bool
@@ -209,7 +211,15 @@ const _PROPOSAL_BUILTINS = (
     :direction, :position, :mcs,
 )
 const _EDGE_BUILTINS = (:a, :b, :distance)
+const _ANGLE_BUILTINS = (:a, :b, :pivot, :angle, :curvature)
 const _LINK_BUILTINS = (:a, :b, :distance, :mcs)
+# bound only in an angle term
+const _ANGLE_ONLY = (:pivot, :angle, :curvature)
+function _angle_only_error(n, what)
+    return PottsCompileError(
+        "`$n` is bound only in angle terms (`angles(rel) => …`), not in $what"
+    )
+end
 
 # Replace population folds by placeholders; return them for separate checking.
 function _strip_populations(x)
@@ -283,12 +293,15 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
         n === :neighbor_site && !(n in allowed) &&
             throw(PottsCompileError("a primed site variable `x′` (its value at the pair's \
                 other site) is only available in contact terms, not in $what"))
+        n in _ANGLE_ONLY && !(n in allowed) && throw(_angle_only_error(n, what))
         n in allowed ||
             throw(PottsCompileError("`$n` is not available in $what \
                 (available: $(join(_visible(allowed), ", ")); index `owner`, `kind`, \
                     `volume` explicitly, e.g. `kind[new]`)"))
     end
     for (r, n) in _uses(x)
+        r === :builtin && n in _ANGLE_ONLY && !(n in allowed) &&
+            throw(_angle_only_error(n, what))
         r === :builtin && !(n in allowed) && !(n in _INDEXABLE) &&
             throw(PottsCompileError("`$n` is not available in $what \
                 (available: $(join(_visible(allowed), ", ")))"))
@@ -349,6 +362,75 @@ function _relationships(sys::PottsSystem)
         push!(edge_vars[r], x)
     end
     return rels, edge_vars, edge_rel
+end
+
+# An angle term reads the triple's static values and its geometry: no edge variable (a
+# triple has two links), nothing a copy changes, no references
+function _check_angle_term(E, d, relationships)
+    r = findfirst(x -> x.name === d.relationship, relationships)
+    r === nothing &&
+        throw(PottsCompileError("angles($(d.relationship)): no @relationship \
+            $(d.relationship)"))
+    relationships[r].ordered || throw(
+        PottsCompileError(
+            "angles($(d.relationship)): the relationship is not ordered; declare it \
+                `@relationship $(d.relationship)(cell, cell) ordered = true` so each \
+                member has a predecessor and a successor"
+        )
+    )
+    _check_names(E, _ANGLE_BUILTINS, "an angle term")
+    _check_static(_strip_populations(E)[1], "an angle term")
+    for (role, n) in _uses(E)
+        role === :edge && throw(
+            PottsCompileError(
+                "angles($(d.relationship)) reads the edge variable `$n`; an angle term \
+                    spans two links, so it reads no edge variable"
+            )
+        )
+    end
+    isempty(_gathers(E)) || throw(
+        PottsCompileError(
+            "angle terms reading neighbors are not supported; read neighbors in a \
+                `cells(…)` or `contacts` term instead"
+        )
+    )
+    return nothing
+end
+
+# `prev`, `next`, `rank` read an ordered relationship; `linked` any relationship
+function _check_relationship_queries(exprs, relationships)
+    for x in exprs
+        _walk(x) do y
+            iscall(y) || return
+            op = operation(y)
+            op isa RelationshipQuery || return
+            r = findfirst(z -> z.name === op.relationship, relationships)
+            r === nothing && throw(
+                PottsCompileError(
+                    "`$(op.what)($(op.relationship), …)`: no @relationship \
+                        $(op.relationship)"
+                )
+            )
+            op.what === :linked || relationships[r].ordered || throw(
+                PottsCompileError(
+                    "`$(op.what)($(op.relationship), …)` reads the order of a chain, but \
+                        @relationship $(op.relationship) is not ordered; declare it with \
+                        `ordered = true`"
+                )
+            )
+            for c in arguments(y)
+                (_is_cell_index(c) || _sort(c) === :cell) || throw(
+                    PottsCompileError(
+                        "`$(Symbolics.wrap(y))`: `$(Symbolics.wrap(c))` is not a cell; \
+                            `$(op.what)` takes cells: `old`, `new`, `id`, a reference \
+                            (`partner[old]`, `prev($(op.relationship), id)`), a fold's \
+                            cell, `a`, `b` or `pivot`"
+                    )
+                )
+            end
+        end
+    end
+    return nothing
 end
 
 # An edge term or link rule of relationship `r` reads only `r`'s edge variables (another
@@ -434,13 +516,14 @@ function _compile_bound(
     contact_terms = Dict{Symbol, Any}()
     site_terms = Any[]
     edge_terms = Tuple{Symbol, Any}[]
+    angle_terms = Tuple{Symbol, Any}[]
     relationships, edge_vars, edge_rel = _relationships(sys)
     copy_sites, copy_cells = _copy_written_vars(sys)
     for e in _p(sys, :energies)
         d = e.domain
         _located(sys, e) do
             _check_energy_geometry(e.expr)
-            d isa Union{CellDomain, EdgeDomain, ContactDomain} &&
+            d isa Union{CellDomain, EdgeDomain, ContactDomain, AngleDomain} &&
                 _check_copy_reads(e.expr, d, copy_sites, copy_cells)
             _check_energy_refs(e.expr, d)
             if d isa CellDomain
@@ -481,6 +564,9 @@ function _compile_bound(
                     "edges($(d.relationship))"
                 )
                 push!(edge_terms, (d.relationship, e.expr))
+            elseif d isa AngleDomain
+                _check_angle_term(e.expr, d, relationships)
+                push!(angle_terms, (d.relationship, e.expr))
             elseif d isa SiteDomain
                 _check_names(e.expr, _SITE_BUILTINS, "a site term")
                 _check_static(_strip_populations(e.expr)[1], "a site term")
@@ -493,7 +579,7 @@ function _compile_bound(
                 push!(site_terms, e.expr)
             else
                 throw(PottsCompileError("unknown energy domain `$d`; expected `cells(…)`, \
-                    `clusters(…)`, `contacts(…)`, `edges(…)` or `sites`"))
+                    `clusters(…)`, `contacts(…)`, `edges(…)`, `angles(…)` or `sites`"))
             end
         end
     end
@@ -509,7 +595,7 @@ function _compile_bound(
         i = info(x)
         i === nothing && continue
         readers = Any[
-            (E for (_, E) in cluster_terms)..., last.(edge_terms)...,
+            (E for (_, E) in cluster_terms)..., last.(edge_terms)..., last.(angle_terms)...,
             (
                 if i.role === :cell
                     (site_terms..., values(contact_terms)...)
@@ -550,12 +636,16 @@ function _compile_bound(
         c.kind === :expr && _located(
             () -> (
                 _check_names(c.expr, _PROPOSAL_BUILTINS, "a constraint");
+                _check_copy_geometry(c.expr, "a constraint");
                 _check_ref_sources(c.expr, "constraints")
             ), sys, c
         )
     end
     _located(
-        () -> _check_ref_sources(_p(sys, :sweep).temperature, "the @sweep temperature"),
+        () -> (
+            _check_copy_geometry(_p(sys, :sweep).temperature, "the @sweep temperature");
+            _check_ref_sources(_p(sys, :sweep).temperature, "the @sweep temperature")
+        ),
         sys, _p(sys, :sweep)
     )
 
@@ -575,6 +665,7 @@ function _compile_bound(
                     throw(PottsCompileError("`Every` does not apply to @on_copy updates: \
                         they run at every accepted copy"))
                 _check_names(u.eq.rhs, _PROPOSAL_BUILTINS, "an on-copy update")
+                _check_copy_geometry(u.eq.rhs, "an on-copy update")
                 _check_ref_sources(u.eq.rhs, "on-copy updates")
                 _is_ref(arguments(lhs)[2]) && throw(
                     PottsCompileError(
@@ -876,6 +967,11 @@ function _compile_bound(
         )...,
         convert_exprs...,
     ]
+    for x in scanned, n in _ANGLE_ONLY
+        _uses_builtin(x, n) && throw(_angle_only_error(n, "`$(Symbolics.wrap(x))`"))
+    end
+    append!(scanned, last.(angle_terms))
+    _check_relationship_queries(scanned, relationships)
     uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
     uses_euler = any(x -> _uses_builtin(x, :euler), scanned)
@@ -1017,6 +1113,7 @@ function _compile_bound(
     contact_terms = Dict{Symbol, Any}(r => snap(E) for (r, E) in contact_terms)
     site_terms = Any[snap(E) for E in site_terms]
     edge_terms = Any[snap(E) for E in edge_terms]
+    angle_terms = Any[snap(E) for E in angle_terms]
     update_pops = Pair{Symbol, Any}[]
     schedule = Dict{Symbol, Vector{Stage}}()
     pre_snapshots = Dict{Symbol, Vector{Tuple{Symbol, Symbol}}}()
@@ -1078,7 +1175,7 @@ function _compile_bound(
     return CompiledPottsSystem(
         sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         _p(sys, :constraints), updates, fields, cell_odes, model_odes,
-        _p(sys, :divisions), relationships, edge_terms, edge_vars,
+        _p(sys, :divisions), relationships, edge_terms, angle_terms, edge_vars,
         _p(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, uses_euler,
         uses_euler_full,
         euler_full_column, cluster_division,
@@ -1586,7 +1683,9 @@ function _check_copy_reads(E, d, sites, cells)
     # `neighbor_kind`), indexed copy-varying cell quantities in cell terms, and copy-written
     # site variables at an explicit site, in every domain (a contact term's bare `x`, `x′`
     # read the pair and stay allowed)
-    r = _copy_varying_read(E, sites, d isa CellDomain ? cells : nothing; mode = :explicit)
+    r = _copy_varying_read(
+        E, sites, d isa Union{CellDomain, AngleDomain} ? cells : nothing; mode = :explicit
+    )
     r === nothing || throw(_copy_read_error(r..., ""))
     # gather bodies and filters: also copy-written site variables
     _walk(E) do y
@@ -1974,6 +2073,8 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
                 lower(e.expr, _site_env(T, :i, rn))
             elseif d isa EdgeDomain
                 lower(e.expr, _edge_env(T, :ea, :eb, :ek, :ed, rn))
+            elseif d isa AngleDomain
+                lower(e.expr, _angle_env(T, :ap, :aq, :an, :aθ, :aκ, rn))
             else
                 nothing
             end
@@ -2188,6 +2289,20 @@ function _energy_centroid_error(name)
             "reads and that shift is not part of ΔH; read it in cell " *
             "updates or @observed, or use `displacement(c, k)` in a @drive"
     )
+end
+
+# `centroid(c, k)` and `separation` in copy scope: drives read them before the copy
+# (D-330); constraints, on-copy updates and the temperature do not
+function _check_copy_geometry(x, what)
+    for (op, name) in ((ref_centroid, "centroid(c, k)"), (ref_separation, "separation"))
+        _has_op(x, op) && throw(
+            PottsCompileError(
+                "`$name` is not available in $what: in copy scope it is read only in \
+                    drives (the centroids before the copy)"
+            )
+        )
+    end
+    return nothing
 end
 
 # The E7 helpers an energy may not read (D-243), refused before the reference checks so the
