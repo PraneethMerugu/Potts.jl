@@ -172,7 +172,7 @@ The module of the initial-state vocabulary.
 - Strict shapes, filled regions, translated copies and compartment groups:
   [`Interior`](@ref), [`Fill`](@ref), [`Objects`](@ref) and [`Group`](@ref).
 - Bands and chains: the shapes [`Bar`](@ref) and [`Rod`](@ref) for random placement with
-  `InsertUntil`, fibre bundles [`Fibres`](@ref) and chains of linked cells along polylines
+  `InsertUntil`, fiber bundles [`Fibers`](@ref) and chains of linked cells along polylines
   [`Chains`](@ref).
 - [`AbstractLayout`](@ref), the supertype of a layer.
 
@@ -182,21 +182,21 @@ module Layouts
 
     using ..Potts: AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout,
         Center, RandomPoints,
-        Voronoi, Eden, Splits, Interior, Fill, Objects, Group, Bar, Rod, Fibres, Chains
+        Voronoi, Eden, Splits, Interior, Fill, Objects, Group, Bar, Rod, Fibers, Chains
     using GeometryBasics: HyperSphere, Circle, Sphere, Point
 
     export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
     export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
     export Eden, Splits
     export Interior, Fill, Objects, Group
-    export Bar, Rod, Fibres, Chains
+    export Bar, Rod, Fibers, Chains
 
 end
 # the layout words, also public on Potts; `set_column!` is the custom layer's seam for
 # per-cell columns
 public AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout, Center,
     RandomPoints, Voronoi,
-    Eden, Splits, Interior, Fill, Objects, Group, Bar, Rod, Fibres, Chains
+    Eden, Splits, Interior, Fill, Objects, Group, Bar, Rod, Fibers, Chains
 public set_column!, link!
 public points, layer_rng
 # the layout extension API (D-091): `Potts.paint!(op::LayoutState, l, lat)`, the paint-state

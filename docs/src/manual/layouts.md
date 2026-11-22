@@ -10,13 +10,16 @@ through them; this page is the reference. The names on this page come from
   neighborhood, domain and geometry) and returns `[ownership => σ, kind => kinds]`. A
   layout with a `Group` (or a custom layer calling `Potts.set_column!`) also returns
   `cluster => ids` and any per-cell columns, in that order (see
-  [Compartment cells](@ref manual-layouts-groups)).
+  [Compartment cells](@ref manual-layouts-groups)), then one `name => [(a, b), …]` per
+  relationship that a layer linked (see [Bars, rods, fibers and chains](@ref
+  manual-layouts-bands)).
 - `layout(l, dims)` paints on a closed square lattice of size `dims` with `Moore(1)`.
 - `layout(l, x; report = true)` also returns one row per layer, in paint order, with
   `type`, `requested`, `painted` (cells created), `dropped` (painted over completely),
   `misses` and `counted` (`InsertUntil`; for `Eden` and `Splits`, `misses` is the cells
-  requested but not painted), `clipped` (the points of a `Voronoi`, `Eden`, `Fill` or
-  `Objects` region lost to closed edges and the domain; 0 for the other built-in layers) and
+  requested but not painted), `clipped` (the points of a `Voronoi`, `Eden`, `Fill`,
+  `Objects` or `Chains` region lost to closed edges and the domain; 0 for the other built-in
+  layers) and
   `splits` (cells this
   layer alone cut into disconnected pieces, and the cells `Splits` left in pieces).
 - Cells left without a site are dropped and the rest renumbered in order. `layout` warns
@@ -27,10 +30,13 @@ through them; this page is the reference. The names on this page come from
 
 | Layer | Paints |
 |---|---|
-| `Tiling(size; spacing = 0, region, kinds, partial = :skip)` | boxes of `size` filling `region` (default: the lattice), `spacing` apart, in column-major order; `kinds` is cycled; `partial = :clip` keeps the part of a box that sticks out of the region |
+| `Tiling(size; spacing = 0, region, kinds, partial = :skip, jitter = 0, seed)` | boxes of `size` filling `region` (default: the lattice), `spacing` apart, in column-major order; `kinds` is cycled; `partial = :clip` keeps the part of a box that sticks out of the region; `jitter = j` moves each box by a random offset of at most `j` sites per axis (`2j ≤ spacing`, so boxes never overlap) |
 | `Scattered(n, size; region, kinds, seed, gap = 1)` | `n` boxes at random positions, at least `gap` sites apart; throws when they cannot be placed |
 | `Frame(kind; width = 1)` | one cell owning every site within `width` of a closed edge (or of the domain boundary) |
 | `InsertUntil(kind; into, number \| fraction, seed, region, misses = :retry)` | one-site cells of `kind` at random sites of cells of the kinds `into`, until `number` are made or `kind` is a `fraction` of all cells; `misses = :count` counts draws that miss |
+| `InsertUntil(shape; kinds, density \| number, angles, occupied = :all, collective = false, partial = :reject, seed, region)` | copies of a `Bar`, a `Rod` or a round shape at random anchors and directions, until they cover a `density` of the region's sites or `number` are placed; a copy that covers a blocking cell (`occupied`) is redrawn |
+| `Fibers(kind; length, width = 1, angles, density \| number, seed)` | straight bundles of `length` × `width` as one cell, crossing each other and painted over a background |
+| `Chains(paths; segments, width, kinds, link)` | one chain of `segments` cells along each polyline, painted over earlier layers; consecutive cells linked in the relationship `link` |
 | `Voronoi(points; region, lloyd = 0, kinds)` | one cell per generator, filling the region's medium sites (it never cuts an earlier layer): each site goes to the nearest generator; `lloyd = k` moves the generators to their cells' centroids k times; every cell is one piece |
 | `Eden(points; rounds, region, kinds, seed, neighborhood, shortfall = :error)` | a one-site cell at each point (coinciding points merge), grown by `rounds` rounds of synchronous random growth into the medium of the region (TST's `GrowInCells`); it never cuts an earlier layer |
 | `Splits(layer, k; shortfall = :error)` | `layer` with each of its cells cut in two across its long axis, `k` times over (TST's `DivideCells`, on the host before the run) |
@@ -109,6 +115,53 @@ op, report = layout(sprout, (200, 200); report = true)
 report[2]
 ```
 
+## [Bars, rods, fibers and chains](@id manual-layouts-bands)
+
+A `Bar(length, width)` is a straight band of sites, and a `Rod(n; length, width, link)` is
+`n` bars end to end, one cell each. `InsertUntil(shape; …)` places copies at random until
+they cover a site `density` of the region. Each draw picks an anchor site and, for a bar or
+a rod, a direction: uniform, or drawn from `angles` (radians in 2D, direction vectors in
+3D). The bands are half-open, so an axis-aligned bar of integer size is exactly
+`length × width` sites (`length × width × width` in 3D). Copies wrap through periodic edges.
+
+| Keyword | Effect |
+|---|---|
+| `occupied = :all` | the cells a copy must not cover: `:all`, or a list of kinds (the copy paints over the others; `()` blocks nothing) |
+| `collective = true` | every copy paints the same cell: a matrix of fibers as one cell |
+| `partial = :reject` | redraw a copy that leaves the lattice, the domain or the region; `:clip` cuts it there |
+
+The density stops on the first copy that reaches it, so the result is at least `density`
+and less than `density` plus one copy's share. After 10,000 rejected draws in a row the
+region is jammed, and `layout` throws.
+
+`Fibers` is the fiber-matrix case with its defaults: one cell, copies cross, clipped at the
+edges. A matrix of 2 × 6 fibers at eight angles on 40% of a fluid background is
+
+```@example mlayouts
+angles = deg2rad.([0, 30, -30, 45, -45, 60, -60, 90])
+ecm = overlay(Fill(:fluid), Fibers(:matrix; length = 6, width = 2, angles, density = 0.4, seed = 1, splits = :allow))
+op, report = layout(ecm, (100, 100); report = true)
+report[2]
+```
+
+`splits = :allow` accepts the pieces of fluid that the fibers enclose.
+
+`Chains(paths; segments, width, kinds, link)` lays one chain along each polyline, a vector
+of Cartesian `Point`s. Its sites are those within `width / 2` of the line, cut into
+`segments` cells of equal arc length from the first point, so cell 1 is the head. `kinds`
+is cycled from the head: `kinds = [:pinned, :segment, :segment]` on chains of three cells
+pins each head.
+
+Rods and chains link consecutive cells in the relationship named by `link`. For an ordered
+relationship (`@relationship chain(cell, cell) ordered = true`) the head has rank 1. A
+link whose cell a later layer empties is dropped, with a warning.
+
+```@example mlayouts
+u = [Point(30.0, 10.5), Point(10.0, 10.5), Point(10.0, 22.5), Point(30.0, 22.5)]
+op = layout(Chains(u; segments = 12, width = 2, kinds = [:segment], link = :chain), (40, 40))
+op[3]
+```
+
 ## Planes, balls and compartment cells
 
 There is no `Plane` or `Spheres` layer: `Fill` and `Objects` cover both. On a
@@ -183,6 +236,7 @@ The paint state `op` is used only through:
 | `Potts.kindof(op, id)`, `Potts.ncells(op)` | a painted cell's kind; the number of cells so far |
 | `Potts.record!(op; requested, painted, misses = 0, counted = painted, clipped = 0)` | the layer's report row |
 | `Potts.set_column!(op, name, id, value)` | a per-cell column: `:cluster` labels (equal labels form one cluster) or a model's cell variable such as `:V_target` (every surviving cell then needs a value) |
+| `Potts.link!(op, name, a, b)` | an initial link from cell `a` to cell `b` in the relationship `name` (in an ordered one, `b` follows `a`) |
 
 The lattice `lat` is read through `size(lat)`, `Potts.isperiodic(lat, d)`,
 `Potts.indomain(lat, x)` and `Potts.core_lattice(lat)` (for CorePotts' `shift`, `relation`

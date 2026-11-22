@@ -60,6 +60,23 @@ adjacency graph `cell_graph(σ)` with `components` and `reachable`, profile help
 and chains of cells along a periodic axis with their relaxation curves (`chain_centroids`,
 `chain_width`, `crossing_time`, `relaxation_mse`). See the [API](@ref api).
 
+Morphology helpers work on masks, such as `σ .> 0` or the sites of one kind:
+
+| Function | Returns |
+|---|---|
+| `skeletonize(mask)` | the one-site-wide skeleton of a 2D mask (Zhang–Suen thinning) |
+| `skeleton_counts(skel; min_length)` | the tips, junctions, branches (tip-to-junction edges of at least `min_length`) and loops of a skeleton; `skeleton_graph` has the nodes and edges |
+| `spanning_cluster(f, σ; axis, adjacency, periodic)`, `percolates` | the sites of the clusters where `f` holds that reach both ends of `axis` |
+| `pair_graph(pred, n)` | the graph of a pairwise predicate on items `1:n`; `components` of it are the clusters under its transitive closure |
+| `sprout_length(mask; axis, from)`, `width_profile`, `sprout_thickness` | how far a mask reaches past a base slice, and its mean width per slice |
+| `lineage(records)`, `clone_sizes` | the lineage forest of `child => parent` birth records, with each cell's founder and depth |
+
+```@example observables
+using PottsModels.Analysis: skeletonize, skeleton_counts, percolates
+mask = σ .> 0
+skeleton_counts(skeletonize(mask)), percolates(mask; axis = 1)
+```
+
 ```@example observables
 using PottsModels.Analysis: centroids, cell_graph, components
 σ = ownership(sol.u[end])

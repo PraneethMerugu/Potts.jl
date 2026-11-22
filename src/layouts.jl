@@ -2614,7 +2614,7 @@ function _paint_leaf!(op::LayoutState, g::Group, lat)
 end
 
 # ------------------------------------------------------------------------------------------
-# Bars, rods, chains and fibres: shapes placed at random to a density, and cells along
+# Bars, rods, chains and fibers: shapes placed at random to a density, and cells along
 # polylines
 # ------------------------------------------------------------------------------------------
 #
@@ -2632,8 +2632,8 @@ end
     Bar(length, width)
 
 A straight bar of `length` by `width` (Cartesian), a shape for
-[`InsertUntil`](@ref InsertUntil(::Union{Bar, Rod, HyperSphere, Interior})) and
-[`Fibres`](@ref).
+[`InsertUntil`](@ref) and
+[`Fibers`](@ref).
 
 A copy is centered at its anchor site and points along a direction that the layer draws.
 A site belongs to the bar when its embedded position lies within `length / 2` of the center
@@ -2649,10 +2649,10 @@ Throws an `ArgumentError` for a value out of range.
 
 # Examples
 ```julia
-InsertUntil(Bar(6, 2); kinds = [:fibre], density = 0.3, seed = 1)
+InsertUntil(Bar(6, 2); kinds = [:fiber], density = 0.3, seed = 1)
 ```
 
-See also [`Rod`](@ref), [`Fibres`](@ref).
+See also [`Rod`](@ref), [`Fibers`](@ref).
 """
 struct Bar
     length::Float64
@@ -2669,7 +2669,7 @@ end
     Rod(n; length, width, link = nothing)
 
 A straight rod of `n` segments, each `length` long and `width` wide, a shape for
-[`InsertUntil`](@ref InsertUntil(::Union{Bar, Rod, HyperSphere, Interior})).
+[`InsertUntil`](@ref).
 
 A copy is `n` cells: the [`Bar`](@ref) of length `n · length`, cut across into `n` equal
 pieces. Segment 1, the head, is at the front along the drawn direction, and segment `n` is
@@ -2746,7 +2746,7 @@ or `number` copies are placed.
 
 Otherwise the copy is painted: one cell per copy (`n` cells for a rod), of
 `kinds[mod1(k, end)]` for copy `k`. With `collective = true` every copy paints the same one
-cell, of `kinds[1]` (a matrix of fibres as one cell), and copies overlap where
+cell, of `kinds[1]` (a matrix of fibers as one cell), and copies overlap where
 `occupied` does not block that kind. Copies wrap
 through periodic edges.
 
@@ -2797,7 +2797,7 @@ overlay(Fill(:fluid), InsertUntil(Bar(6, 2); kinds = [:matrix], density = 0.4,
     angles, occupied = (), collective = true, partial = :clip, seed = 1, splits = :allow))
 ```
 
-See also [`Fibres`](@ref), [`Rod`](@ref), [`Bar`](@ref).
+See also [`Fibers`](@ref), [`Rod`](@ref), [`Bar`](@ref).
 """
 function InsertUntil(
         shape::_Placeable; kinds, density = nothing, number = nothing, angles = nothing,
@@ -3097,20 +3097,20 @@ function paint!(op::LayoutState, l::InsertUntil{Nothing, <:_Placement}, lat::Lat
 end
 
 """
-    Fibres(kind; length, width = 1, angles = nothing, density = nothing, number = nothing,
+    Fibers(kind; length, width = 1, angles = nothing, density = nothing, number = nothing,
         occupied = (), collective = true, partial = :clip, seed, region = nothing,
         splits = :warn)
 
-A layer of straight fibre bundles of `kind`, `length` by `width`, at random positions and
+A layer of straight fiber bundles of `kind`, `length` by `width`, at random positions and
 at directions drawn from `angles`, until they cover a `density` of the region.
 
-`Fibres` is [`InsertUntil`](@ref InsertUntil(::Union{Bar, Rod, HyperSphere, Interior}))
+`Fibers` is [`InsertUntil`](@ref)
 with a [`Bar`](@ref) and these defaults: the bundles form one cell (`collective = true`),
 they may cross (`occupied = ()`), and a bundle that reaches a closed edge is cut there
 (`partial = :clip`). Paint it over a background, such as `Fill(:fluid)`, whose sites the
 bundles take. The background is then cut into pieces wherever the bundles enclose part of
 it, so pass `splits = :allow` to accept that. The report row is that of `InsertUntil`,
-with `type = :Fibres`.
+with `type = :Fibers`.
 
 # Arguments
 - `kind`: the kind of the bundles.
@@ -3125,13 +3125,13 @@ with `type = :Fibres`.
 ```julia
 # 2 × 6 bundles at the angles 0, ±30, ±45, ±60 and 90 degrees on 40% of a fluid background
 angles = deg2rad.([0, 30, -30, 45, -45, 60, -60, 90])
-overlay(Fill(:fluid), Fibres(:matrix; length = 6, width = 2, angles, density = 0.4, seed = 1,
+overlay(Fill(:fluid), Fibers(:matrix; length = 6, width = 2, angles, density = 0.4, seed = 1,
     splits = :allow))
 ```
 
 See also [`Bar`](@ref), [`Fill`](@ref).
 """
-struct Fibres{K} <: AbstractLayout
+struct Fibers{K} <: AbstractLayout
     kind::K
     length::Float64
     width::Float64
@@ -3145,31 +3145,31 @@ struct Fibres{K} <: AbstractLayout
     region::Any
     splits::Symbol
 end
-function Fibres(
+function Fibers(
         kind; length::Real, width::Real = 1, angles = nothing, density = nothing,
         number = nothing, occupied = (), collective::Bool = true, partial::Symbol = :clip,
         seed::Integer, region = nothing, splits::Symbol = :warn
     )
     kind isa Union{AbstractArray, Tuple} &&
-        throw(ArgumentError("Fibres: `kind` is one kind, got $(repr(kind))"))
-    l = Fibres(
+        throw(ArgumentError("Fibers: `kind` is one kind, got $(repr(kind))"))
+    l = Fibers(
         kind, Float64(length), Float64(width), angles, density, number, occupied,
-        collective, partial, (_check_seed(seed, "Fibres"); UInt64(seed)), region, splits
+        collective, partial, (_check_seed(seed, "Fibers"); UInt64(seed)), region, splits
     )
-    _fibre_layer(l)                              # validates every argument
+    _fiber_layer(l)                              # validates every argument
     return l
 end
-function _fibre_layer(l::Fibres)
+function _fiber_layer(l::Fibers)
     return InsertUntil(
         Bar(l.length, l.width); kinds = [l.kind], l.density, l.number, l.angles,
         l.occupied, l.collective, l.partial, l.seed, l.region, l.splits
     )
 end
-_splits(l::Fibres) = l.splits
-paint!(op::LayoutState, l::Fibres, lat) = paint!(op, _fibre_layer(l), lat)
-function _layout_args(l::Fibres)
+_splits(l::Fibers) = l.splits
+paint!(op::LayoutState, l::Fibers, lat) = paint!(op, _fiber_layer(l), lat)
+function _layout_args(l::Fibers)
     return (
-        Fibres, (:kind,),
+        Fibers, (:kind,),
         (;
             l.kind, l.length, l.width, l.angles, l.density, l.number, l.occupied,
             l.collective, l.partial, l.seed, l.region, l.splits,
@@ -3586,7 +3586,7 @@ _layer_kinds(l::Objects) = l.kinds
 _layer_kinds(l::Group) = Any[k for x in l.layers for k in _layer_kinds(x)]
 _layer_kinds(l::InsertUntil{<:Any, Nothing}) = Any[l.kind; l.into]
 _layer_kinds(l::InsertUntil{Nothing, <:_Placement}) = l.placement.kinds
-_layer_kinds(l::Fibres) = (l.kind,)
+_layer_kinds(l::Fibers) = (l.kind,)
 _layer_kinds(l::Chains) = l.kinds
 
 # Against a model, a layout's kind names may not be its kind classes (D-135): a class would
