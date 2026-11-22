@@ -113,7 +113,7 @@ other copy in flight may change a cell that the term reads.
 - **Protocol (CPU and device).**
   1. A marking pass, one launch: each item marks every cell of W with a writer stamp
      (compare-and-swap; a second writer sets the cell to "contested") and every cell of R
-     with a reader stamp (its block id, or "many" if another reader came first).
+     with a reader stamp (compare-and-swap: its block id, or "many" if another reader came first). Stamps carry a per-phase token, as `_phase_conflict!` already does, so no reset pass is needed.
   2. The kernel boundary orders all marks before all checks.
   3. A check pass: an item is clear if every cell of its W has itself as the only writer
      and no reader other than itself, and every cell of its R has no writer other than
@@ -123,7 +123,8 @@ other copy in flight may change a cell that the term reads.
   another, in block order. This is the serial pass, applied to whole items; it needs the
   serial list allocated whenever a model declares extra read sets. A clear item neither
   reads nor writes anything that another item writes, so its attempts commute with every
-  other item's. The phase is therefore equal to a sequential run of its items, and every
+  other item's. The phase is therefore equal to a sequential run of its items in the order
+  "all clear items, then the other items in block order", and every
   committed ΔH is exact.
 - **On the CPU** this replaces the same-cell test of `_phase_conflict!` for models with
   extra read sets. A phase with a conflict can still run inline as a whole, as today.
@@ -160,7 +161,7 @@ The fallback when claims cost too much: snapshot the cell state that other copie
 
 | Mechanism | Models | Parallel form | Exact? |
 |---|---|---|---|
-| Lifecycle rules | Bauer 2007 and 2009, Jiang 2005, FBCA, Jafari Nivlouei, Dal-Castel | between sweeps, device planner (section 3) | exact |
+| Lifecycle rules | Bauer 2007 and 2009, Jiang 2005, FBCA, Jafari Nivlouei, Dal-Castel | between sweeps, host planner on the CPU and device planner on a device (section 3) | exact |
 | Per-cell operators, uptake | FBCA; Bauer per-cell uptake if chosen | between sweeps, one item or workgroup per cell (section 4) | exact |
 | Proposal laws: `UnlikeNeighbor`, Hastings acceptance, `attempts = k` | Bauer 2007, FBCA | local reads; the Hastings ratio needs the forward and reverse proposal probabilities (for a site-then-unlike-neighbor law, the unlike-neighbor count at the target before and after the copy), both within the footprint | exact |
 | Neighbor loops `neighbors(c)`, `contact(c, n)` | Jafari Nivlouei | per-pair contact aggregates kept on every copy | exact |

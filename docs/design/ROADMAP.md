@@ -673,7 +673,7 @@ Full runs are offline (D-146).
   - (2026-11-16) The checkerboard items above name the colored, claiming checkerboard. D-271 replaced it with the lockless block scheme, and `_color_order!` no longer exists, so they need restating before work starts.
 - [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
   SciMLBase callbacks, `@terminate`.
-  - (D-332) Lowered onto the D-089 device planner: retire into a collective, create at a site set and state kept across a transition run on the device; a quiet MCS stays at 0 syncs and 0 transfers (`research/parallel-mechanisms.md` §3).
+  - (D-332) A host-planner form (D-035, CPU) and a D-089 device-planner form, tested together: retire into a collective, create at a site set and state kept across a transition run on the device; a quiet MCS stays at 0 syncs and 0 transfers (`research/parallel-mechanisms.md` §3).
   - (D-162) `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as MTK `SymbolicDiscreteCallback`s from the start, so `ModelingToolkitBase.discrete_events(sys)` lists them. Per-cell, per-site, per-copy and structural rules are never listed as callbacks.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
