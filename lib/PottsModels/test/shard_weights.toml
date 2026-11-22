@@ -95,6 +95,7 @@
 "acceptance/update_rules_tests.jl" = 7.0
 "acceptance/voronoi_shapes_tests.jl" = 13.0
 "akeeb_initial_state_tests.jl" = 9.0
+"analysis_morphology_tests.jl" = 5.0
 "analysis_tests.jl" = 13.0
 "callback_set_heap_tests.jl" = 11.0
 "foam_model_source_tests.jl" = 4.0

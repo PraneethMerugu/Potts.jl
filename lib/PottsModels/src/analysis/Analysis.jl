@@ -23,6 +23,12 @@ profiles after a simulation, never inside a Monte Carlo step.
   [`mean_squared_displacement`](@ref), the modified Fürth model
   [`furth_mean_squared_displacement`](@ref), its fits [`furth_fit`](@ref) and
   [`natural_units`](@ref).
+- Skeletons of 2D masks: [`skeletonize`](@ref), [`skeleton_graph`](@ref) and
+  [`skeleton_counts`](@ref) (tips, junctions, branches, loops).
+- Clusters: percolation with [`spanning_cluster`](@ref) and [`percolates`](@ref), and the
+  graph of a pairwise predicate [`pair_graph`](@ref) (clusters by [`components`](@ref)).
+- Sprouts: [`sprout_length`](@ref), [`width_profile`](@ref), [`sprout_thickness`](@ref).
+- Lineage trees from birth records: [`lineage`](@ref), [`clone_sizes`](@ref).
 - Polarization (Thomas et al. 2022): the MSD slope [`furth_exponent`](@ref), its maximum
   [`optimal_interval`](@ref), the fit-free [`max_slope_interval`](@ref),
   [`mean_velocity`](@ref) and [`polarization_statistics`](@ref) (ξ, ε, σθ, u_∥).
@@ -48,6 +54,10 @@ export unwrap_track, mean_squared_displacement, furth_mean_squared_displacement,
     natural_units
 export furth_exponent, optimal_interval, max_slope_interval, mean_velocity,
     polarization_statistics
+export skeletonize, skeleton_graph, skeleton_counts
+export spanning_cluster, percolates, pair_graph
+export sprout_length, width_profile, sprout_thickness
+export lineage, clone_sizes
 
 include("peaks.jl")
 include("profiles.jl")
@@ -58,5 +68,9 @@ include("edges.jl")
 include("foam.jl")
 include("motility.jl")
 include("polarization.jl")
+include("skeleton.jl")
+include("clusters.jl")
+include("sprouts.jl")
+include("lineage.jl")
 
 end
