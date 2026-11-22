@@ -71,8 +71,9 @@
 # Oracles: the parameter values are the spec's, with the unit conversions computed here; ΔH
 # against a brute-force total energy written here (all pairs of the stated neighbourhood,
 # area, the covariance length) plus a chemotaxis formula and TST's ConnectivityPreservedP
-# written here from ca.cpp; the field against a plain explicit Euler (shared/merks_field_oracle.jl; 15
-# substeps, ring clamped after each); `merks_state` against the former loop, copied here
+# written here from ca.cpp; the field against a plain explicit Euler
+# (shared/merks_field_oracle.jl; 15 substeps, ring clamped after each); `merks_state`
+# against the former loop, copied here
 # with StableRNG; the frame against a hand-written 20-offset stencil. Negative controls:
 # the other phase order, no clamp, 14 substeps and a 9-point Laplacian each miss the field
 # oracle; the 2006 and 2008 sets differ; retractions and cell–cell copies are non-vacuous
