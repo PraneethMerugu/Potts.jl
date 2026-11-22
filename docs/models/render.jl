@@ -31,7 +31,9 @@
 using Literate: Literate
 using TOML: TOML
 
-const MODEL_PAGES = ["graner_glazier", "merks", "foam", "akeeb", "wortel_act", "openvt"]
+const MODEL_PAGES = [
+    "graner_glazier", "merks", "foam", "akeeb", "wortel_act", "openvt", "fortuna",
+]
 const MODELS_DIR = @__DIR__
 const PAPER_RUNS = joinpath(dirname(MODELS_DIR), "src", "assets", "paper_runs")
 

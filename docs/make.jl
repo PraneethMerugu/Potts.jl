@@ -32,6 +32,7 @@ const PAPER_PAGES = [
     ("04_foam", "foam", "Foam rheology (Jiang et al. 1999)"),
     ("09_cell_sorting", "graner_glazier", "Cell sorting (Graner & Glazier 1992)"),
     ("10_akeeb", "akeeb", "Leader–follower invasion (Akeeb, Marcus & Jiang 2026)"),
+    ("14_fortuna", "fortuna", "Nucleus migration (Fortuna et al. 2020)"),
     ("15_openvt_monolayer", "openvt", "Growing monolayer (OpenVT benchmark)"),
 ]
 # model pages that are not reproductions of a paper's results

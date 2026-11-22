@@ -360,7 +360,7 @@ function merks2008_denovo(;
     )
 end
 
-function _merks_choice(x, allowed, model, key)
+function _structural_choice(x, allowed, model, key)
     if x in allowed
         return x
     else
@@ -466,7 +466,7 @@ See also [`Merks2008`](@ref), [`MerksVasculogenesis`](@ref).
     @drive copy =>
         -ifelse((old == 0) | (new == 0), χcM, χcc) *
         (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
-    if _merks_choice(rule, (:soft, :hard), "Merks2006", :rule) === :soft
+    if _structural_choice(rule, (:soft, :hard), "Merks2006", :rule) === :soft
         @drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)
     else
         @constraint connectivity(endothelial; rule = ArcOrPair())
@@ -559,8 +559,9 @@ See also [`Merks2006`](@ref), [`MerksVasculogenesis`](@ref).
         cells(endothelial) => λ * (volume - A)^2
         contacts => J[kind, neighbor_kind]
     end
-    if _merks_choice(mode, (:extension_retraction, :extension_only), "Merks2008", :mode) ===
-            :extension_retraction
+    if _structural_choice(
+            mode, (:extension_retraction, :extension_only), "Merks2008", :mode
+        ) === :extension_retraction
         @drive copy =>
             -ifelse((old == 0) | (new == 0), χcM, χcc) *
             (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))

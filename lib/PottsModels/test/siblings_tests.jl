@@ -1,7 +1,7 @@
 # Generality guardrail (D-051 R0, review §6 (e)): for every published model, a sibling built
 # only from public primitives. The sibling is another tool's variant of the model's defining
 # mechanism. It must build, pass the ΔH self-check and show its mechanism. A published
-# model without an entry in `SIBLINGS` fails.
+# model without an entry in `SIBLINGS` or `SIBLING_FILES` fails.
 
 @testsetup module SiblingsSetup
 include(joinpath(@__DIR__, "shared", "common.jl"))
@@ -259,6 +259,8 @@ function sib_length(σ, c)
     sxy = mean((i[1] - mx) * (i[2] - my) for i in I)
     return 4 * sqrt((sxx + syy) / 2 + sqrt(((sxx - syy) / 2)^2 + sxy^2))
 end
+# published model => the file that holds its sibling item, for siblings with their own file
+const SIBLING_FILES = Dict(:FortunaMigration => "fortuna_sibling_tests.jl")
 # published model => (sibling label, check); every check builds, self-checks and runs
 const SIBLINGS = Dict(
     :GranerGlazier => (
@@ -577,8 +579,10 @@ end
             ),
             names(PottsModels)
         )
-        # every published model has a sibling
-        @test Set(models) == Set(keys(SIBLINGS))
+        # every published model has a sibling, here or in its own file
+        @test Set(models) == union(keys(SIBLINGS), keys(SIBLING_FILES))
+        testdir = joinpath(pkgdir(PottsModels), "test")
+        @test all(f -> isfile(joinpath(testdir, f)), values(SIBLING_FILES))
         @testset "$m: $label" for (m, (label, check)) in SIBLINGS
             check()
         end
