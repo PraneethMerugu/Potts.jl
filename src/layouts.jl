@@ -90,6 +90,7 @@ mutable struct LayoutState{N}
     const clusters::Dict{Int, Any}
     const colnames::Vector{Symbol}   # user columns (`set_column!`), in order of first use
     const colvals::Vector{Dict{Int, Any}}   # … cell => value, one dict per column
+    const links::Vector{Tuple{Symbol, Int, Int}}    # `link!`: (relationship, from, to)
     layer::Int                       # the current leaf (0: none)
     base::Int                        # cells allocated before the current leaf
     warn::Bool                       # the current leaf has `splits = :warn`
@@ -101,7 +102,7 @@ function LayoutState(dims::NTuple{N, Int}) where {N}
         Dict{
             Int, Any,
         }(),
-        Symbol[], Dict{Int, Any}[], 0, 0, true, 0
+        Symbol[], Dict{Int, Any}[], Tuple{Symbol, Int, Int}[], 0, 0, true, 0
     )
 end
 
@@ -351,6 +352,43 @@ function set_column!(op::LayoutState, name::Symbol, id::Integer, value)
     return nothing
 end
 
+"""
+    link!(op::LayoutState, name::Symbol, a, b)
+
+Record a link from cell `a` to cell `b` in the relationship `name` of the operating point
+that [`layout`](@ref) returns.
+
+Call it from a layer's `paint!`. [`layout`](@ref) returns the links of each relationship as
+`name => [(a, b), …]` in final cell numbers, which `PottsProblem` takes as the initial
+links (see the relationships manual). In an ordered relationship `(a, b)` makes `b` the
+successor of `a`. A link whose cell is left with no site after the whole layout is dropped,
+and `layout` warns once per relationship with the number dropped.
+
+`link!` writes to the paint state, as [`set_column!`](@ref) does. To add a link to a live
+state during a run, use `CorePotts.add_link!` instead.
+
+# Arguments
+- `op::LayoutState`: the paint state passed to `paint!`.
+- `name::Symbol`: the relationship.
+- `a::Integer`, `b::Integer`: two distinct allocated cell numbers. Throws an
+  `ArgumentError` otherwise.
+
+# Returns
+- `nothing`. Throws an `ArgumentError` when called outside a layer's `paint!`.
+
+See also [`Chains`](@ref), [`Rod`](@ref), [`set_column!`](@ref).
+"""
+function link!(op::LayoutState, name::Symbol, a::Integer, b::Integer)
+    op.layer == 0 &&
+        throw(ArgumentError("link!: called outside a layer's paint!; invoke only inside \
+            `Potts.paint!`"))
+    (1 <= a <= ncells(op) && 1 <= b <= ncells(op) && a != b) ||
+        throw(ArgumentError("link!: cells $a and $b must be distinct allocated cells \
+            (ncells = $(ncells(op))); use new_cell!"))
+    push!(op.links, (name, Int(a), Int(b)))
+    return nothing
+end
+
 # ------------------------------------------------------------------------------------------
 # Lattice queries
 # ------------------------------------------------------------------------------------------
@@ -486,7 +524,8 @@ _splits(::AbstractLayout) = :warn
 # ------------------------------------------------------------------------------------------
 
 """
-    Tiling(size; spacing = 0, region = nothing, kinds, partial = :skip, splits = :warn)
+    Tiling(size; spacing = 0, region = nothing, kinds, partial = :skip, jitter = 0,
+        seed = nothing, splits = :warn)
 
 A layer of boxes of `size`, `spacing` medium sites apart, that fill `region` in
 column-major order from its lower corner.
@@ -495,6 +534,13 @@ column-major order from its lower corner.
 closer than `spacing` to the first box through the wrap are skipped, so the spacing also
 holds across the boundary. `layout` throws an `ArgumentError` when no box fits the region.
 
+`jitter = j` moves each box by an integer offset drawn uniformly from `-j:j` along each
+axis, with `Potts.layer_rng(seed)`, in placement order. A box is then pushed back toward
+its grid position just enough to stay inside the region (and, under `partial = :skip`,
+whole). Each box moves at most `j` sites, so with `2j ≤ spacing` along every axis no two
+boxes overlap: neighbors keep at least `spacing - 2j` medium sites between them. A jittered
+box never wraps through a periodic edge.
+
 # Arguments
 - `size`: the box size, a tuple with one positive entry per axis.
 
@@ -502,6 +548,11 @@ holds across the boundary. `layout` throws an `ArgumentError` when no box fits t
 - `spacing = 0`: the medium sites between boxes, an integer or a tuple (non-negative).
 - `region = nothing`: a tuple of unit ranges; `nothing` is the whole lattice.
 - `kinds`: a non-empty collection of kinds.
+- `jitter = 0`: the largest offset of a box along each axis, an integer or a tuple
+  (non-negative, and at most `spacing ÷ 2` along each axis). Throws an `ArgumentError`
+  otherwise.
+- `seed = nothing`: the seed of the offsets, in `0:typemax(UInt64)`; required when some
+  `jitter` is positive.
 - `partial = :skip`: `:skip` places whole boxes only, and `region` must lie on the lattice.
   `:clip` also starts boxes up to the end of the region and keeps the part of each box
   inside region ∩ lattice (`region` may reach beyond the lattice). Unlike CompuCell3D's
@@ -532,11 +583,13 @@ struct Tiling{N, K} <: AbstractLayout
     region::Union{Nothing, NTuple{N, UnitRange{Int}}}
     kinds::Vector{K}
     partial::Symbol
+    jitter::NTuple{N, Int}
+    seed::Union{Nothing, UInt64}
     splits::Symbol
 end
 function Tiling(
         size; spacing = 0, region = nothing, kinds,
-        partial::Symbol = :skip, splits::Symbol = :warn
+        partial::Symbol = :skip, jitter = 0, seed = nothing, splits::Symbol = :warn
     )
     N = length(size)
     sz = _check_size(_tuple(size, N), "Tiling")
@@ -547,9 +600,18 @@ function Tiling(
     partial in (:skip, :clip) ||
         throw(ArgumentError("Tiling: `partial` must be :skip or :clip, \
             got $(repr(partial))"))
+    jt = _tuple(jitter, N)
+    all(>=(0), jt) ||
+        throw(ArgumentError("Tiling: jitter must be non-negative, got $jt"))
+    all(map((j, p) -> 2j <= p, jt, sp)) ||
+        throw(ArgumentError("Tiling: jitter $jt can make boxes overlap with spacing $sp; \
+            keep 2·jitter <= spacing along every axis"))
+    any(>(0), jt) && seed === nothing &&
+        throw(ArgumentError("Tiling: a positive jitter needs a `seed`"))
+    seed === nothing || _check_seed(seed, "Tiling")
     return Tiling(
         sz, sp, _region_arg(region, N, "Tiling"), _kinds_arg(kinds, "Tiling"), partial,
-        _splits_arg(splits, "Tiling")
+        jt, seed === nothing ? nothing : UInt64(seed), _splits_arg(splits, "Tiling")
     )
 end
 _splits(l::Tiling) = l.splits
@@ -597,13 +659,26 @@ function paint!(op::LayoutState, l::Tiling{N}, lat) where {N}
         throw(ArgumentError("Tiling: no box of size $(l.size) fits the region $reg; use a \
             smaller box size or a larger region"))
     n = 0
+    rng = l.seed === nothing ? nothing : layer_rng(l.seed)
     for o in Iterators.product(starts...)
         n += 1
         id = new_cell!(op, l.kinds[mod1(n, length(l.kinds))])
-        assign!(op, map((a, s, r) -> a:min(a + s - 1, last(r)), o, l.size, reg), id)
+        a = rng === nothing ? o : _jittered(rng, o, l.jitter, l.size, reg, clip)
+        assign!(op, map((a, s, r) -> a:min(a + s - 1, last(r)), a, l.size, reg), id)
     end
     record!(op; requested = n, painted = n)
     return nothing
+end
+
+# A box start moved by a draw from `-j:j` per axis, then clamped into the region: whole
+# boxes under `:skip`; under `:clip` a start already past `last(r) - s + 1` may only move
+# back. The clamped start lies between the grid start and the drawn one.
+function _jittered(rng, o::NTuple{N, Int}, jitter, size, reg, clip) where {N}
+    return ntuple(Val(N)) do d
+        a = o[d] + rand(rng, (-jitter[d]):jitter[d])
+        hi = clip ? max(o[d], last(reg[d]) - size[d] + 1) : last(reg[d]) - size[d] + 1
+        clamp(a, first(reg[d]), hi)
+    end
 end
 
 # region ∩ lattice (`partial = :clip`)
@@ -931,7 +1006,8 @@ Give exactly one stop rule:
   number of cells painted before this layer, and `K` the number of those of `kind`. Both
   count only cells that still own a site. Pass a `Rational` (for example `1//4`) to emulate
   a script's `K/N < r` loop exactly: with a floating-point `r`, the product form can
-  disagree with the ratio form at the boundary.
+  disagree with the ratio form at the boundary. `fraction` is a fraction of cells; the
+  shape form of `InsertUntil` takes `density`, a fraction of sites.
 
 The rule is checked before the first draw and after every hit, not after a miss. Under
 `:count` the count can therefore overshoot by the misses drawn since the last hit (as in a
@@ -968,7 +1044,7 @@ overlay(Fill(:a), InsertUntil(:b; into = [:a], fraction = 1//4, seed = 1))
 
 See also [`layout`](@ref).
 """
-struct InsertUntil{K} <: AbstractLayout
+struct InsertUntil{K, P} <: AbstractLayout
     kind::K
     into::Vector{Any}
     fraction::Union{Nothing, Real}
@@ -977,6 +1053,8 @@ struct InsertUntil{K} <: AbstractLayout
     region::Union{Nothing, Tuple{Vararg{UnitRange{Int}}}}
     count_misses::Bool
     splits::Symbol
+    # `nothing`: one-site cells into host cells; a `_Placement`: copies of a shape
+    placement::P
 end
 function InsertUntil(
         kind; into, fraction = nothing, number = nothing, seed::Integer, region = nothing,
@@ -1002,7 +1080,7 @@ function InsertUntil(
         number === nothing ? -1 : Int(number), UInt64(seed), reg, misses === :count,
         _splits_arg(
             splits, "InsertUntil"
-        )
+        ), nothing
     )
 end
 _splits(l::InsertUntil) = l.splits
@@ -1017,7 +1095,7 @@ function _insert_done(l::InsertUntil, N, K, counted)
     end
 end
 
-function paint!(op::LayoutState, l::InsertUntil, lat)
+function paint!(op::LayoutState, l::InsertUntil{<:Any, Nothing}, lat)
     dims = size(lat)
     l.region === nothing || _check_rank(l, length(l.region), dims, "InsertUntil")
     sites = CartesianIndices(_region(l.region, dims, "InsertUntil"))
@@ -2146,7 +2224,10 @@ end
 # The keyword constructor of a layer, the names of its positional arguments, and every
 # argument (positional and keyword) as it would be passed.
 function _layout_args(l::Tiling)
-    return (Tiling, (:size,), (; l.size, l.spacing, l.region, l.kinds, l.partial, l.splits))
+    return (
+        Tiling, (:size,),
+        (; l.size, l.spacing, l.region, l.kinds, l.partial, l.jitter, l.seed, l.splits),
+    )
 end
 function _layout_args(l::Scattered)
     return (
@@ -2155,7 +2236,7 @@ function _layout_args(l::Scattered)
     )
 end
 _layout_args(l::Frame) = (Frame, (:kind,), (; l.kind, l.width, l.splits))
-function _layout_args(l::InsertUntil)
+function _layout_args(l::InsertUntil{<:Any, Nothing})
     return (
         InsertUntil, (:kind,),
         (;
@@ -2755,7 +2836,32 @@ function layout(l::AbstractLayout, x; report::Bool = false)
     σc, kindsc = _compact(σ, kinds, counts)
     point = [ownership => σc, kind => identity.(kindsc)]
     _push_columns!(point, op, counts)
+    _push_links!(point, op, counts)
     return report ? (point, rows) : point
+end
+
+# The links of `link!`, one entry `name => pairs` per relationship in order of first use, in
+# final cell numbers; links with a dropped cell are left out (one warning per relationship).
+function _push_links!(point, op::LayoutState, counts)
+    isempty(op.links) && return point
+    final = cumsum(counts .> 0)
+    names = unique(first.(op.links))
+    for name in names
+        pairs = Tuple{Int, Int}[]
+        dropped = 0
+        for (r, a, b) in op.links
+            r === name || continue
+            if counts[a] > 0 && counts[b] > 0
+                push!(pairs, (final[a], final[b]))
+            else
+                dropped += 1
+            end
+        end
+        dropped > 0 && @warn "layout: dropped $dropped links of `$name` whose cell has no \
+            site"
+        push!(point, name => pairs)
+    end
+    return point
 end
 
 # The `cluster` column (when some cell got a label) and the user columns of `set_column!`,
@@ -2797,7 +2903,7 @@ _layer_kinds(l::Frame) = (l.kind,)
 _layer_kinds(l::Fill) = (l.kind,)
 _layer_kinds(l::Objects) = l.kinds
 _layer_kinds(l::Group) = Any[k for x in l.layers for k in _layer_kinds(x)]
-_layer_kinds(l::InsertUntil) = Any[l.kind; l.into]
+_layer_kinds(l::InsertUntil{<:Any, Nothing}) = Any[l.kind; l.into]
 
 # Against a model, a layout's kind names may not be its kind classes (D-135): a class would
 # never match a cell's kind (`InsertUntil(into = [g])` would silently miss). Names that are
