@@ -497,11 +497,15 @@ end
 ] tags = [:potts, :symbolic] begin
     using Potts
     using Potts: CorePotts
+    using LinearAlgebra: dot
     @potts_model Rod begin
+        @structural_parameters periodic = false
         @kinds medium seg
         @parameters ω = 0.5
         @relationship chain(cell, cell) ordered = true
-        @lattice Lattice((40, 24); boundary = Closed(), neighborhood = Moore(1))
+        @lattice Lattice(
+            (40, 24); boundary = periodic ? Periodic() : Closed(), neighborhood = Moore(1)
+        )
         @energy cells => (volume - 25)^2
         @drive copy => -ω * (
             chord_dot(chain, old, direction[1], direction[2]) +
@@ -509,30 +513,68 @@ end
         )
         @sweep Metropolis(; temperature = 2.0)
     end
-    op = [ownership => zigzag((40, 24)), :chain => ZIGZAG_LINKS]
-    prob = PottsProblem(Rod(; name = :rod), op, (0, 2))
-    u, lat = prob.u0, prob.lattice
-    # by hand: the centroids at the moment of the copy and Eq 9 on the chain 1 → … → 6
-    S = [collect(CorePotts.centroid(Float64, u.cell, lat, c)) for c in 1:6]
-    unit(v) = v / hypot(v...)
-    θ(c) = c == 0 ? [0.0, 0.0] : c == 1 ? θ(2) : c == 6 ? θ(5) : unit(S[c - 1] - S[c + 1])
-    worst, nmoving = 0.0, 0
-    props = all_copies(prob, u)
-    for prop in props
-        d = collect(CorePotts.coordinates(lat, prop.target)) .-
-            collect(CorePotts.coordinates(lat, prop.source))
-        expected = -0.5 * (sum(d .* θ(prop.old)) + sum(d .* θ(prop.new)))
-        drive = prob.f.delta_H(u, prob.p, prop, ctx_of(prob)) - energy_change(prob, u, prop)
-        worst = max(worst, abs(drive - expected))
-        nmoving += abs(expected) > 0.05
+    # a bent rod (an arch: the y offset rises, then falls back) so that every segment has
+    # its own chord; `shift` moves it across the periodic seam
+    function arch(dims; shift = 0)
+        σ = zeros(Int32, dims)
+        for (c, y) in enumerate((0, 4, 8, 8, 4, 0))
+            x0 = 2 + (c - 1) * 5 + shift
+            for i in x0:(x0 + 4), j in (3 + y):(7 + y)
+                σ[mod1(i, dims[1]), j] = c
+            end
+        end
+        return σ
     end
-    @test length(props) > 100
-    @test worst < 1.0e-12
-    @test nmoving > length(props) ÷ 2
-    # a forward copy gains: the head segment pushing into the medium ahead of it (toward
-    # −x, away from its successor) lowers ΔH
-    @test θ(1)[1] < -0.5
+    unit(v) = v / hypot(v...)
+    cases = (
+        ("zigzag, closed", false, zigzag((40, 24))),
+        ("arch, closed", false, arch((40, 24))),
+        ("arch across the periodic seam", true, arch((40, 24); shift = 25)),
+    )
+    for (label, periodic, σ) in cases
+        op = [ownership => σ, :chain => ZIGZAG_LINKS]
+        prob = PottsProblem(Rod(; name = :rod, periodic), op, (0, 2))
+        u, lat = prob.u0, prob.lattice
+        half = [20, 12]
+        mi(v) = periodic ? mod.(v .+ half, 2 .* half) .- half : v
+        # by hand: the centroids at the moment of the copy and Eq 9 on the chain 1 → … → 6,
+        # with minimum-image differences on the periodic lattice
+        S = [collect(CorePotts.centroid(Float64, u.cell, lat, c)) for c in 1:6]
+        θ(c) = c == 0 ? [0.0, 0.0] : c == 1 ? θ(2) : c == 6 ? θ(5) :
+            unit(mi(S[c - 1] - S[c + 1]))
+        worst, nmoving, nhead = 0.0, 0, 0
+        props = all_copies(prob, u)
+        for prop in props
+            d = mi(
+                collect(CorePotts.coordinates(lat, prop.target)) .-
+                    collect(CorePotts.coordinates(lat, prop.source))
+            )
+            expected = -0.5 * (dot(d, θ(prop.old)) + dot(d, θ(prop.new)))
+            drive = prob.f.delta_H(u, prob.p, prop, ctx_of(prob)) -
+                energy_change(prob, u, prop)
+            worst = max(worst, abs(drive - expected))
+            nmoving += abs(expected) > 0.05
+            # the head spreading into the medium along its chord lowers ΔH
+            if prop.new == 1 && prop.old == 0 && dot(d, θ(1)) > 0.5
+                nhead += 1
+                @test drive < -0.25
+            end
+        end
+        @testset "$label" begin
+            @test length(props) > 100
+            @test worst < 1.0e-12
+            @test nmoving > length(props) ÷ 2
+            @test nhead > 0
+        end
+        if label != "zigzag, closed"
+            # the segments point in clearly different directions (a single rod axis
+            # shared by all segments fails the comparison above)
+            @test maximum(acos(clamp(dot(θ(a), θ(b)), -1, 1)) for a in 1:6, b in 1:6) > 0.5
+        end
+    end
     # drives read live state on every solver, so the parallel one runs this model
+    op = [ownership => arch((40, 24)), :chain => ZIGZAG_LINKS]
+    prob = PottsProblem(Rod(; name = :rod), op, (0, 2))
     for alg in (SequentialCPM(), CheckerboardCPM())
         @test solve(prob, alg).retcode == Potts.SciMLBase.ReturnCode.Success
     end

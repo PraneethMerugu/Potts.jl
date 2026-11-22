@@ -107,7 +107,13 @@ end
     if mode === :ok
         @observed o(cell) ~ norm(separation(id, partner))
     end
-    @sweep Metropolis(; temperature = 1.0)
+    if mode === :temp_s
+        @sweep Metropolis(;
+            temperature = 1.0 + 0.001 * separation(partner[old], partner[new])[1]
+        )
+    else
+        @sweep Metropolis(; temperature = 1.0)
+    end
 end
 
 function rh_build_error(; hex = false, mode = :ok)
@@ -543,8 +549,8 @@ end
         # a drive reads centroid(c, k) and separation before the copy
         @test rh_build_error(; hex = false, mode = :drive_c) === nothing
         @test rh_build_error(; hex = false, mode = :drive_s) === nothing
-        # energies, constraints and on-copy updates do not (a copy moves the centroids)
-        for mode in (:energy_c, :con_s, :oncopy_c)
+        # energies, constraints, on-copy updates and the temperature do not
+        for mode in (:energy_c, :con_s, :oncopy_c, :temp_s)
             e = rh_build_error(; hex = false, mode)
             @test e isa Potts.PottsCompileError
             @test occursin(r"centroid|separation", sprint(showerror, e))
