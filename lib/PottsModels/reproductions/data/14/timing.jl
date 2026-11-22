@@ -15,7 +15,7 @@ using Potts: CorePotts, LatticeFields
 median_of(xs) = sort(xs)[cld(length(xs), 2)]
 const R, φ = 15, 0.1
 sys = FortunaMigration(; name = :fortuna, lattice = fortuna_lattice(R, φ))
-op = [fortuna_layout(R, φ, sys); :R => Float64(R); :φ_l => φ; :λ_F => 150.0; :c => 0.1]
+op = [fortuna_layout(R, sys); :R => Float64(R); :φ_l => φ; :λ_F => 150.0; :c => 0.1]
 prob = PottsProblem(sys, op, (0, 200); seed = 1, field_solver = ExplicitEuler(substeps = 1))
 integ = init(prob, SequentialCPM(); save_everystep = false, save_start = false, save_end = false)
 foreach(_ -> step!(integ), 1:20)

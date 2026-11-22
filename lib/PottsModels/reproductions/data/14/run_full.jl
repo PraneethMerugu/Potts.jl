@@ -327,7 +327,7 @@ scal_meta(j) = (;
 function trial_scal()
     rows = NamedTuple[]
     sys = P.system(10, 0.05)
-    fortuna_layout(10, 0.05, sys)                              # the cache, before the threaded map
+    fortuna_layout(10, sys)                              # the cache, before the threaded map
     for (j, c) in enumerate(P.C_GRID)
         path = joinpath(OUT, "scal_$(j).jls")
         row = if isfile(path)
@@ -403,12 +403,12 @@ for (i, _) in RUNS
     R, φ, _ = P.SETS[i]
     haskey(SYS, (R, φ)) && continue
     sys = P.system(R, φ)
-    SYS[(R, φ)] = (sys, fortuna_layout(R, φ, sys))
+    SYS[(R, φ)] = (sys, fortuna_layout(R, sys))
 end
 
 # the fast recorder records exactly what the observe-based one does (60 MCS at R = 10, 15)
 for (R, φ) in ((10, 0.05), (15, 0.05))
-    sys, lay = haskey(SYS, (R, φ)) ? SYS[(R, φ)] : (s = P.system(R, φ); (s, fortuna_layout(R, φ, s)))
+    sys, lay = haskey(SYS, (R, φ)) ? SYS[(R, φ)] : (s = P.system(R, φ); (s, fortuna_layout(R, s)))
     L, _, Lz = P.dims(R, φ)
     ok = check_recorder(P.problem(R, φ, 150; c = C, seed = 7, T = 60, sys, layout = lay); T = 60, L, Lz)
     ok || error("run_full.jl: the fast recorder disagrees with the observe-based one at R = $R; not running")
@@ -665,6 +665,8 @@ open(joinpath(REC, "README.md"), "w") do io
         - At P ≫ 10⁴ MCS both fit methods underestimate P by about 20 % (the protocol's
           oracle; P = 23265 and 26853 in Table 2). This is inside the ±50 % band of
           `table2/`.
+        - `mean_displacement`: the short trial measured 19.8 sites against the bound of 20
+          (2R) under the paper's drive (with the earlier start sized to the targets).
         - `qtier.toml` is the qtier stage's record, copied verbatim.
         - The per-run tracks (`tracks/<set>_<rep>.tsv.gz`, gzip TSV, columns
           $(join(TRACK_COLS, ", "))) are in the batch's release, not in git: the centroids

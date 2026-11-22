@@ -20,10 +20,10 @@
 # ## Running it
 #
 # A cell of radius R = 10 sites with a lamellipodium fraction φ_l = 0.05, on an
-# 80 × 80 × 21 lattice, periodic in x and y. It starts as a ball of cytoplasm with a
-# concentric ball of nucleus, halfway between the substrate and the lid, as in the paper's
-# supplement. The cell settles onto the substrate by itself. The run is 6000 MCS long, and
-# the F-actin field takes one explicit Euler step per MCS.
+# 80 × 80 × 21 lattice, periodic in x and y. It starts as in the paper's supplement: a
+# ball of radius R, centered halfway up the lattice, with a concentric ball of nucleus
+# inside. The lid cuts the top of the ball. The volumes then relax to their targets. The
+# run is 6000 MCS long, and the F-actin field takes one explicit Euler step per MCS.
 
 using Potts, PottsModels
 using PottsModels.Analysis: unwrap_track
@@ -31,7 +31,7 @@ using CairoMakie
 
 R, φ_l = 10, 0.05
 sys = FortunaMigration(; name = :fortuna, lattice = fortuna_lattice(R, φ_l))
-op = [fortuna_layout(R, φ_l, sys); :R => Float64(R); :φ_l => φ_l]
+op = [fortuna_layout(R, sys); :R => Float64(R); :φ_l => φ_l]
 prob = PottsProblem(
     sys, op, (0, 6000); seed = 1, field_solver = ExplicitEuler(substeps = 1)
 )
@@ -118,7 +118,7 @@ fig
 # | Update order | not stated | sweep, then field step, then protrusion. The field step is the same update as the authors' code (CompuCell3D diffuses and decays, then secretes; with one explicit step per MCS and a source that does not depend on ``F`` the two are identical). Secreting first would give ``F ≈ 0.1`` |
 # | Drive (Eq. 7) | extensions of the lamellipodium into the medium | the same (default); `drive = :extension_retraction` adds retractions, as in the authors' code |
 # | Targets | ``(1 - φ_n - φ_l)V``, ``φ_n V``, ``φ_l V`` | the same, fixed from ``t = 0`` |
-# | Start | concentric spheres centered at ``(L_x/2, L_y/2, L_z/2)`` (supplement S1, p. 6), sizes not stated | the same; the cytoplasm ball sized to its target plus 216 nucleus sites, the nucleus ball to 216 sites, strict inside (the authors' code puts a cube nucleus in a ball resting on the substrate) |
+# | Start | concentric spheres centered at ``(L_x/2, L_y/2, L_z/2)`` (supplement S1, p. 6), sizes not stated | the same; the outer ball of radius R (the whole cell volume), the nucleus ball of 216 sites, strict inside, and the planes cut the outer ball where it reaches them; the volumes relax to the fixed targets (the authors' code puts a cube nucleus in a ball resting on the substrate) |
 # | Lattice | ``L \in [8R, 14R]``, ``L_z = 2.1R`` | ``8R``, or ``10R`` when ``R \ge 20`` and ``φ_l \ge 0.2``, truncated (the rule of the authors' code) |
 # | Nucleus track | the nucleus center of mass | the same, in ``x`` and ``y`` |
 #

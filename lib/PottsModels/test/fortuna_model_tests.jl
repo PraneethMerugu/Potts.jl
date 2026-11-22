@@ -3,8 +3,9 @@
 # has its own file, fortuna_field_tests.jl.
 # - build: the lattice rule, the compiled model and its copy-blocked twin;
 # - Table 1: the parameters and the contact matrix (J_cytoplasm–lamellipodium = 20);
-# - the start: the concentric balls of the supplement, sized to the cytoplasm target plus
-#   the 216 nucleus sites, for the twelve (R, φ_l) of the paper;
+# - the start: the concentric balls of the supplement, the outer one of radius R and the
+#   nucleus of 216 sites, for the twelve (R, φ_l) of the paper; the volumes relax to the
+#   targets;
 # - the protrusion pass equals a counter-addressed draw oracle; p > 1, V₃ ≥ φ_l V and the
 #   φ_l = 0 NaN path; the field step comes before the protrusion pass;
 # - the drive is λ_F (F(target) − F(source)) on lamellipodium extensions into the medium
@@ -20,7 +21,7 @@ include(joinpath(@__DIR__, "shared", "fortuna.jl"))
 using PottsModels.Analysis: unwrap_track
 
 const R10 = fortuna_lattice(10, 0.05)                 # (80, 80, 21)
-default_op(sys = model_sys(R10)) = fortuna_layout(10, 0.05, sys)
+default_op(sys = model_sys(R10)) = fortuna_layout(10, sys)
 default_problem(; kw...) = fortuna_problem(model_sys(R10), default_op(), 10, 0.05; kw...)
 
 # the default run, seed 1, 500 MCS saved every 50: shared by the run items
@@ -32,14 +33,13 @@ function default_run()
     end
 end
 
-# The start by hand: the strict balls of radius r₀ (cytoplasm) and r_n (nucleus) around
-# (L/2 + 1, L/2 + 1, L_z/2 + 1)
-start_radius(R, φ_l) = cbrt(((1 - 0.15 - φ_l) * ball_volume(R) + 216) / (4π / 3))
+# The start by hand: the strict ball of radius r around (L/2 + 1, L/2 + 1, L_z/2 + 1),
+# without the planes z = 1 and z = L_z
 function oracle_ball(R, φ_l, r)
     L, _, Lz = fortuna_lattice(R, φ_l)
     c = (L / 2 + 1, L / 2 + 1, Lz / 2 + 1)
     return Set(
-        (x, y, z) for x in 1:L, y in 1:L, z in 1:Lz
+        (x, y, z) for x in 1:L, y in 1:L, z in 2:(Lz - 1)
             if sqrt((x - c[1])^2 + (y - c[2])^2 + (z - c[3])^2) < r * (1 - 1.0e-12)
     )
 end
@@ -98,19 +98,14 @@ end
     @testset "R = $R, φ_l = $φ_l" for (R, φ_l) in START
         dims = fortuna_lattice(R, φ_l)
         L, _, Lz = dims
-        ball = oracle_ball(R, φ_l, start_radius(R, φ_l))
+        ball = oracle_ball(R, φ_l, Float64(R))
         nucleus = oracle_ball(R, φ_l, cbrt(216 / (4π / 3)))
         @test nucleus ⊆ ball && 200 <= length(nucleus) <= 216
-        ncyto = length(ball) - length(nucleus)
-        # sized to the target: within the protocol's 2 % volume band (the lattice count of
-        # a ball off the site grid differs from its volume by up to about 1.7 % here)
-        tcyto = (1 - 0.15 - φ_l) * ball_volume(R)
-        @test abs(ncyto - tcyto) < 0.02 * tcyto
-        # the ball sits between the planes without touching either
-        @test 2 < minimum(x[3] for x in ball) && maximum(x[3] for x in ball) < Lz
+        # the outer ball holds the whole cell volume, less what the planes cut off
+        @test 0.9 * ball_volume(R) < length(ball) < 1.02 * ball_volume(R)
         # the layout against the oracle
         sys = FortunaMigration(; name = :fortuna, lattice = dims)
-        op = fortuna_layout(R, φ_l, sys)
+        op = fortuna_layout(R, sys)
         σ = entry(op, ownership)
         @test size(σ) == dims
         @test entry(op, kind) == [:cytoplasm, :nucleus, :substrate, :lid]
@@ -119,14 +114,15 @@ end
         @test Set(Tuple.(findall(==(2), σ))) == nucleus
         @test all(==(3), view(σ, :, :, 1)) && all(==(4), view(σ, :, :, Lz))
         @test count(==(0), σ) == prod(dims) - length(ball) - 2 * L^2
-        # concentric: both centroids sit on the center
+        # concentric: both centroids sit on the center in x and y; the lid can cut the
+        # top of the outer ball, so only the nucleus sits on the center in z too
         c = (L / 2 + 1, L / 2 + 1, Lz / 2 + 1)
-        @test all(isapprox.(oracle_centroid(σ, (1,)), c; atol = 1.0e-9))
+        @test all(isapprox.(oracle_centroid(σ, (1,))[1:2], c[1:2]; atol = 1.0e-9))
         @test all(isapprox.(oracle_centroid(σ, (2,)), c; atol = 1.0e-9))
     end
-    # negative control: a ball of radius R (the authors' code) is far above the cytoplasm
-    # target at R = 10
-    @test length(oracle_ball(10, 0.05, 10.0)) - 216 - 0.8 * ball_volume(10) > 500
+    # one layer above the substrate at R = 20; the ball reaches z = 2 at R = 10 and 15
+    @test minimum(x[3] for x in oracle_ball(20, 0.05, 20.0)) == 3
+    @test minimum(x[3] for x in oracle_ball(10, 0.05, 10.0)) == 2
     # the problem: targets from the kinds, no lamellipodium yet
     u0 = default_problem().u0
     @test volumes(u0)[2:4] == [216, 6400, 6400]
@@ -142,9 +138,10 @@ end
 ] tags = [:pottsmodels, :core] begin
     sys = twin_sys(R10)
     op = resting_op(sys, 10, 0.05)
-    # the shipped start has no candidate: the ball does not touch the substrate
+    # at R = 10 the shipped start reaches z = 2: its candidates are the ball sites there
     shipped = fortuna_problem(sys, default_op(sys), 10, 0.05).u0
-    @test isempty(oracle_pass(shipped, 0, 1; c = 0.1, φ_l = 0.05, R = 10)[2])
+    shipped_cand = oracle_pass(shipped, 0, 1; c = 0.1, φ_l = 0.05, R = 10)[2]
+    @test length(shipped_cand) == count(x -> x[3] == 2, oracle_ball(10, 0.05, 10.0)) > 0
     for seed in 1:4
         prob = fortuna_problem(sys, op, 10, 0.05; tspan = (0, 4), seed)
         sol = solve(prob, SequentialCPM(); saveat = 1)
@@ -290,10 +287,16 @@ end
     @test v == [count(==(c), σ) for c in eachindex(v)]
     @test v[3] == v[4] == 6400
     @test length(alive(u, CYTOPLASM)) == 1 && length(alive(u, NUCLEUS)) == 1
-    # volumes near their targets after 500 MCS (within 10 %)
-    @test all(c -> abs(v[c] / u.cell.V_target[c] - 1) < 0.1, (1, 2))
-    # the derived ΔH against the brute-force energy difference
-    @test selfcheck(prob; n = 100) < 1.0e-9
+    # the start volumes are off their targets (the outer ball holds the whole cell
+    # volume); the volumes relax to the targets and stay within 3 % from MCS 100 on
+    # (probes at R = 10 and 15: within 0.3 % for the cytoplasm, 2.3 % for the nucleus)
+    off(w, c) = abs(volumes(w)[c] / w.cell.V_target[c] - 1)
+    @test off(sol.u[1], 1) > 0.1 && off(sol.u[1], 2) > 0.5
+    @test all(w -> off(w, 1) < 0.03 && off(w, 2) < 0.03, sol.u[3:end])
+    # the derived ΔH against the brute-force energy difference, up to the rounding of two
+    # total energies: the start is off the volume targets, so its volume energy is about
+    # 5 × 10⁶, and 1 ulp there is about 10⁻⁹
+    @test selfcheck(prob; n = 100) < 1.0e-8
     # the same seed gives the same run; another seed another
     long = remake(prob; tspan = (0, 300))
     b = solve(long, SequentialCPM(); save_everystep = false).u[end]

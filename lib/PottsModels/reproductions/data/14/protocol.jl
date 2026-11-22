@@ -310,7 +310,7 @@ system(R, φ) = get!(
     () -> FortunaMigration(; name = :fortuna, lattice = dims(R, φ)), SYSTEMS, dims(R, φ)
 )
 # build `sys` and `layout` on the calling task (the cache is a plain Dict)
-function problem(R, φ, λ; c = 0.1, seed, T, sys = system(R, φ), layout = fortuna_layout(R, φ, sys))
+function problem(R, φ, λ; c = 0.1, seed, T, sys = system(R, φ), layout = fortuna_layout(R, sys))
     op = [layout; :R => Float64(R); :φ_l => Float64(φ); :λ_F => Float64(λ); :c => Float64(c)]
     return PottsProblem(sys, op, (0, T); seed, field_solver = ExplicitEuler(substeps = 1))
 end
@@ -377,7 +377,7 @@ function threaded_map(f, xs)
 end
 function qruns(R, φ, λ, c, block; T = 20_000, n = 3)
     sys = system(R, φ)
-    layout = fortuna_layout(R, φ, sys)
+    layout = fortuna_layout(R, sys)
     return threaded_map(
         k -> record(problem(R, φ, λ; c, seed = qseed(block, k), T, sys, layout); T, every = 10),
         1:n
