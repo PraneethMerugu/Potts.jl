@@ -130,7 +130,7 @@ end
     @test_throws ArgumentError optimal_interval(1.0)
 end
 
-@testitem "Fortuna polarization analysis: Δτ_opt from tracks on the paper's sampling" setup = [
+@testitem "Fortuna polarization analysis: Δτ_opt from tracks, paper's sampling" setup = [
     FortunaPolarizationSetup,
 ] tags = [:pottsmodels, :core] begin
     # Table 2's R = 15, φ = 0.10, λ_F = 150: S = 9.68e-3, P = 6878 MCS, D = 2.83e-4. Ten
@@ -168,7 +168,8 @@ end
 ] tags = [:pottsmodels, :core] begin
     # Π = (2, 0); the steps alternate at +θ₀ and −θ₀ with speeds 1 and 3
     θ0 = π / 6
-    steps = [isodd(k) ? 1.0 .* (cos(θ0), sin(θ0)) : 3.0 .* (cos(θ0), -sin(θ0)) for k in 1:10]
+    up, down = (cos(θ0), sin(θ0)), 3.0 .* (cos(θ0), -sin(θ0))
+    steps = [isodd(k) ? up : down for k in 1:10]
     tr = accumulate((x, d) -> x .+ d, steps; init = (0.0, 0.0))
     tr = [(0.0, 0.0); tr]
     Π = fill((2.0, 0.0), 11)
@@ -199,7 +200,7 @@ end
     @test_throws ArgumentError mean_velocity([(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)], 1)
 end
 
-@testitem "Fortuna polarization analysis: the anisotropic model against quadrature" setup = [
+@testitem "Fortuna polarization analysis: the anisotropic model and quadrature" setup = [
     FortunaPolarizationSetup,
 ] tags = [:pottsmodels, :core] begin
     v, Dp, p = 0.01, 0.005, 3.0

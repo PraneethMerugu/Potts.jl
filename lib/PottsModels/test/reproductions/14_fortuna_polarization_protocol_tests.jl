@@ -6,8 +6,8 @@
 # - the whole analysis of one set on tracks with a known modified Fürth MSD whose
 #   polarization is the direction of the persistent velocity: the fitted Δτ_opt is within
 #   the band of the true one, ξ peaks within ×2 of Δτ_opt (Fig 4), u_∥ converges and u
-#   diverges as δ → 0 (Figs 3B, 7D); negative control: a polarization that ignores the motion
-#   has ξ ≈ 0 and u_∥ ≈ 0;
+#   diverges as δ → 0 (Figs 3B, 7D); negative control: a polarization that ignores the
+#   motion has ξ ≈ 0 and u_∥ ≈ 0;
 # - the verdict rules on hand rows, with controls that break each rule.
 
 @testsetup module FortunaPolarizationProtocolSetup
@@ -22,10 +22,13 @@ const P14 = FortunaProtocol
 
 # One recorded run (the columns `stationary` reads) of a modified Fürth walk, every MCS:
 # AR(1) velocity plus Brownian increments of D_fast = DS/(1 − S), in units of R; the
-# polarization is `pol` sites along the velocity (`mode = :velocity`) or along a fresh random
-# direction each MCS (`mode = :random`), and the lamellipodium leads the nucleus by `lead`.
-function synthetic_run(rng; S, D, P, R = 15, L = 120, n = 100_001, pol = 2.0, lead = 5.0,
-        mode = :velocity)
+# polarization is `pol` sites along the velocity (`mode = :velocity`) or along a fresh
+# random direction each MCS (`mode = :random`), and the lamellipodium leads the nucleus by
+# `lead`.
+function synthetic_run(
+        rng; S, D, P, R = 15, L = 120, n = 100_001, pol = 2.0, lead = 5.0,
+        mode = :velocity
+    )
     a, sv, sb = exp(-1 / P), sqrt(D / (2P)), sqrt(D * S / (1 - S))
     v, x = (sv * randn(rng), sv * randn(rng)), (60.0 / R, 60.0 / R)
     rec = (
@@ -50,11 +53,14 @@ end
 ] tags = [:pottsmodels, :reproductions] begin
     S = PP.SETS
     @test length(S) == 36 && allunique(S) && first(S)[1] == 15
-    @test Set(s[1] for s in S) == Set((10, 15, 20)) && Set(s[3] for s in S) == Set((150, 175, 200))
+    @test Set(s[1] for s in S) == Set((10, 15, 20))
+    @test Set(s[3] for s in S) == Set((150, 175, 200))
     seeds = [PP.seed(i, k) for i in eachindex(S) for k in 1:PP.REPS]
     @test allunique(seeds) && all(<(typemax(Int32)), seeds)
     # disjoint from the seeds of the Fortuna reproduction
-    old = [P14.seed(i, k) for i in eachindex(P14.SETS) for k in 1:P14.replicates(P14.SETS[i])]
+    old = [
+        P14.seed(i, k) for i in eachindex(P14.SETS) for k in 1:P14.replicates(P14.SETS[i])
+    ]
     @test isempty(intersect(seeds, old))
     @test keys(PP.PAPER_DTAU) ⊆ S && PP.CLOUD_SETS ⊆ S
     @test (PP.TMAX, PP.WARMUP, PP.EVERY, PP.REPS) == (100_000, 1000, 1, 10)
@@ -97,7 +103,9 @@ end
     # Table 2's R = 15, φ = 0.10, λ_F = 150: S = 9.68e-3, P = 6878 MCS, D = 2.83e-4 R²/MCS
     S, P, D = 9.68e-3, 6878.0, 2.83e-4
     truth = PP.A.optimal_interval(S).Δτ
-    runs = [PP.stationary(synthetic_run(StableRNG(100 + k); S, D, P), 15, 120) for k in 1:10]
+    runs = [
+        PP.stationary(synthetic_run(StableRNG(100 + k); S, D, P), 15, 120) for k in 1:10
+    ]
     a = PP.analyze_set(runs)
     r = a.row
     @test r.resolved && r.n == 10
@@ -133,8 +141,10 @@ end
         )
     end
     curve(dtau) = [
-        (; lag = l, delta = l * 1.0e-4, u = 10 / sqrt(l), upar = 1.0,
-            xi_CN_N = -abs(log(l * 1.0e-4 / dtau)), xi_L_CN = 0.0, xi_L_N = 0.0)
+        (;
+            lag = l, delta = l * 1.0e-4, u = 10 / sqrt(l), upar = 1.0,
+            xi_CN_N = -abs(log(l * 1.0e-4 / dtau)), xi_L_CN = 0.0, xi_L_N = 0.0,
+        )
             for l in PP.DELTA_LAGS
     ]
     sets = [s for s in PP.SETS if s[1] == 15]
@@ -157,7 +167,8 @@ end
         rows[(15, 0.05, λ)] = merge(rows[(15, 0.05, λ)], (; u = 0.0, sigma = 1.0))
     end
     cs = curves[(15, 0.2, 175)]
-    curves[(15, 0.2, 175)] = [c.lag == 1 ? merge(c, (; upar = 1.2, u = 0.1)) : c for c in cs]
+    broken(c) = c.lag == 1 ? merge(c, (; upar = 1.2, u = 0.1)) : c
+    curves[(15, 0.2, 175)] = broken.(cs)
     W = Dict(v.id => v for v in PP.verdicts(rows, curves))
     @test !W["dtau/R15/φ0.1/λ200"].ok && W["dtau/R15/φ0.3/λ150"].ok
     @test !W["xi_peak/R15/φ0.1/λ200"].ok

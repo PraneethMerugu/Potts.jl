@@ -375,7 +375,8 @@ end
         # the oracle cube: 6 sites on each axis, x − 3:x + 2 around the integer center in
         # x and y, and R − 1:R + 4 around R + 3/2 in z
         m = L ÷ 2 + 1
-        cube = Set((x, y, z) for x in (m - 3):(m + 2), y in (m - 3):(m + 2), z in (R - 1):(R + 4))
+        xy = (m - 3):(m + 2)
+        cube = Set((x, y, z) for x in xy, y in xy, z in (R - 1):(R + 4))
         ball = oracle_ball(R, φ_l, Float64(R))
         @test length(cube) == 216 && cube ⊆ ball
         @test Set(Tuple.(findall(==(2), σ))) == cube
@@ -394,13 +395,15 @@ end
         entry(fortuna_layout(10, sys; nucleus = :cube), ownership)
 end
 
-@testitem "FortunaMigration: the all-lamellipodium source drives every lamellipodium site" setup = [
+@testitem "FortunaMigration: the all-lamellipodium source drives every such site" setup = [
     FortunaModelSetup,
 ] tags = [:pottsmodels, :core] begin
     # the hand lamellipodium has sites at z = 2 (on the substrate) and z = 3 (not). After
     # 3 MCS without protrusion, F ≥ 0.9 at both layers with the source of Thomas et al.
     # (2022) (0.9 on a site the last sweep gained), and only at z = 2 with the default
-    sys14b = FortunaMigration(; name = :f, lattice = R10, factin_source = :all_lamellipodium)
+    sys14b = FortunaMigration(;
+        name = :f, lattice = R10, factin_source = :all_lamellipodium,
+    )
     op = hand_op(resting_op(sys14b, 10, 0.05))
     prob = fortuna_problem(sys14b, op, 10, 0.05; p = (:c => 0.0,))
     u = solve(remake(prob; tspan = (0, 3)), SequentialCPM()).u[end]

@@ -199,8 +199,10 @@ function analyze_set(runs)
     at = Dict(β => (ok ? stats(Π(β), ρ, lag, dt) : NAN_STATS) for β in BETAS)
     curves = map(filter(<(n), DELTA_LAGS)) do l
         s = Dict(β => stats(Π(β), ρ, l, dt) for β in BETAS)
-        (; lag = l, delta = l * dt, u = s[:CN_N].u, upar = s[:CN_N].u_parallel,
-            xi_CN_N = s[:CN_N].ξ, xi_L_CN = s[:L_CN].ξ, xi_L_N = s[:L_N].ξ)
+        (;
+            lag = l, delta = l * dt, u = s[:CN_N].u, upar = s[:CN_N].u_parallel,
+            xi_CN_N = s[:CN_N].ξ, xi_L_CN = s[:L_CN].ξ, xi_L_N = s[:L_N].ξ,
+        )
     end
     # the fit-free estimate (info): the steepest slope of the every-MCS MSD
     ml = filter(<(n), DELTA_LAGS)
@@ -272,17 +274,23 @@ function verdicts(rows, curves)
     if haskey(rows, FIG4_POLARIZED)
         r = rows[FIG4_POLARIZED]
         pk = argmax_delta(curves[FIG4_POLARIZED], :xi_CN_N)
-        add!("xi_peak/" * set_id(FIG4_POLARIZED), :row, pk / r.dtau, "∈ [1/2, 2]",
-            isfinite(pk / r.dtau) && 0.5 <= pk / r.dtau <= 2)
-        add!("xi_best/" * set_id(FIG4_POLARIZED), :row, r.xi_CN_N - max(r.xi_L_CN, r.xi_L_N),
-            "> 0", r.xi_CN_N > r.xi_L_CN && r.xi_CN_N > r.xi_L_N)
+        add!(
+            "xi_peak/" * set_id(FIG4_POLARIZED), :row, pk / r.dtau, "∈ [1/2, 2]",
+            isfinite(pk / r.dtau) && 0.5 <= pk / r.dtau <= 2
+        )
+        add!(
+            "xi_best/" * set_id(FIG4_POLARIZED), :row, r.xi_CN_N - max(r.xi_L_CN, r.xi_L_N),
+            "> 0", r.xi_CN_N > r.xi_L_CN && r.xi_CN_N > r.xi_L_N
+        )
     end
     if haskey(rows, FIG4_WEAK)
         r = rows[FIG4_WEAK]
         for col in (:xi_CN_N, :xi_L_CN, :xi_L_N)
             pk = argmax_delta(curves[FIG4_WEAK], col)
-            add!("xi_weak/" * set_id(FIG4_WEAK) * "/" * string(col), :info, pk / r.dtau,
-                "info: argmax/Δτ_opt", true)
+            add!(
+                "xi_weak/" * set_id(FIG4_WEAK) * "/" * string(col), :info, pk / r.dtau,
+                "info: argmax/Δτ_opt", true
+            )
         end
     end
     for R in (15, 10, 20), (name, (xc, yc, sg)) in pairs(TRENDS)

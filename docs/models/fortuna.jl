@@ -179,11 +179,14 @@ using PottsModels.Analysis: polarization_statistics, optimal_interval
 track_p = [p ./ R for p in unwrap_track(n_xy, (L, L), true)]
 lags = unique(round.(Int, exp10.(range(0, 3; length = 13))))
 stats = [polarization_statistics(Π, track_p, l) for l in lags]
-optimal_interval(9.68e-3)       # S of Fortuna et al., Table 2: R = 15, φ_l = 0.10, λ_F = 150
+# S of Fortuna et al., Table 2, at R = 15, φ_l = 0.10, λ_F = 150
+optimal_interval(9.68e-3)
 
 #-
 fig_p = Figure(size = (720, 300))
-ax = Axis(fig_p[1, 1]; xscale = log10, yscale = log10, xlabel = "δ (MCS)", ylabel = "R / MCS")
+ax = Axis(
+    fig_p[1, 1]; xscale = log10, yscale = log10, xlabel = "δ (MCS)", ylabel = "R / MCS"
+)
 lines!(ax, lags, [s.u for s in stats]; label = "⟨u⟩")
 along = [polarization_statistics(Π, track_p, l; unit = true).u_parallel for l in lags]
 lines!(ax, lags, abs.(along); label = "|⟨Π̂ · u⟩|")

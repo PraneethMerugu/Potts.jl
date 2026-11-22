@@ -140,11 +140,15 @@ See also [`optimal_interval`](@ref), [`mean_squared_displacement`](@ref).
 function max_slope_interval(Δt, m)
     t, y = collect(Float64, Δt), collect(Float64, m)
     length(t) == length(y) ||
-        throw(ArgumentError("max_slope_interval: Δt has $(length(t)) values, m $(length(y))"))
+        throw(
+        ArgumentError("max_slope_interval: Δt has $(length(t)) values, m $(length(y))")
+    )
     length(t) >= 3 ||
         throw(ArgumentError("max_slope_interval: at least 3 points are needed"))
     (t[1] > 0 && all(i -> t[i + 1] > t[i], 1:(length(t) - 1))) ||
-        throw(ArgumentError("max_slope_interval: Δt must be positive and strictly increasing"))
+        throw(
+        ArgumentError("max_slope_interval: Δt must be positive and strictly increasing")
+    )
     all(>(0), y) || throw(ArgumentError("max_slope_interval: m must be positive"))
     s = [
         (log(y[i + 1]) - log(y[i - 1])) / (log(t[i + 1]) - log(t[i - 1]))
@@ -244,7 +248,9 @@ outside `1:(n − 1)`, and for points that are not 2D.
 ```jldoctest
 julia> using PottsModels.Analysis
 
-julia> s = polarization_statistics(fill((1.0, 0.0), 3), [(0.0, 0.0), (1.0, 1.0), (2.0, 0.0)], 1);
+julia> track = [(0.0, 0.0), (1.0, 1.0), (2.0, 0.0)];
+
+julia> s = polarization_statistics(fill((1.0, 0.0), 3), track, 1);
 
 julia> (s.u ≈ √2, s.ξ ≈ 1, s.σθ ≈ π / 4 * √2)
 (true, true, true)
@@ -252,12 +258,16 @@ julia> (s.u ≈ √2, s.ξ ≈ 1, s.σθ ≈ π / 4 * √2)
 
 See also [`mean_velocity`](@ref), [`optimal_interval`](@ref).
 """
-function polarization_statistics(Π, tracks, lag::Integer; dt::Real = 1.0, unit::Bool = false)
+function polarization_statistics(
+        Π, tracks, lag::Integer; dt::Real = 1.0, unit::Bool = false
+    )
     what = "polarization_statistics"
     (isempty(Π) || isempty(tracks)) && throw(ArgumentError("$what: no series"))
     Ps, Ts = _series(Π), _series(tracks)
     length(Ps) == length(Ts) ||
-        throw(ArgumentError("$what: $(length(Ps)) polarization series for $(length(Ts)) tracks"))
+        throw(
+        ArgumentError("$what: $(length(Ps)) polarization series for $(length(Ts)) tracks")
+    )
     speeds, par, signed, unsigned = Float64[], Float64[], Float64[], Float64[]
     for (p, tr) in zip(Ps, Ts)
         P = _points2(p, what)

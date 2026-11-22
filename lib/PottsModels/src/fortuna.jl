@@ -45,8 +45,8 @@ lamellipodium makes where it touches the substrate.
 - **F-actin.** Eq 6: `∂F/∂t = D_F ΔF − k_decay F + k_source` on lamellipodium sites with
   a substrate face neighbor, on the whole lattice. The field is the `PDESystem`
   `FortunaField.factin`, coupled with `@fields`; the site predicate is its input. With
-  `factin_source = :all_lamellipodium` the source covers every lamellipodium site, as Eq 9 of
-  Thomas et al. (2022) prints it.
+  `factin_source = :all_lamellipodium` the source covers every lamellipodium site, as Eq 9
+  of Thomas et al. (2022) prints it.
 - **Drive.** Eq 7 as printed: a copy of a lamellipodium into the medium (an extension)
   adds `λ_F (F(target) − F(source))` to ΔH. With `drive = :extension_retraction` the same
   term also applies to a copy of the medium into a lamellipodium (a retraction), as in the
@@ -267,7 +267,8 @@ function fortuna_lattice(R::Real, φ_l::Real)
 end
 
 """
-    fortuna_layout(R, sys; nucleus = :ball) -> [ownership => σ, kind => kinds, cluster => ids]
+    fortuna_layout(R, sys; nucleus = :ball)
+        -> [ownership => σ, kind => kinds, cluster => ids]
 
 Return the start of [`FortunaMigration`](@ref) on the lattice of `sys`: the paper's two
 concentric balls (supplement S1, p. 6), no lamellipodium, the substrate plane at z = 1 and
@@ -309,7 +310,9 @@ op = [fortuna_layout(10, sys); :R => 10.0; :φ_l => 0.05]
 """
 function fortuna_layout(R::Real, sys; nucleus::Symbol = :ball)
     nucleus in (:ball, :cube) || throw(
-        ArgumentError("fortuna_layout: `nucleus` must be :ball or :cube, got $(repr(nucleus))")
+        ArgumentError(
+            "fortuna_layout: `nucleus` must be :ball or :cube, got $(repr(nucleus))"
+        )
     )
     L, _, Lz = Potts.lattice(sys).dims
     c = (L / 2 + 1, L / 2 + 1, R + 1.5)                    # resting on the substrate
