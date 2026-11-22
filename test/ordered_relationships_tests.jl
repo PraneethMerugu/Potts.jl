@@ -51,7 +51,9 @@ function inverse_radius(lat, p, q, n)
     return a * b * c == 0 ? 0.0 : 4K / (a * b * c)
 end
 # Σ ξ κ² over the chain's triples with three alive members; `cent(c)` gives the centroids
-function curvature_energy(u, lat, ξ; cent = c -> CorePotts.centroid(Float64, u.cell, lat, c))
+function curvature_energy(
+        u, lat, ξ; cent = c -> CorePotts.centroid(Float64, u.cell, lat, c)
+    )
     L = u.cell.links__chain
     H = 0.0
     for q in axes(L, 2)
@@ -90,7 +92,10 @@ function after(prob, u, prop)
     return a
 end
 # whether the copy changes a triple: `old` or `new` in a chain of three or more
-in_triple(u, c) = c != 0 && (u.cell.links__chain[1, c] != 0 || u.cell.links__chain[2, c] != 0)
+function in_triple(u, c)
+    L = u.cell.links__chain
+    return c != 0 && (L[1, c] != 0 || L[2, c] != 0)
+end
 
 export zigzag, ZIGZAG_LINKS, ctx_of, inverse_radius, curvature_energy, copies, after,
     in_triple
@@ -253,7 +258,9 @@ end
             dκ = dH - energy_change(flat, u, prop)
             worst_oracle = max(
                 worst_oracle,
-                abs(dκ - (curvature_energy(a, lat, 300.0) - curvature_energy(u, lat, 300.0)))
+                abs(
+                    dκ - (curvature_energy(a, lat, 300.0) - curvature_energy(u, lat, 300.0))
+                )
             )
             # negative control: an oracle that ignores the shift of `new`'s centroid
             if in_triple(u, prop.new) && (prop.old == 0 || a.cell.volume[prop.old] > 0)
@@ -354,7 +361,8 @@ end
         )
     end
     # the parallel solvers are refused with an error naming the sequential solver
-    prob = PottsProblem(Bent(; name = :b), [ownership => σ, :chain => [(1, 2), (2, 3)]], (0, 1))
+    op = [ownership => σ, :chain => [(1, 2), (2, 3)]]
+    prob = PottsProblem(Bent(; name = :b), op, (0, 1))
     @test_throws "SequentialCPM()" solve(prob, CheckerboardCPM())
     @test solve(prob, SequentialCPM()).retcode == Potts.SciMLBase.ReturnCode.Success
 end

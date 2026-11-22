@@ -988,7 +988,8 @@ function _triple_geometry(::Type{T}, cell, l, p, q, n) where {T}
     cq = CorePotts.centroid(T, cell, l, q)
     cn = CorePotts.centroid(T, cell, l, n)
     return (
-        CorePotts.pivot_angle(T, l, cp, cq, cn), CorePotts.menger_curvature(T, l, cp, cq, cn),
+        CorePotts.pivot_angle(T, l, cp, cq, cn),
+        CorePotts.menger_curvature(T, l, cp, cq, cn),
     )
 end
 
