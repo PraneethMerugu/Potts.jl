@@ -362,3 +362,94 @@ end
     @test observe(pd, :lam_cyto)[1] == 0 == oracle_lam_cyto(σd, 5, 1)
     @test oracle_lam_cyto(σ0, 5, 1) > 0                 # control: attached
 end
+
+@testitem "FortunaMigration: the cube-nucleus start of Thomas et al. (2022)" setup = [
+    FortunaModelSetup,
+] tags = [:pottsmodels, :core] begin
+    @testset "R = $R, φ_l = $φ_l" for (R, φ_l) in START
+        dims = fortuna_lattice(R, φ_l)
+        L = dims[1]
+        sys = FortunaMigration(; name = :fortuna, lattice = dims)
+        op = fortuna_layout(R, sys; nucleus = :cube)
+        σ = entry(op, ownership)
+        # the oracle cube: 6 sites on each axis, x − 3:x + 2 around the integer center in
+        # x and y, and R − 1:R + 4 around R + 3/2 in z
+        m = L ÷ 2 + 1
+        xy = (m - 3):(m + 2)
+        cube = Set((x, y, z) for x in xy, y in xy, z in (R - 1):(R + 4))
+        ball = oracle_ball(R, φ_l, Float64(R))
+        @test length(cube) == 216 && cube ⊆ ball
+        @test Set(Tuple.(findall(==(2), σ))) == cube
+        @test Set(Tuple.(findall(==(1), σ))) == setdiff(ball, cube)
+        @test entry(op, kind) == [:cytoplasm, :nucleus, :substrate, :lid]
+        # the cube sits half a site off the ball's center in x and y: Π_CN−N = (1/2, 1/2)
+        @test all(isapprox.(oracle_polarization(σ, 1, 2), (0.5, 0.5); atol = 1.0e-9))
+    end
+    sys = model_sys(R10)
+    prob = fortuna_problem(sys, fortuna_layout(10, sys; nucleus = :cube), 10, 0.05)
+    @test observe(prob, :Πx)[1] ≈ 0.5 && observe(prob, :Πy)[1] ≈ 0.5
+    @test_throws ArgumentError fortuna_layout(10, sys; nucleus = :sphere)
+    # control: the default start is the concentric ball
+    @test count(==(2), entry(fortuna_layout(10, sys), ownership)) == 216
+    @test entry(fortuna_layout(10, sys), ownership) !=
+        entry(fortuna_layout(10, sys; nucleus = :cube), ownership)
+end
+
+@testitem "FortunaMigration: the all-lamellipodium source drives every such site" setup = [
+    FortunaModelSetup,
+] tags = [:pottsmodels, :core] begin
+    # the hand lamellipodium has sites at z = 2 (on the substrate) and z = 3 (not). After
+    # 3 MCS without protrusion, F ≥ 0.9 at both layers with the source of Thomas et al.
+    # (2022) (0.9 on a site the last sweep gained), and only at z = 2 with the default
+    sys14b = FortunaMigration(;
+        name = :f, lattice = R10, factin_source = :all_lamellipodium,
+    )
+    op = hand_op(resting_op(sys14b, 10, 0.05))
+    prob = fortuna_problem(sys14b, op, 10, 0.05; p = (:c => 0.0,))
+    u = solve(remake(prob; tspan = (0, 3)), SequentialCPM()).u[end]
+    F = observe(prob, :F, u)
+    kd = cell_kinds(u)
+    σ = Array(ownership(u))
+    lam(c) = c != 0 && kd[c] == LAMELLIPODIUM
+    upper = [I for I in CartesianIndices(σ) if lam(σ[I]) && I[3] == 3]
+    @test !isempty(upper) && all(I -> F[I] > 0.85, upper)
+    # extensions from z = 3 sites into the medium get the drive λ_F (F(target) − F(source))
+    props = boundary_proposals(prob, u)
+    up_ext = filter(
+        p -> lam(p.new) && p.old == 0 && CartesianIndices(σ)[p.source][3] == 3 &&
+            F[p.source] - F[p.target] > 0.5, props
+    )
+    @test !isempty(up_ext)
+    @test all(p -> drive(prob, u, p) ≈ 150.0 * (F[p.target] - F[p.source]), up_ext)
+    @test all(p -> drive(prob, u, p) < -75, up_ext)
+    # control: the default model on the same state leaves z = 3 without F, so the same
+    # copies get almost no drive
+    def = fortuna_problem(model_sys(R10), op, 10, 0.05; p = (:c => 0.0,))
+    ud = solve(remake(def; tspan = (0, 3)), SequentialCPM()).u[end]
+    Fd = observe(def, :F, ud)
+    upper_d = [I for I in CartesianIndices(σ) if lam(Array(ownership(ud))[I]) && I[3] == 3]
+    @test !isempty(upper_d) && all(I -> Fd[I] < 1.0e-3, upper_d)
+end
+
+@testitem "FortunaMigration: a short run of the Thomas et al. (2022) variant" setup = [
+    FortunaModelSetup,
+] tags = [:pottsmodels, :core] begin
+    sys = FortunaMigration(; name = :f, lattice = R10, factin_source = :all_lamellipodium)
+    prob = fortuna_problem(
+        sys, fortuna_layout(10, sys; nucleus = :cube), 10, 0.05; tspan = (0, 200)
+    )
+    sol = solve(prob, SequentialCPM(); saveat = 50)
+    @test Symbol(sol.retcode) === :Success
+    u = sol.u[end]
+    @test length(alive(u, LAMELLIPODIUM)) == 1 && observe(prob, :lam_births, u)[1] >= 1
+    σ = Array(ownership(u))
+    v = volumes(u)
+    @test v == [count(==(c), σ) for c in eachindex(v)]
+    # every lamellipodium site is a source: F is near 1 on them after 200 MCS, except on
+    # sites the last protrusion pass converted (after the field step)
+    F = observe(prob, :F, u)
+    on = F[σ .== only(alive(u, LAMELLIPODIUM))]
+    @test count(>(0.8), on) >= 0.9 * length(on)
+    @test count(>(0.8), F[σ .== 1]) == 0              # control: no cytoplasm source
+    @test selfcheck(prob; n = 100) < 1.0e-8
+end

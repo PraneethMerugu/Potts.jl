@@ -23,6 +23,9 @@ profiles after a simulation, never inside a Monte Carlo step.
   [`mean_squared_displacement`](@ref), the modified Fürth model
   [`furth_mean_squared_displacement`](@ref), its fits [`furth_fit`](@ref) and
   [`natural_units`](@ref).
+- Polarization (Thomas et al. 2022): the MSD slope [`furth_exponent`](@ref), its maximum
+  [`optimal_interval`](@ref), the fit-free [`max_slope_interval`](@ref),
+  [`mean_velocity`](@ref) and [`polarization_statistics`](@ref) (ξ, ε, σθ, u_∥).
 
 Indices are 1-based throughout; cell numbers are the values of σ (0 is the medium).
 """
@@ -43,6 +46,8 @@ export stored_energy, side_counts, contact_changes, t1_events, topology_distribu
     topology_moments, power_spectrum, spectral_exponent, mean_t1, yield_strain
 export unwrap_track, mean_squared_displacement, furth_mean_squared_displacement, furth_fit,
     natural_units
+export furth_exponent, optimal_interval, max_slope_interval, mean_velocity,
+    polarization_statistics
 
 include("peaks.jl")
 include("profiles.jl")
@@ -52,5 +57,6 @@ include("concave_hull.jl")
 include("edges.jl")
 include("foam.jl")
 include("motility.jl")
+include("polarization.jl")
 
 end

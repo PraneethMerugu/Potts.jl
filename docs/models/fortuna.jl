@@ -16,6 +16,11 @@
 #   Glazier and R. M. C. de Almeida, "CompuCell3D Simulations Reproduce Mesenchymal Cell
 #   Migration on Flat Substrates", *Biophys. J.* **118**, 2801–2815 (2020),
 #   doi:[10.1016/j.bpj.2020.04.024](https://doi.org/10.1016/j.bpj.2020.04.024).
+# - G. L. Thomas, I. Fortuna, G. C. Perrone, F. Graner and R. M. C. de Almeida,
+#   "Shape–velocity correlation defines polarization in migrating cell simulations",
+#   *Physica A* **587**, 126511 (2022),
+#   doi:[10.1016/j.physa.2021.126511](https://doi.org/10.1016/j.physa.2021.126511). The
+#   [polarization study](@ref fortuna-polarization) below.
 #
 # ## Running it
 #
@@ -129,6 +134,108 @@ fig
 # fortuna_lattice
 # fortuna_layout
 # ```
+#
+# ```@raw html
+# </details>
+# ```
+
+#
+# ## [The polarization study](@id fortuna-polarization)
+#
+# Thomas et al. (2022) ask which polarization vector of the same model best predicts where
+# the cell moves next. Their choice is ``Π_{CN-N}``, from the nucleus to the center of mass
+# of cytoplasm and nucleus together (the `Πx`, `Πy` observables). Their variant puts the
+# F-actin source on every lamellipodium site and starts from a cubic nucleus. Both are
+# options of the same model:
+
+sys_p = FortunaMigration(;
+    name = :fortuna, lattice = fortuna_lattice(R, φ_l), factin_source = :all_lamellipodium,
+)
+op_p = [fortuna_layout(R, sys_p; nucleus = :cube); :R => Float64(R); :φ_l => φ_l]
+prob_p = PottsProblem(
+    sys_p, op_p, (0, 4000); seed = 2, field_solver = ExplicitEuler(substeps = 1)
+)
+integ = init(prob_p, SequentialCPM(); save_everystep = false)
+obs(name) = observe(prob_p, name, integ.u)[1]
+n_xy, Π = NTuple{2, Float64}[], NTuple{2, Float64}[]
+for t in 1:4000
+    step!(integ)
+    t > 1000 || continue                  # the paper's 1000-MCS warm-up
+    push!(n_xy, (obs(:nx), obs(:ny)))
+    push!(Π, (obs(:Πx), obs(:Πy)) ./ R)
+end
+nothing #hide
+
+# The interval matters. Over a short interval the lattice noise hides the motion and the
+# mean speed ``⟨u⟩_δ`` diverges as ``δ → 0``. The speed along the polarization,
+# ``⟨u_∥⟩_δ = ⟨Π \cdot u⟩``, stays finite (Thomas et al., Figs. 3B and 7D).
+# `polarization_statistics` gives both, and the correlation index ``ξ`` (Eq. 14), for one
+# interval. The paper's interval is ``Δτ_\text{opt}``, where the slope of the modified
+# Fürth MSD is steepest (Eq. 12): `optimal_interval(S)` returns it in units of the
+# persistence time ``P``. This run is short and in lattice units, so the plot only shows
+# the shape; it plots ``Π̂ \cdot u`` (`unit = true`) so that both curves are speeds.
+
+using PottsModels.Analysis: polarization_statistics
+track_p = [p ./ R for p in unwrap_track(n_xy, (L, L), true)]
+lags = unique(round.(Int, exp10.(range(0, 3; length = 13))))
+stats = [polarization_statistics(Π, track_p, l) for l in lags]
+nothing #hide
+
+#-
+fig_p = Figure(size = (720, 300))
+ax = Axis(
+    fig_p[1, 1]; xscale = log10, yscale = log10, xlabel = "δ (MCS)", ylabel = "R / MCS"
+)
+lines!(ax, lags, [s.u for s in stats]; label = "⟨u⟩")
+along = [polarization_statistics(Π, track_p, l; unit = true).u_parallel for l in lags]
+lines!(ax, lags, abs.(along); label = "|⟨Π̂ · u⟩|")
+axislegend(ax; position = :lb)
+lines(
+    fig_p[1, 2], lags, [s.ξ for s in stats];
+    axis = (; xscale = log10, xlabel = "δ (MCS)", ylabel = "ξ (CN−N)")
+)
+fig_p
+
+# ```@raw html
+# <details><summary>The polarization study: analysis, protocol and differences (click to open)</summary>
+# ```
+#
+# ### Analysis
+#
+# The functions are in `PottsModels.Analysis` and take plain vectors of 2D points.
+# `furth_exponent(Δτ, S)` is the MSD slope ``α`` of Eq. 12, `optimal_interval(S)` its
+# maximum ``(Δτ_\text{opt}, α_\text{opt})``, and `max_slope_interval(Δt, m)` the steepest
+# slope of a measured MSD without a fit. `mean_velocity` is Eq. 13, and
+# `polarization_statistics` gives ``⟨u⟩``, ``ε`` (Eq. 15), ``ξ`` (Eq. 14), ``σ_θ`` and
+# ``⟨u_∥⟩`` (Eq. 16) for one interval, pooled over the replicates. ``Π_{L-N}`` and
+# ``Π_{L-CN} = Π_{L-N} - Π_{CN-N}`` come from the centroid observables `lx`, `ly`, `nx`,
+# `ny` by minimum image.
+#
+# ### Reproduction
+#
+# The protocol is `lib/PottsModels/reproductions/data/14/polarization_protocol.jl`: the 36
+# sets of the paper (``λ_F \in \{150, 175, 200\}``, ``φ_l \in \{0.05, 0.10, 0.20, 0.30\}``,
+# ``R \in \{10, 15, 20\}``), 10 replicates of ``10^5`` MCS each, every MCS recorded, and
+# the bands for Figs. 3–7, fixed before the runs. `run_polarization.jl` makes the tracks
+# and `analyze_polarization.jl` the record. The record and its videos come later. The
+# ``Δτ_\text{opt}`` rows pass within the sampling spread of both fits (a bootstrap over our
+# replicates and the spread of one ideal fit at the set's ``S``), and the ``u_∥`` rows within
+# 10 % or 1.96 replicate standard errors; the record also gives ``u_∥`` on the CN track ``r_N + Π_{CN-N}``.
+#
+# ### Differences from the paper
+#
+# | | Paper | Here |
+# |:--|:--|:--|
+# | F-actin source (Eq. 9) | every lamellipodium site | the same, `factin_source = :all_lamellipodium` (Fortuna et al. and the authors' code restrict it to lamellipodium sites on the substrate, the default) |
+# | Start | a spherical cell resting on the substrate with a cubic nucleus, no lamellipodium; cube size not stated | the outer ball of the model above with a 6³ nucleus cube (`fortuna_layout(R, sys; nucleus = :cube)`), the size of the authors' cube; with ``m = L/2 + 1`` it spans ``m-3{:}m+2`` in ``x`` and ``y`` (half a site off center) and ``R-1{:}R+4`` in ``z``; the authors' code centers it with `range(-3, 3)` on an integer point on all three axes, so ``z`` differs by half a site |
+# | Drive (Eq. 8) | on the lamellipodium–medium boundary, direction not stated | extensions only, as Eq. 7 of Fortuna et al.; `drive = :extension_retraction` adds retractions |
+# | Other parameters | "as in Ref. [9]" | those of the model above, ``c`` included (the reproduction uses the calibrated ``c``) |
+# | Warm-up | 1000 MCS | the same, in the protocol |
+# | Tracked point ``ρ`` | "the cell position", not defined | the nucleus center of mass in ``x`` and ``y``, the point Fortuna et al. fit ``S``, ``P``, ``D`` on |
+# | Natural units | ``τ = t/P``, ``ρ = r/\sqrt{2DP/(1-S)}`` with the fit of each set | the same, with the modified Fürth fit of the Fortuna reproduction |
+# | ``ξ`` (Eq. 14) | ``⟨\cos θ⟩/⟨\sin θ⟩`` | ``θ \in [0, π]`` unsigned, so ``\sin θ \ge 0``; ``σ_θ`` uses the signed angle |
+# | ``u_∥`` (Eq. 16) | ``Π \cdot Δρ/δ`` | the same, not divided by ``\lvert Π \rvert``; `unit = true` divides |
+# | Fig. 5 power laws | fitted over the ``S`` of every simulation of Fortuna et al. | `optimal_interval` matches the ``α_\text{opt}`` law within 1 % at the ``S`` of their Table 2; the ``Δτ_\text{opt}`` law differs by up to 16 % at the smallest ``S``: it is a least-squares fit in linear space over the same ``S``, which weights the large ``Δτ`` (our refit gives ``1.948\,S^{0.4575}``, ``R^2 = 0.9993``); the tests use 3 % for the ``α_\text{opt}`` law and 20 % for the ``Δτ_\text{opt}`` law, while both printed values (0.048, 0.672) agree to 0.001 |
 #
 # ```@raw html
 # </details>

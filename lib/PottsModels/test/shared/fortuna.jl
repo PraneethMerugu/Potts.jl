@@ -15,8 +15,9 @@ ball_volume(R) = 4 / 3 * π * R^3
 @potts_model FortunaBlocked begin
     @structural_parameters begin
         lattice = (80, 80, 21)
+        factin_source = :substrate_contact
     end
-    @extend base = PottsModels.FortunaMigration(; lattice)
+    @extend base = PottsModels.FortunaMigration(; lattice, factin_source)
     @parameters mobile = 0.0
     @constraint mobile > 0.5
 end
@@ -26,8 +27,9 @@ const SYSTEMS = Dict{Any, Any}()
 model_sys(lattice) = get!(
     () -> FortunaMigration(; name = :fortuna, lattice), SYSTEMS, (:model, lattice)
 )
-twin_sys(lattice) = get!(
-    () -> FortunaBlocked(; name = :twin, lattice), SYSTEMS, (:twin, lattice)
+twin_sys(lattice; factin_source = :substrate_contact) = get!(
+    () -> FortunaBlocked(; name = :twin, lattice, factin_source), SYSTEMS,
+    (:twin, lattice, factin_source)
 )
 function fortuna_problem(sys, op, R, φ_l; tspan = (0, 1), seed = 1, p = (), kw...)
     full = [op; :R => Float64(R); :φ_l => Float64(φ_l); collect(p)]
