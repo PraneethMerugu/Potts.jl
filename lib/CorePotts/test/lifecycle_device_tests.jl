@@ -24,7 +24,8 @@ function ld_base_prob()
     st = with_capacity(initial_state(σ, Int32[1]; cell = init_moments(σ, lat, 1)), 3)
     once(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? EVENT_DIVIDE : EVENT_NONE
     f = CPMFunction(
-        gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
+        gg_delta_H; commit! = gg_commit!,
+        temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
         lifecycle = Lifecycle(once)
     )
     prob = PottsProblem(f, st, lat, (0, 4), gg_params())
@@ -37,7 +38,7 @@ function ld_growing_prob()
     lg = Lattice((40, 40))
     stg = with_capacity(initial_state(σg, Int32[1]; cell = init_moments(σg, lg, 1)), 16)
     fg = CPMFunction(
-        gg_delta_H; temperature = gg_temperature,
+        gg_delta_H; commit! = gg_commit!, temperature = gg_temperature,
         lifecycle = Lifecycle(
             (st, p, ctx, key, mcs, c) -> if st.cell.volume[c] >= 60
                 EVENT_DIVIDE
@@ -229,11 +230,13 @@ end
         # a quiet MCS on the CPU costs the trigger kernel only, in both forms
         quiet = Lifecycle((st, p, ctx, key, mcs, c) -> EVENT_NONE)
         fq = CPMFunction(
-            gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+            gg_delta_H; commit! = gg_commit!,
+            temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = quiet
         )
         f0 = CPMFunction(
-            gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics
+            gg_delta_H; commit! = gg_commit!,
+            temperature = gg_temperature, constraint = frozen_dynamics
         )
         n(f, k) = begin
             integ = init(PottsProblem(f, base.st, base.lat, (0, 4), gg_params()), k)
@@ -281,7 +284,8 @@ end
         calls = Int[]
         rebuild!(st, p, ctx, backend) = (push!(calls, count(>(0), st.cell.volume)); nothing)
         fr = CPMFunction(
-            gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+            gg_delta_H; commit! = gg_commit!,
+            temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = Lifecycle(base.once; rebuild!)
         )
         for alg in (SequentialCPM(), CheckerboardCPM())
@@ -313,7 +317,8 @@ end
                 cl = merge(init_moments(σ, lat, 1), empty_links(2, 1))
                 stl = with_capacity(initial_state(σ, Int32[1]; cell = cl), 3)
                 fl = CPMFunction(
-                    gg_delta_H; temperature = gg_temperature, constraint = (
+                    gg_delta_H; commit! = gg_commit!,
+                    temperature = gg_temperature, constraint = (
                         st, p, prop, ctx
                     ) -> false,
                     lifecycle = Lifecycle(once; divide! = link_md!)
@@ -357,7 +362,8 @@ end
                 )
                 sts = with_capacity(initial_state(σs, Int32[1, 1, 1]; cell = cells), 8)
                 fs = CPMFunction(
-                    gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+                    gg_delta_H; commit! = gg_commit!,
+                    temperature = gg_temperature, constraint = frozen_dynamics,
                     lifecycle = Lifecycle(trs)
                 )
                 probs = PottsProblem(fs, sts, latS, (0, 3), gg_params())
@@ -441,7 +447,8 @@ end
         function make(fused, every)
             return PottsProblem(
                 CPMFunction(
-                    gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+                    gg_delta_H; commit! = gg_commit!,
+                    temperature = gg_temperature, constraint = frozen_dynamics,
                     phases = Phases(after_mcs = fused ? () : (CellPhase(tick!),)),
                     lifecycle = Lifecycle(
                         ripe; divide! = restart!, every, before = if fused
@@ -488,6 +495,24 @@ end
         finally
             CorePotts._LAUNCH_FAULT[] = 0
             CorePotts._FORCE_FUSED_LIFECYCLE[] = false
+        end
+    end
+end
+
+@testitem "lifecycle planner: pieces columns equal a recount after events" setup = [
+    CP_lifecycle_device,
+] tags = [:corepotts, :lifecycle_device] begin
+    @testset "cell-scope pieces columns equal a recount after events" begin
+        prob = pieces_lifecycle_problem()
+        u0 = prob.u0
+        for alg in (SequentialCPM(), CheckerboardCPM()), fused in (false, true)
+            run() = solve(prob, alg; saveat = 1)
+            sol = fused ? with_fused(run) : run()
+            @test sol.retcode == ReturnCode.Success
+            @test sol.stats.lifecycle.divisions == 3 && sol.stats.lifecycle.removals == 1
+            @test pieces_match_recount(sol, prob.lattice)
+            # control: the columns changed, so stale columns would fail
+            @test sol.u[end].cell.pieces != u0.cell.pieces
         end
     end
 end

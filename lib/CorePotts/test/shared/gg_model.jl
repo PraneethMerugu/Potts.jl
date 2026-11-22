@@ -15,6 +15,13 @@ function gg_delta_H(st, p, prop, ctx)
 end
 gg_temperature(st, p, prop, ctx) = p.T
 const GG = CPMFunction(gg_delta_H; temperature = gg_temperature)
+# the default commit plus the moment trackers when the state holds them (division planes
+# then pass through exact centroids)
+function gg_commit!(st, p, prop, ctx)
+    commit_volume!(st, p, prop, ctx)
+    haskey(st.cell, :m1) && commit_moments!(st.cell, ctx, prop)
+    return nothing
+end
 function gg_params(T = Float64)
     return (;
         J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 11, 14),

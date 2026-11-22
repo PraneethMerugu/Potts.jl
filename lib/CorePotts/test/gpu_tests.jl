@@ -791,3 +791,18 @@ end
         @test counts() .- before == (0, 1, 16)
     end
 end
+
+@testitem "device: pieces columns equal a recount after lifecycle events" setup = [
+    CP_gpu,
+] tags = [:corepotts, :gpu, :device, :gpu_only] begin
+    @testset "device: pieces columns equal a recount after lifecycle events" begin
+        backend = PottsDevices.device_backend()
+        prob = pieces_lifecycle_problem(; T = Float32)
+        sol = solve(prob, CheckerboardCPM(); backend, saveat = 1)
+        @test sol.retcode == ReturnCode.Success
+        @test sol.stats.lifecycle.divisions == 3 && sol.stats.lifecycle.removals == 1
+        @test pieces_match_recount(sol, prob.lattice)
+        # control: the columns changed, so stale columns would fail
+        @test Array(sol.u[end].cell.pieces) != prob.u0.cell.pieces
+    end
+end

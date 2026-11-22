@@ -172,7 +172,13 @@ end
 Construct the lifecycle of a model: cell division, removal and kind transition.
 
 Potts generates one from `@divide`, `@remove` and `@transition` rules; it can also be
-written by hand. Division requires the moment trackers (`init_moments`).
+written by hand. Division requires the moment trackers (`init_moments`) and a `commit!`
+that keeps them current ([`commit_moments!`](@ref)). The lifecycle updates every built-in
+tracker incrementally and does not recount it from `σ`. A hand-written model whose
+`commit!` does not maintain a tracker that the state holds (the moments above all) uses
+stale values for the whole run: its division planes pass through stale centroids. Potts
+adds `commit_moments!` whenever it adds the moment columns. On a periodic axis a centroid
+is defined only while the cell spans less than half the period.
 
 Both kinds of division can happen in one MCS:
 
@@ -237,12 +243,13 @@ its generation, so cell-addressed random draws never repeat.
   trigger of each cell in one work item; on an MCS that the lifecycle does not check,
   `before` runs as its own launch.
 - `release = nothing`: `release(st, c)`, the reset of a model's cell references. It runs
-  for every cell `c` of an event round before any id is allocated (on a device in the
-  copy stage, before the daughter column copies, while every volume is still the
-  pre-event one). It resets each reference of a live cell `c` whose referent is dead
+  for every cell `c` of an event round in the copy stage: after the plan (ids, planes and
+  normals) and before the daughter column copies, while every volume is still the
+  pre-event one. It resets each reference of a live cell `c` whose referent is dead
   (volume 0) to 0, so no reference points at the cell that reuses the slot, and
   daughters copy the reset value. It writes only cell `c`'s own columns and reads
-  `volume`.
+  `volume`. A `normal` or `cluster_normal` that reads cell references sees them before
+  this reset.
 - `owner_changed = nothing`: `owner_changed(st, i)`, the ownership hook, run at every site
   `i` whose owner the lifecycle changes (a removed cell's sites, a daughter's sites), for
   example to reset site variables declared `clear_on_ownership_change`. It writes only

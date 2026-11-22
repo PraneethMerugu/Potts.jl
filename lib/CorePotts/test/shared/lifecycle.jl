@@ -13,7 +13,10 @@ function run_lifecycle(
         phases = Phases(), backend = CPU()
     )
     st = lc_state(σ, kinds, lat; capacity, cell)
-    f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint, lifecycle, phases)
+    f = CPMFunction(
+        gg_delta_H; commit! = gg_commit!, temperature = gg_temperature, constraint,
+        lifecycle, phases
+    )
     return solve(PottsProblem(f, st, lat, tspan, p), alg; backend)
 end
 
@@ -62,7 +65,9 @@ function fk_problem(
             )...
         )
     end
-    f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = lc, sys)
+    f = CPMFunction(
+        gg_delta_H; commit! = gg_commit!, temperature = gg_temperature, lifecycle = lc, sys
+    )
     return PottsProblem(f, st, lat, tspan, gg_params(T); seed, frozen = fk_mask(st, 2))
 end
 fk_sites(u, c) = Array(u.ownership) .== c
@@ -83,7 +88,9 @@ function fk_domain_problem(; T = Float64)
         (st, p, ctx, key, mcs, c) -> mcs == 2 && c == 1 ? EVENT_DIVIDE : EVENT_NONE;
         normal = AlongMinorAxis{T}()
     )
-    f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = lc)
+    f = CPMFunction(
+        gg_delta_H; commit! = gg_commit!, temperature = gg_temperature, lifecycle = lc
+    )
     return PottsProblem(f, st, lat, (0, 8), gg_params(T))
 end
 
@@ -102,3 +109,44 @@ CorePotts.remake_frozen(s::DeclaredFrozen, prob, u) = fk_mask(u, s.k)
 struct KindsBadReads end
 CorePotts.frozen_kinds(::KindsBadReads) = (Int32(2),)
 CorePotts.frozen_reads(::KindsBadReads) = (:nonexistent,)
+
+# Cell-scope `pieces` columns under the lifecycle (the host stage rebuilds them on every
+# event round). Frozen dynamics, so only the lifecycle changes σ: a U-shaped cell 1 and two
+# blocks divide at MCS 1, 2 and 3, and cell 2 is removed at MCS 5. The columns start as a
+# recount.
+function pieces_lifecycle_problem(; T = Float64)
+    lat = Lattice((30, 30))
+    σ = zeros(Int32, 30, 30)
+    σ[4:13, 4:5] .= 1
+    σ[4:13, 12:13] .= 1
+    σ[12:13, 4:13] .= 1
+    σ[18:25, 4:9] .= 2
+    σ[18:23, 18:27] .= 3
+    cap = 8
+    P, L = recompute_pieces(σ, lat, Val(false), cap)
+    st = lc_state(σ, Int32[1, 1, 1], lat; capacity = cap)
+    st = CPMState(
+        st.ownership, merge(st.cell, (; pieces = P, largest_piece = L)), st.site,
+        st.model, st.history
+    )
+    trigger(st, p, ctx, key, mcs, c) = if mcs == c && c <= 3
+        EVENT_DIVIDE
+    elseif mcs == 5 && c == 2
+        EVENT_REMOVE
+    else
+        EVENT_NONE
+    end
+    lc = Lifecycle(trigger; normal = AlongMajorAxis{T}())
+    f = CPMFunction(
+        gg_delta_H; commit! = gg_commit!, temperature = gg_temperature,
+        constraint = frozen_dynamics, lifecycle = lc
+    )
+    return PottsProblem(f, st, lat, (0, 7), gg_params(T))
+end
+# every saved state's pieces columns equal a recount from its σ
+function pieces_match_recount(sol, lat)
+    return all(sol.u) do u
+        P, L = recompute_pieces(Array(u.ownership), lat, Val(false), length(u.cell.kind))
+        Array(u.cell.pieces) == P && Array(u.cell.largest_piece) == L
+    end
+end

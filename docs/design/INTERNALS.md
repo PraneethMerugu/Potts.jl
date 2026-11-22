@@ -208,8 +208,8 @@ for each MCS:
 
 Event-driven and validate-then-commit:
 
-1. `lifecycle.trigger(st, p, c)` (generated) marks candidate cells; a device counter
-   accumulates the count. All later kernels exit immediately when the count is zero, so
+1. `lifecycle.trigger(st, p, c)` (generated) marks candidate cells and sets the round's
+   event flag. All later kernels exit immediately when the flag is not set, so
    the pipeline costs a few launches on quiet MCS and never synchronizes (D-089). One
    KernelAbstractions planner runs on every backend and algorithm: a device runs the fused
    form (one workgroup) for small problems, else one kernel per stage; the CPU runs the
@@ -222,7 +222,12 @@ Event-driven and validate-then-commit:
    scratch), daughter column copies, `generation += 1`, cluster ids, links, state rules,
    then the trackers of parents, daughters and removed cells, cluster re-rooting and the
    cluster trackers. Statistics stay on the device until a host read point (the CPU
-   folds them after every event round).
+   folds them after every event round). Every tracker is updated incrementally and never
+   recounted from σ, so division needs the moment trackers and a `commit!` that keeps them
+   (`commit_moments!`; Potts adds it with the moment columns). A hand-written model whose
+   `commit!` does not maintain a tracker it holds divides through stale values.
+   `Lifecycle.release` runs in the copy stage, after the plan, so a `normal` that reads
+   cell references sees them before the reset.
 4. Host stage, on event rounds only: the cell-scope `pieces` rebuild, `Lifecycle.rebuild!`
    and a custom `remake_frozen` rule. On a device only a model with such a hook reads the
    event flag (one sync, 4 bytes per checked MCS).
@@ -266,15 +271,16 @@ applied at the boundary.
   - Standard rule: one `_frozen_body!` launch over the sites (frozen when outside the
     domain or the owner's kind is listed) rewrites `frozen` in place and counts, with
     atomics, the change of the mobile count and the number of changed sites (entries 2
-    and 3 of a 3-entry counter). A direct refresh and the host lifecycle path read the
-    counts at once (on the CPU the site list is rebuilt in place when a site changed). On
-    the device lifecycle path a one-item kernel folds each round's change `d` into
-    `mask = [Σ d, Σ d·mcs, refreshes]` (Int64, on the device); the host reads it only at
-    its read points (`_fold_lifecycle!`: `current_state`, so saves, `integ.u` and
-    `checkpoint`; the end of `solve!`; a direct refresh; `reinit!`) and corrects
-    `nmobile` and `stats.attempts` exactly (the MCS `m + 1 … t − 1` after a refresh at
-    MCS `m` ran with the old count). Nothing on the device needs the count
-    (CheckerboardCPM reads only the mask).
+    and 3 of a 3-entry counter). A direct refresh reads the counts at once (on the CPU the
+    site list is rebuilt in place when a site changed). In the lifecycle, a one-item
+    kernel folds each round's change `d` and its changed sites `n` into
+    `mask = [Σ d, Σ d·mcs, refreshes, Σ n]` (Int64). The host reads it at its read points
+    (`_fold_lifecycle!`: `current_state`, so saves, `integ.u` and `checkpoint`; the end of
+    `solve!`; a direct refresh; `reinit!`), and on the CPU also after every event round
+    (`now = t + 1`, so the attempts correction is zero). It corrects `nmobile` and
+    `stats.attempts` exactly (the MCS `m + 1 … t − 1` after a refresh at MCS `m` ran with
+    the old count) and rebuilds the `SequentialCPM` site list when `Σ n` changed.
+    Nothing on the device needs the count (CheckerboardCPM reads only the mask).
   - Custom rule: a host copy of the state (`snapshot` off the CPU), `frozen_sites`, copy
     of the mask to the device.
   - `frozen_sites(prob, u)` is the same rule on a host state, with the domain complement;

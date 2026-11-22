@@ -221,7 +221,8 @@ end
         end
         frozen(st, p, prop, ctx) = false
         f = CPMFunction(
-            gg_delta_H; temperature = gg_temperature, constraint = frozen,
+            gg_delta_H; commit! = gg_commit!,
+            temperature = gg_temperature, constraint = frozen,
             lifecycle = Lifecycle(tr; divide! = rule!, rules = true)
         )
         sol = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
@@ -233,7 +234,8 @@ end
         plain(st, p, ctx, key, mcs, c) = mcs == 0 && c == 1 ? EVENT_DIVIDE : EVENT_NONE
         n = Ref(0)
         f7 = CPMFunction(
-            gg_delta_H; temperature = gg_temperature, constraint = frozen,
+            gg_delta_H; commit! = gg_commit!,
+            temperature = gg_temperature, constraint = frozen,
             lifecycle = Lifecycle(
                 plain;
                 divide! = (st, p, ctx, key, mcs, parent, daughter) -> (n[] += 1; nothing)
@@ -305,7 +307,8 @@ end
             σ[:, 6:10] .= 2
             st = lc_state(σ, Int32[1, 2], lat)
             f = CPMFunction(
-                gg_delta_H; temperature = gg_temperature, sys = FrozenKind(2),
+                gg_delta_H; commit! = gg_commit!,
+                temperature = gg_temperature, sys = FrozenKind(2),
                 lifecycle = Lifecycle(
                     (st, p, ctx, key, mcs, c) -> if mcs == 3 && c == 1
                         EVENT_TRANSITION

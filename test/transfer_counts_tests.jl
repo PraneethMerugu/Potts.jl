@@ -66,6 +66,32 @@ function transfer_read_counts(u0, nblocks)
     )
 end
 
+# Host-hook fixture (CorePotts level): a lifecycle with `rebuild!`, frozen dynamics, one
+# division at MCS 2. Every checked MCS, quiet or with an event, reads the 4-byte event flag
+# (one sync, one transfer) to decide whether the host stage runs.
+function transfer_hook_problem(; T = Float32)
+    lat = CorePotts.Lattice((16, 8))
+    σ = zeros(Int32, 16, 8)
+    σ[3:6, 2:3] .= 1
+    cell = CorePotts.init_moments(σ, lat, 1)
+    st = CorePotts.with_capacity(CorePotts.initial_state(σ, Int32[1]; cell), 4)
+    trigger(st, p, ctx, key, mcs, c) = if mcs == 2 && c == 1
+        CorePotts.EVENT_DIVIDE
+    else
+        CorePotts.EVENT_NONE
+    end
+    hook(st, p, ctx, backend) = nothing
+    lc = CorePotts.Lifecycle(
+        trigger; normal = CorePotts.AlongMinorAxis{T}(), rebuild! = hook
+    )
+    f = CorePotts.CPMFunction(
+        (st, p, prop, ctx) -> zero(T); temperature = (st, p, prop, ctx) -> zero(T),
+        constraint = (st, p, prop, ctx) -> false, lifecycle = lc
+    )
+    return CorePotts.PottsProblem(f, st, lat, (0, 6), (;))
+end
+transfer_hook_counts() = (1, 1, sizeof(Int32))
+
 # HostPhase fixture (CorePotts level): a no-op host phase after every sweep.
 function transfer_hostphase_problem(; T = Float64)
     σ = zeros(Int32, 12, 12)
@@ -288,6 +314,21 @@ end
             # folded at the read
             @test integ.stats.lifecycle.divisions == 2
             @test count(>(0), u.cell.volume) == 4
+            # a lifecycle with a host hook: the event flag on every checked MCS, quiet
+            # (MCS 0, 1, 3, 4) and with the event (MCS 2)
+            prob = transfer_hook_problem()
+            integ = init(
+                prob, alg; backend, save_start = false,
+                save_everystep = false, save_end = false
+            )
+            for _ in 1:5
+                c0 = transfer_counts(integ.stats)
+                step!(integ)
+                @test transfer_counts(integ.stats) .- c0 == transfer_hook_counts()
+            end
+            # control: the event happened
+            current_state(integ)
+            @test integ.stats.lifecycle.divisions == 1
             prob = transfer_hostphase_problem(; T = Float32)
             integ = init(
                 prob, alg; backend, save_start = false,
