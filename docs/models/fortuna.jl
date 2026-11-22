@@ -21,8 +21,8 @@
 #
 # A cell of radius R = 10 sites with a lamellipodium fraction φ_l = 0.05, on an
 # 80 × 80 × 21 lattice, periodic in x and y. It starts as in the paper's supplement: a
-# ball of radius R, centered halfway up the lattice, with a concentric ball of nucleus
-# inside. The lid cuts the top of the ball. The volumes then relax to their targets. The
+# ball of radius R resting on the substrate, with a concentric ball of nucleus inside.
+# The lid cuts the top layer of the ball. The volumes then relax to their targets. The
 # run is 6000 MCS long, and the F-actin field takes one explicit Euler step per MCS.
 
 using Potts, PottsModels
@@ -118,7 +118,7 @@ fig
 # | Update order | not stated | sweep, then field step, then protrusion. The field step is the same update as the authors' code (CompuCell3D diffuses and decays, then secretes; with one explicit step per MCS and a source that does not depend on ``F`` the two are identical). Secreting first would give ``F ≈ 0.1`` |
 # | Drive (Eq. 7) | extensions of the lamellipodium into the medium | the same (default); `drive = :extension_retraction` adds retractions, as in the authors' code |
 # | Targets | ``(1 - φ_n - φ_l)V``, ``φ_n V``, ``φ_l V`` | the same, fixed from ``t = 0`` |
-# | Start | concentric spheres centered at ``(L_x/2, L_y/2, L_z/2)`` (supplement S1, p. 6), sizes not stated | the same; the outer ball of radius R (the whole cell volume), the nucleus ball of 216 sites, strict inside, and the planes cut the outer ball where it reaches them; the volumes relax to the fixed targets (the authors' code puts a cube nucleus in a ball resting on the substrate) |
+# | Start | concentric spheres centered at ``(L_x/2, L_y/2, L_z/2)`` (supplement S1, p. 6), sizes not stated | the same; the outer ball of radius R (the whole cell volume) and the nucleus ball of 216 sites, strict inside, with the center R above the substrate's top face so that the lowest layer is z = 2 for every R (tangent in the continuum; the center at L_z/2 + 1 left an empty layer at R = 20); the lid cuts the top layer at R = 10 and 15; the volumes relax to the fixed targets (the authors' code puts a cube nucleus in a ball resting on the substrate) |
 # | Lattice | ``L \in [8R, 14R]``, ``L_z = 2.1R`` | ``8R``, or ``10R`` when ``R \ge 20`` and ``φ_l \ge 0.2``, truncated (the rule of the authors' code) |
 # | Nucleus track | the nucleus center of mass | the same, in ``x`` and ``y`` |
 #

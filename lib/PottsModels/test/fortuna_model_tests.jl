@@ -4,8 +4,8 @@
 # - build: the lattice rule, the compiled model and its copy-blocked twin;
 # - Table 1: the parameters and the contact matrix (J_cytoplasm–lamellipodium = 20);
 # - the start: the concentric balls of the supplement, the outer one of radius R and the
-#   nucleus of 216 sites, for the twelve (R, φ_l) of the paper; the volumes relax to the
-#   targets;
+#   nucleus of 216 sites, resting on the substrate, for the twelve (R, φ_l) of the paper;
+#   the volumes relax to the targets;
 # - the protrusion pass equals a counter-addressed draw oracle; p > 1, V₃ ≥ φ_l V and the
 #   φ_l = 0 NaN path; the field step comes before the protrusion pass;
 # - the drive is λ_F (F(target) − F(source)) on lamellipodium extensions into the medium
@@ -33,11 +33,11 @@ function default_run()
     end
 end
 
-# The start by hand: the strict ball of radius r around (L/2 + 1, L/2 + 1, L_z/2 + 1),
-# without the planes z = 1 and z = L_z
+# The start by hand: the strict ball of radius r around (L/2 + 1, L/2 + 1, R + 3/2), which
+# rests on the substrate's top face, without the planes z = 1 and z = L_z
 function oracle_ball(R, φ_l, r)
     L, _, Lz = fortuna_lattice(R, φ_l)
-    c = (L / 2 + 1, L / 2 + 1, Lz / 2 + 1)
+    c = (L / 2 + 1, L / 2 + 1, R + 1.5)
     return Set(
         (x, y, z) for x in 1:L, y in 1:L, z in 2:(Lz - 1)
             if sqrt((x - c[1])^2 + (y - c[2])^2 + (z - c[3])^2) < r * (1 - 1.0e-12)
@@ -101,8 +101,10 @@ end
         ball = oracle_ball(R, φ_l, Float64(R))
         nucleus = oracle_ball(R, φ_l, cbrt(216 / (4π / 3)))
         @test nucleus ⊆ ball && 200 <= length(nucleus) <= 216
-        # the outer ball holds the whole cell volume, less what the planes cut off
+        # the outer ball holds the whole cell volume, less what the lid cuts off
         @test 0.9 * ball_volume(R) < length(ball) < 1.02 * ball_volume(R)
+        # it rests on the substrate: the lowest layer is z = 2
+        @test minimum(x[3] for x in ball) == 2
         # the layout against the oracle
         sys = FortunaMigration(; name = :fortuna, lattice = dims)
         op = fortuna_layout(R, sys)
@@ -116,13 +118,13 @@ end
         @test count(==(0), σ) == prod(dims) - length(ball) - 2 * L^2
         # concentric: both centroids sit on the center in x and y; the lid can cut the
         # top of the outer ball, so only the nucleus sits on the center in z too
-        c = (L / 2 + 1, L / 2 + 1, Lz / 2 + 1)
+        c = (L / 2 + 1, L / 2 + 1, R + 1.5)
         @test all(isapprox.(oracle_centroid(σ, (1,))[1:2], c[1:2]; atol = 1.0e-9))
         @test all(isapprox.(oracle_centroid(σ, (2,)), c; atol = 1.0e-9))
     end
-    # one layer above the substrate at R = 20; the ball reaches z = 2 at R = 10 and 15
-    @test minimum(x[3] for x in oracle_ball(20, 0.05, 20.0)) == 3
-    @test minimum(x[3] for x in oracle_ball(10, 0.05, 10.0)) == 2
+    # the lid cuts the top layer z = 2R + 1 at R = 10 and 15, not at R = 20
+    @test maximum(x[3] for x in oracle_ball(20, 0.05, 20.0)) == 41
+    @test maximum(x[3] for x in oracle_ball(10, 0.05, 10.0)) == 20
     # the problem: targets from the kinds, no lamellipodium yet
     u0 = default_problem().u0
     @test volumes(u0)[2:4] == [216, 6400, 6400]

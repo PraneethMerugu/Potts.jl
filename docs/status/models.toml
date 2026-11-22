@@ -134,7 +134,7 @@ deviations = [
     "Not stated in the paper, as in the authors' code: the field is periodic in x and y with zero flux in z, on the whole lattice including both planes.",
     "The update order is not stated: sweep, field step, protrusion. The field step is the same update as the authors' code (CompuCell3D diffuses and decays, then secretes; with one explicit step per MCS and a source that does not depend on F the two are identical). Secreting first would give F ≈ 0.1.",
     "The drive is Eq 7 as printed (extensions only); the authors' code form with retractions is the option drive = :extension_retraction.",
-    "The start is the supplement's concentric spheres at (L_x/2, L_y/2, L_z/2), with an outer ball of radius R (the whole cell volume) and a 216-site nucleus ball, relaxing to the targets; the authors' code starts on the substrate with a cube nucleus.",
+    "The start is the supplement's concentric spheres at (L_x/2, L_y/2, L_z/2), with an outer ball of radius R (the whole cell volume) and a 216-site nucleus ball, placed tangent to the substrate (lowest layer z = 2 for every R), relaxing to the targets; the authors' code starts on the substrate with a cube nucleus.",
 ]
 
 [[model]]

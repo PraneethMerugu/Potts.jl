@@ -244,13 +244,14 @@ Return the start of [`FortunaMigration`](@ref) on the lattice of `sys`: the pape
 concentric balls (supplement S1, p. 6), no lamellipodium, the substrate plane at z = 1 and
 the lid at z = L_z.
 
-- Both balls are centered at `(L/2 + 1, L/2 + 1, L_z/2 + 1)`: the center
-  `(L_x/2, L_y/2, L_z/2)` of the supplement in the authors' 0-based coordinates. Both are
-  strict (`d < r`).
-- The outer ball has radius `R`, the whole cell volume `V = (4π/3)R³`. With
-  `L_z ≈ 2.1R` it spans the height between the planes; the planes are painted last, so
-  they cut its top and bottom where it reaches them. The cytoplasm is the outer ball minus
-  the nucleus.
+- Both balls are centered at `(L/2 + 1, L/2 + 1, R + 3/2)`, both strict (`d < r`). The
+  supplement puts the center at `L_z/2` with `L_z = 2.1R`, so the ball rests on the
+  substrate in the continuum. On the lattice that center can leave an empty layer, so the
+  center sits `R` above the substrate's top face (z = 3/2): the lowest layer of the ball
+  is z = 2 for every `R`.
+- The outer ball has radius `R`, the whole cell volume `V = (4π/3)R³`. Its top layer is
+  z = 2R + 1; the lid is painted last, so it cuts that layer where `L_z ≤ 2R + 1`. The
+  cytoplasm is the outer ball minus the nucleus.
 - The nucleus ball has the volume of 216 sites, `r_n = ∛(216/(4π/3))`. Its site count
   depends on where the center falls on the lattice (216 for a center between sites in z,
   fewer for a center on a site).
@@ -270,7 +271,7 @@ op = [fortuna_layout(10, sys); :R => 10.0; :φ_l => 0.05]
 function fortuna_layout(R::Real, sys)
     L, _, Lz = Potts.lattice(sys).dims
     rn = cbrt(216 / (4π / 3))
-    center = Point(L / 2 + 1, L / 2 + 1, Lz / 2 + 1)
+    center = Point(L / 2 + 1, L / 2 + 1, R + 1.5)          # resting on the substrate
     body = Group(
         Objects(Interior(Sphere(center, Float64(R))); kinds = [:cytoplasm]),
         Fill(:nucleus; region = Interior(Sphere(center, rn)))
