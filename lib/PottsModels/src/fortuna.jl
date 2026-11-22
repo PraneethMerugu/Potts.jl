@@ -290,9 +290,11 @@ nucleus resting over the substrate".
 - The start volumes are not the targets: the volume constraints relax them to the fixed
   targets `(1 − φ_n − φ_l)V`, `φ_n V` and `φ_l V`.
 - The cube (`nucleus = :cube`) spans `ceil(c − 3):ceil(c − 3) + 5` on each axis around
-  the same center `c`: 216 sites for every `R`. Thomas et al. do not state its size; 6³ is
-  the cube of the authors' code, with the code's offset (`x − 3:x + 2` around an integer
-  center), so in x and y it sits half a site off the ball's center.
+  the same center `c`: 216 sites for every `R`. With `m = L/2 + 1` that is `m − 3:m + 2`
+  in x and y, half a site off the ball's center, and `R − 1:R + 4` in z, centered on
+  `R + 3/2`. Thomas et al. do not state its size; 6³ is the size of the authors' cube.
+  Their code places it with `range(−3, 3)` around an integer center on all three axes,
+  so our z placement differs from theirs by half a site.
 - Cells: 1 cytoplasm, 2 nucleus, 3 substrate, 4 lid; the cytoplasm and the nucleus share
   a cluster.
 

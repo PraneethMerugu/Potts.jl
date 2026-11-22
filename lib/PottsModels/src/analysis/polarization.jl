@@ -164,6 +164,7 @@ function _points2(x, what)
     isempty(x) && throw(ArgumentError("$what: a series is empty"))
     length(first(x)) == 2 ||
         throw(ArgumentError("$what: the points must be 2D (projected on the substrate)"))
+    x isa AbstractVector{NTuple{2, Float64}} && return x
     return _track_points(x, Val(2), what)
 end
 
@@ -218,7 +219,8 @@ replicate:
   of `|u(τ, δ)|` (with the `n − 1` denominator).
 - `ξ`: the velocity-polarization correlation index `⟨cos θ⟩/⟨sin θ⟩` (Eq. 14), with `θ`
   the unsigned angle in `[0, π]` between `Π(τ)` and `u(τ, δ)`, so `sin θ ≥ 0`: `ξ` is 0
-  when they are always orthogonal and grows without bound when they are always parallel.
+  when they are always orthogonal, grows without bound when they are always parallel, and
+  is negative when they point mostly in opposite directions (`⟨cos θ⟩ < 0`).
 - `σθ`: the standard deviation of the signed angle `θ ∈ (−π, π]` (from `Π` to `u`), whose
   mean is near 0 for a symmetric spread.
 - `u_parallel`: the mean of `Π(τ) · u(τ, δ)` (Eq. 16 as printed, not divided by `|Π|`),
@@ -268,31 +270,43 @@ function polarization_statistics(
         throw(
         ArgumentError("$what: $(length(Ps)) polarization series for $(length(Ts)) tracks")
     )
-    speeds, par, signed, unsigned = Float64[], Float64[], Float64[], Float64[]
+    # running sums; the speed and angle variances use sums shifted by a first value
+    n, ns, np = 0, 0, 0
+    s1 = s2 = shift = 0.0
+    spar = scos = ssin = t1 = t2 = 0.0
     for (p, tr) in zip(Ps, Ts)
-        P = _points2(p, what)
-        length(P) == length(tr) ||
+        P, x = _points2(p, what), _points2(tr, what)
+        length(P) == length(x) ||
             throw(ArgumentError("$what: a polarization series has $(length(P)) samples, \
-                its track $(length(tr))"))
-        u = mean_velocity(tr, lag; dt)
-        for k in eachindex(u)
-            a, v = P[k], u[k]
-            push!(speeds, hypot(v...))
+                its track $(length(x))"))
+        1 <= lag < length(x) ||
+            throw(ArgumentError("$what: lag $lag is outside 1:$(length(x) - 1)"))
+        δ = lag * Float64(dt)
+        for k in 1:(length(x) - lag)
+            a = P[k]
+            v = (x[k + lag] .- x[k]) ./ δ
+            sp = hypot(v...)
+            n == 0 && (shift = sp)
+            n += 1
+            s1 += sp - shift
+            s2 += (sp - shift)^2
             na = hypot(a...)
             (isfinite(na) && !(unit && na == 0)) || continue
-            push!(par, (a[1] * v[1] + a[2] * v[2]) / (unit ? na : 1.0))
-            (na > 0 && hypot(v...) > 0) || continue
+            np += 1
+            spar += (a[1] * v[1] + a[2] * v[2]) / (unit ? na : 1.0)
+            (na > 0 && sp > 0) || continue
             θ = atan(a[1] * v[2] - a[2] * v[1], a[1] * v[1] + a[2] * v[2])
-            push!(signed, θ)
-            push!(unsigned, abs(θ))
+            ns += 1
+            scos += cos(θ)
+            ssin += abs(sin(θ))
+            t1 += θ
+            t2 += θ^2
         end
     end
-    mean_(x) = sum(x) / length(x)
-    std_(x) = sqrt(sum(abs2, x .- mean_(x)) / (length(x) - 1))
-    um = mean_(speeds)
+    um = shift + s1 / n
+    svar(sum1, sum2, m) = (sum2 - sum1^2 / m) / (m - 1)
     return (;
-        u = um, ε = std_(speeds) / um,
-        ξ = mean_(cos.(unsigned)) / mean_(sin.(unsigned)), σθ = std_(signed),
-        u_parallel = mean_(par), n = length(speeds), n_angles = length(signed),
+        u = um, ε = sqrt(max(svar(s1, s2, n), 0.0)) / um, ξ = scos / ssin,
+        σθ = sqrt(max(svar(t1, t2, ns), 0.0)), u_parallel = spar / np, n, n_angles = ns,
     )
 end

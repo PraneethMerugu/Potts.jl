@@ -22,10 +22,15 @@
 # - Tracked point ("the cell position" ρ, Eq 13): the nucleus center of mass in xy,
 #   periodic-unwrapped, over R, the point Fortuna et al. fitted S, P and D on (their S1
 #   §S3; Fig 5 uses those S values). The paper does not name it. The CN center of mass is
-#   in the tracks too.
+#   in the tracks too; u_∥ on the CN track is an info column (`upar_cn1`, `upar_cn10`),
+#   because Π_CN−N contains −r_N and short-time nucleus jitter enters u_∥ on the nucleus
+#   track.
 # - Fit: the modified Fürth fit of the Fortuna protocol, `furth_fit(50 .* (1:200), m;
 #   method = :lsq)`, m the replicate-mean MSD of the stationary track sampled every 50
 #   MCS (1981 samples; "1980 points" per trajectory, p. 11). `:paper` is info.
+# - Spread of Δτ_opt (`dtau_logsd`): the standard deviation of log Δτ_opt over `BOOT_B`
+#   bootstrap resamples of the replicates (each resample refits the mean of its replicate
+#   MSDs), seed `BOOT_SEED`.
 # - Natural units (Eq 4): τ = t/P, ρ = r/√(2DP/(1 − S)) with the set's fit. Π in units of
 #   R (Figs 6–7: "in units of cell radius").
 # - Δτ_opt = `optimal_interval(S).Δτ` (Eq 12); its lag is round(Δτ_opt P) MCS, at least 1.
@@ -59,22 +64,36 @@
 #
 # | Row | Target | Source | Band |
 # |---|---|---|---|
-# | `dtau/R15/φ0.1/λ200` | Δτ_opt = 0.048 | Fig 4 | within ±30 % |
-# | `dtau/R15/φ0.3/λ150` | Δτ_opt = 0.672 | Fig 4 | within ±30 % |
+# | `dtau/R15/φ0.1/λ200` | Δτ_opt = 0.048 | Fig 4 | the Δτ band below |
+# | `dtau/R15/φ0.3/λ150` | Δτ_opt = 0.672 | Fig 4 | the Δτ band below |
 # | `S/R15/φ0.3/λ150` | S = 9.46e-2 | p. 10 | info |
 # | `xi_peak/R15/φ0.1/λ200` | ξ_CN−N(δ) peaks near Δτ_opt | Fig 4 | argmax over δ within ×2 of Δτ_opt |
 # | `xi_best/R15/φ0.1/λ200` | Π_CN−N is the strongest correlator at Δτ_opt | Fig 4 caption | ξ_CN−N > ξ_L−CN and > ξ_L−N |
 # | `xi_weak/R15/φ0.3/λ150` | no definition peaks near Δτ_opt | Fig 4 | info: the three argmax / Δτ_opt |
-# | `trend/R15/<name>` | the six trends of Figs 6–7 (`TRENDS`), over φ for each λ_F | Figs 6A–C, 7A–C | the sign holds on ≥ 2 of the 3 λ_F curves |
-# | `upar/R15/φ…/λ…` | ⟨u_∥⟩_δ converges as δ → 0 | Fig 7D | |u_∥(1) − u_∥(10)| ≤ 0.10 |u_∥(10)| (δ in MCS) |
+# | `trend/R15/<name>` | the six trends of Figs 6–7 (`TRENDS`), over φ for each λ_F | Figs 6A–C, 7A–C | the sign holds on all 3 λ_F curves |
+# | `upar/R15/φ…/λ…` | ⟨u_∥⟩_δ converges as δ → 0 | Fig 7D | Δ = |u_∥(1) − u_∥(10)| ≤ 0.10 |u_∥(10)|, or Δ < its replicate standard error (δ in MCS) |
+# | `upar_cn/R15/φ…/λ…` | the same on the CN track | review | info: the relative change |
 # | `udiv/R15/φ…/λ…` | ⟨u⟩_δ diverges as δ → 0 | Fig 3B | u(1 MCS) > u(10 MCS) |
 # | `trend/R10/…`, `trend/R20/…` | the same trends | Figs S7, S14, S15 | info |
 #
-# A trend's sign is the sign of Kendall's τ over the four φ points of one λ_F curve.
+# A trend's sign is the sign of Kendall's τ over the four φ points of one λ_F curve. The
+# spec asks for "the same monotonic trends"; the sign of τ is weaker than strict
+# monotonicity (one swapped pair still passes), a deliberate relaxation (D-331).
+#
+# The Δτ band: pass if |log(Δτ_ours / Δτ_paper)| ≤ 1.96 √(dtau_logsd² n/(n − 1) + σ_ref²).
+# The first term is our fit's spread (the bootstrap, corrected for n replicates), the
+# second the paper's: σ_ref (`DTAU_REF_SD`) is the standard deviation of log Δτ_opt of one
+# fit of the ideal modified Fürth process at the set's Table 2 S, P, D with this sampling
+# (200 StableRNG seeds, 5001–5200): 0.187 at (15, 0.10, 200) and 0.151 at (15, 0.30, 150).
+# On 200 pairs of independent ideal fits the band fails 5.5 % and 7.5 % of the time
+# (0 % against the true value); a Δτ off by a factor 2 passes 16.5 % and 2 %.
 #
 # Record schema (TSV, one header line):
-#   sets.tsv     set R phi lambda n S P D resolved dtau alpha lag pi u eps sigma xi_CN_N
-#                xi_L_CN xi_L_N upar dtau_slope detached
+#   sets.tsv     set R phi lambda n S P D resolved dtau alpha dtau_logsd lag pi u eps
+#                sigma xi_CN_N xi_L_CN xi_L_N upar upar1 upar10 upar_dse upar_cn1
+#                upar_cn10 dtau_slope detached
+#                (upar1, upar10: u_∥ at δ = 1 and 10 MCS; upar_dse: the standard error
+#                of their difference over the replicates; upar_cn*: on the CN track)
 #   curves.tsv   set lag delta u upar xi_CN_N xi_L_CN xi_L_N
 #   msd.tsv      set lag msd (lag in MCS, MSD in R²)
 #   clouds.tsv.gz set rep t pi u theta (the 50-MCS grid; t of the window start)
@@ -83,6 +102,8 @@ module FortunaPolarizationProtocol
 
 using Potts, PottsModels
 using PottsModels.Analysis: Analysis
+using StableRNGs: StableRNG
+using Statistics: mean, std
 const A = Analysis
 
 # ------------------------------------------------------------------------------------------
@@ -96,7 +117,6 @@ const DT = 50                                        # MCS per MSD sample (the F
 const FIT_LAGS = 1:200                               # samples: 50 … 10⁴ MCS
 const DELTA_LAGS = unique(round.(Int, exp10.(range(0, 4; length = 41))))   # δ grid, MCS
 const BETAS = (:CN_N, :L_CN, :L_N)
-const KIND_LAMELLIPODIUM = 4                         # kind code (@kinds order)
 const SETS = [
     (R, φ, λ) for R in (15, 10, 20) for φ in (0.05, 0.1, 0.2, 0.3) for λ in (150, 175, 200)
 ]
@@ -106,7 +126,9 @@ const FIG4_POLARIZED = (15, 0.1, 200)
 const FIG4_WEAK = (15, 0.3, 150)
 const PAPER_DTAU = Dict(FIG4_POLARIZED => 0.048, FIG4_WEAK => 0.672)   # Fig 4 caption
 const PAPER_S_WEAK = 9.46e-2                                           # p. 10
-const DTAU_BAND = 0.3
+const DTAU_REF_SD = Dict(FIG4_POLARIZED => 0.187, FIG4_WEAK => 0.151)   # the Δτ band
+const BOOT_B = 200                                   # bootstrap resamples of Δτ_opt
+const BOOT_SEED = 1_420_999_000
 const UPAR_BAND = 0.1
 const CLOUD_SETS = ((15, 0.05, 200), (15, 0.3, 150))                   # Fig 6D, 7A inset
 # name => (x column, y column, expected sign of Kendall's τ)
@@ -136,17 +158,20 @@ minimum_image(d, L) = d - L * round(d / L)
 """
     stationary(rec, R, L; warmup = WARMUP) -> (; t, track, Π, detached)
 
-The stationary part of one recorded run (`t ≥ warmup`, every MCS): the nucleus track in
-units of R (xy, unwrapped) and the three polarizations in units of R. `rec` has the
-columns t, nx, ny, lx, ly, Πx, Πy, vl and lam_cyto. `detached` is the fraction of samples
-with a lamellipodium but no lamellipodium–cytoplasm contact.
+The stationary part of one recorded run (`t ≥ warmup`, every MCS): the nucleus track and
+the CN track (`cn_track`) in units of R (xy, unwrapped) and the three polarizations in
+units of R. `rec` has the columns t, nx, ny, cx, cy, lx, ly, Πx, Πy, vl and lam_cyto.
+`detached` is the fraction of samples with a lamellipodium but no lamellipodium–cytoplasm
+contact.
 """
 function stationary(rec, R, L; warmup = WARMUP)
     w = findall(>=(warmup), rec.t)
     isempty(w) && throw(ArgumentError("stationary: no sample at t ≥ $warmup"))
     t = rec.t[w]
     all(==(EVERY), diff(t)) || throw(ArgumentError("stationary: the samples are not every MCS"))
-    track = [p ./ R for p in A.unwrap_track(collect(zip(rec.nx[w], rec.ny[w])), (L, L), true)]
+    unwrap(x, y) = [p ./ R for p in A.unwrap_track(collect(zip(x[w], y[w])), (L, L), true)]
+    track = unwrap(rec.nx, rec.ny)
+    cn_track = unwrap(rec.cx, rec.cy)
     cn = [(x, y) ./ R for (x, y) in zip(rec.Πx[w], rec.Πy[w])]
     ln = map(w) do j
         rec.vl[j] > 0 || return (NaN, NaN)
@@ -154,7 +179,7 @@ function stationary(rec, R, L; warmup = WARMUP)
     end
     lcn = [a .- b for (a, b) in zip(ln, cn)]
     detached = count(j -> rec.vl[j] > 0 && rec.lam_cyto[j] == 0, w) / length(w)
-    return (; t, track, Π = (CN_N = cn, L_CN = lcn, L_N = ln), detached)
+    return (; t, track, cn_track, Π = (CN_N = cn, L_CN = lcn, L_N = ln), detached)
 end
 
 # ------------------------------------------------------------------------------------------
@@ -176,26 +201,79 @@ function stats(Π, tracks, lag, dt)
 end
 
 """
-    analyze_set(runs) -> NamedTuple
+    dtau_fit(msds, lags; B = BOOT_B, seed = BOOT_SEED) -> (; f, o, logsd)
+
+The fit of the mean of the replicate MSDs `msds` (one vector per replicate, at `lags`
+samples of `DT` MCS), its optimal interval `o` and `logsd`, the standard deviation of
+log Δτ_opt over `B` bootstrap resamples of the replicates (NaN without a resolved fit or
+with fewer than 2 replicates).
+"""
+function dtau_fit(msds, lags; B = BOOT_B, seed = BOOT_SEED)
+    nofit = fit(Float64[], Float64[], :lsq)
+    length(lags) >= 4 || return (; f = nofit, o = (; Δτ = NaN, α = NaN), logsd = NaN)
+    f = fit(DT .* lags, mean(msds), :lsq)
+    resolved(f) || return (; f, o = (; Δτ = NaN, α = NaN), logsd = NaN)
+    o = A.optimal_interval(f.S)
+    k = length(msds)
+    k >= 2 || return (; f, o, logsd = NaN)
+    rng = StableRNG(seed)
+    v = Float64[]
+    for _ in 1:B
+        fb = fit(DT .* lags, mean(msds[rand(rng, 1:k, k)]), :lsq)
+        resolved(fb) && push!(v, log(A.optimal_interval(fb.S).Δτ))
+    end
+    return (; f, o, logsd = length(v) >= 2 ? std(v) : NaN)
+end
+
+"""
+    dtau_ok(d, logsd, n, ref, ref_sd) -> (ok, half_width)
+
+The Δτ band: `|log(d/ref)| ≤ 1.96 √(logsd² n/(n − 1) + ref_sd²)`.
+"""
+function dtau_ok(d, logsd, n, ref, ref_sd)
+    h = 1.96 * sqrt(logsd^2 * n / (n - 1) + ref_sd^2)
+    return (isfinite(d) && d > 0 && isfinite(h) && abs(log(d / ref)) <= h, h)
+end
+
+"""
+    upar_ok(a, b, se) -> Bool
+
+The u_∥ convergence band: `|a − b| ≤ UPAR_BAND |b|` or `|a − b| < se`.
+"""
+upar_ok(a, b, se) = isfinite(a) && isfinite(b) &&
+    (abs(a - b) <= UPAR_BAND * abs(b) || (isfinite(se) && abs(a - b) < se))
+
+"""
+    analyze_set(runs; B = BOOT_B) -> NamedTuple
 
 Reduce the stationary series of one set's replicates (`stationary` outputs, equal lengths)
-to its sets.tsv row, its δ curves, its MSD and its per-sample cloud.
+to its sets.tsv row, its δ curves, its MSD and its per-sample cloud. `B` is the number of
+bootstrap resamples of Δτ_opt.
 """
-function analyze_set(runs)
+function analyze_set(runs; B = BOOT_B)
     n = length(first(runs).t)
     all(r -> length(r.t) == n, runs) || throw(ArgumentError("analyze_set: unequal run lengths"))
     g = 1:DT:n                                        # the 50-MCS grid
     lags = filter(<(length(g)), FIT_LAGS)
-    m = isempty(lags) ? Float64[] :
-        A.mean_squared_displacement([r.track[g] for r in runs]; lags)
-    f = length(lags) >= 4 ? fit(DT .* lags, m, :lsq) : fit(Float64[], Float64[], :lsq)
+    msds = isempty(lags) ? [Float64[] for _ in runs] :
+        [A.mean_squared_displacement(r.track[g]; lags) for r in runs]
+    m = mean(msds)
+    (; f, o, logsd) = dtau_fit(msds, lags; B)
     ok = resolved(f)
-    o = ok ? A.optimal_interval(f.S) : (; Δτ = NaN, α = NaN)
     lag = ok ? max(1, round(Int, o.Δτ * f.P)) : 0
     scale = ok ? sqrt(2 * f.D * f.P / (1 - f.S)) : 1.0
     dt = ok ? 1 / f.P : 1.0                           # natural units (τ per MCS) if resolved
     ρ = [[p ./ scale for p in r.track] for r in runs]
+    ρcn = [[p ./ scale for p in r.cn_track] for r in runs]
     Π(β) = [getfield(r.Π, β) for r in runs]
+    # u_∥ at δ = 1 and 10 MCS: pooled, per replicate (the standard error of the change),
+    # and on the CN track (info)
+    upar(l, tr = ρ) = stats(Π(:CN_N), tr, l, dt).u_parallel
+    dk = [
+        stats([r.Π.CN_N], [p], 1, dt).u_parallel - stats([r.Π.CN_N], [p], 10, dt).u_parallel
+            for (r, p) in zip(runs, ρ)
+    ]
+    upar_dse = length(dk) >= 2 ? std(dk) / sqrt(length(dk)) : NaN
     at = Dict(β => (ok ? stats(Π(β), ρ, lag, dt) : NAN_STATS) for β in BETAS)
     curves = map(filter(<(n), DELTA_LAGS)) do l
         s = Dict(β => stats(Π(β), ρ, l, dt) for β in BETAS)
@@ -227,8 +305,10 @@ function analyze_set(runs)
     s = at[:CN_N]
     row = (;
         n = length(runs), S = f.S, P = f.P, D = f.D, resolved = ok, dtau = o.Δτ, alpha = o.α,
-        lag, pi = pimean, u = s.u, eps = s.ε, sigma = s.σθ, xi_CN_N = s.ξ,
-        xi_L_CN = at[:L_CN].ξ, xi_L_N = at[:L_N].ξ, upar = s.u_parallel, dtau_slope = slope,
+        dtau_logsd = logsd, lag, pi = pimean, u = s.u, eps = s.ε, sigma = s.σθ,
+        xi_CN_N = s.ξ, xi_L_CN = at[:L_CN].ξ, xi_L_N = at[:L_N].ξ, upar = s.u_parallel,
+        upar1 = upar(1), upar10 = upar(10), upar_dse, upar_cn1 = upar(1, ρcn),
+        upar_cn10 = upar(10, ρcn), dtau_slope = slope,
         detached = sum(r.detached for r in runs) / length(runs),
     )
     msd = [(; lag = DT * l, msd = mk) for (l, mk) in zip(lags, m)]
@@ -248,7 +328,6 @@ function kendall(x, y)
     end
     return s / npair
 end
-within(x, ref, band) = isfinite(x) && abs(x / ref - 1) <= band
 argmax_delta(curves, col) = let v = [getfield(c, col) for c in curves], ok = findall(isfinite, v)
     isempty(ok) ? NaN : curves[ok[argmax(v[ok])]].delta
 end
@@ -264,8 +343,10 @@ function verdicts(rows, curves)
     add!(id, kind, value, band, ok) = push!(V, (; id, kind, value, band, ok))
     for (s, ref) in PAPER_DTAU
         haskey(rows, s) || continue
-        d = rows[s].dtau
-        add!("dtau/" * set_id(s), :row, d, "$(ref) ± 30 %", within(d, ref, DTAU_BAND))
+        r = rows[s]
+        ok, h = dtau_ok(r.dtau, r.dtau_logsd, r.n, ref, DTAU_REF_SD[s])
+        band = "$(ref) × exp(±$(round(h; digits = 3)))"
+        add!("dtau/" * set_id(s), :row, r.dtau, band, ok)
     end
     if haskey(rows, FIG4_WEAK)
         S = rows[FIG4_WEAK].S
@@ -305,7 +386,18 @@ function verdicts(rows, curves)
             good += sign(kendall(x, y)) == sg
         end
         total == 0 && continue
-        add!("trend/R$R/$name", R == 15 ? :row : :info, good, "≥ 2 of 3 λ_F curves", good >= 2)
+        add!("trend/R$R/$name", R == 15 ? :row : :info, good, "all 3 λ_F curves", good == 3)
+    end
+    for (s, r) in rows
+        s[1] == 15 || continue
+        isfinite(r.upar10) || continue
+        rel = abs(r.upar1 - r.upar10) / abs(r.upar10)
+        add!(
+            "upar/" * set_id(s), :row, rel, "≤ 0.10, or Δ < SE $(round(r.upar_dse; sigdigits = 3))",
+            upar_ok(r.upar1, r.upar10, r.upar_dse)
+        )
+        rc = abs(r.upar_cn1 - r.upar_cn10) / abs(r.upar_cn10)
+        add!("upar_cn/" * set_id(s), :info, rc, "info: CN track", true)
     end
     for (s, cs) in curves
         s[1] == 15 || continue
@@ -313,8 +405,6 @@ function verdicts(rows, curves)
         c10 = findfirst(c -> c.lag == 10, cs)
         (c1 === nothing || c10 === nothing) && continue
         a, b = cs[c1], cs[c10]
-        rel = abs(a.upar - b.upar) / abs(b.upar)
-        add!("upar/" * set_id(s), :row, rel, "≤ 0.10", isfinite(rel) && rel <= UPAR_BAND)
         add!("udiv/" * set_id(s), :row, a.u / b.u, "> 1", a.u > b.u)
     end
     return sort(V; by = v -> v.id)

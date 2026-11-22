@@ -83,10 +83,8 @@ function write_tsv(name, header, lines)
     end
     return nothing
 end
-const SET_HEAD = (
-    "set", "R", "phi", "lambda", "n", "S", "P", "D", "resolved", "dtau", "alpha", "lag", "pi", "u",
-    "eps", "sigma", "xi_CN_N", "xi_L_CN", "xi_L_N", "upar", "dtau_slope", "detached",
-)
+# the row's own field names, so the header follows the protocol's row
+const SET_HEAD = ("set", "R", "phi", "lambda", string.(keys(first(values(rows))))...)
 write_tsv("sets.tsv", SET_HEAD, setrows)
 write_tsv("curves.tsv", ("set", "lag", "delta", "u", "upar", "xi_CN_N", "xi_L_CN", "xi_L_N"), curverows)
 write_tsv("msd.tsv", ("set", "lag", "msd"), msdrows)

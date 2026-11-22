@@ -175,12 +175,11 @@ nothing #hide
 # persistence time ``P``. This run is short and in lattice units, so the plot only shows
 # the shape; it plots ``Π̂ \cdot u`` (`unit = true`) so that both curves are speeds.
 
-using PottsModels.Analysis: polarization_statistics, optimal_interval
+using PottsModels.Analysis: polarization_statistics
 track_p = [p ./ R for p in unwrap_track(n_xy, (L, L), true)]
 lags = unique(round.(Int, exp10.(range(0, 3; length = 13))))
 stats = [polarization_statistics(Π, track_p, l) for l in lags]
-# S of Fortuna et al., Table 2, at R = 15, φ_l = 0.10, λ_F = 150
-optimal_interval(9.68e-3)
+nothing #hide
 
 #-
 fig_p = Figure(size = (720, 300))
@@ -218,14 +217,17 @@ fig_p
 # sets of the paper (``λ_F \in \{150, 175, 200\}``, ``φ_l \in \{0.05, 0.10, 0.20, 0.30\}``,
 # ``R \in \{10, 15, 20\}``), 10 replicates of ``10^5`` MCS each, every MCS recorded, and
 # the bands for Figs. 3–7, fixed before the runs. `run_polarization.jl` makes the tracks
-# and `analyze_polarization.jl` the record. The record and its videos come later.
+# and `analyze_polarization.jl` the record. The record and its videos come later. The
+# ``Δτ_\text{opt}`` rows pass within the sampling spread of both fits (a bootstrap over our
+# replicates and the spread of one ideal fit at the set's ``S``), and the ``u_∥`` rows within
+# 10 % or the replicate standard error; the record also gives ``u_∥`` on the CN track.
 #
 # ### Differences from the paper
 #
 # | | Paper | Here |
 # |:--|:--|:--|
 # | F-actin source (Eq. 9) | every lamellipodium site | the same, `factin_source = :all_lamellipodium` (Fortuna et al. and the authors' code restrict it to lamellipodium sites on the substrate, the default) |
-# | Start | a spherical cell resting on the substrate with a cubic nucleus, no lamellipodium; cube size not stated | the outer ball of the model above with a 6³ nucleus cube (`fortuna_layout(R, sys; nucleus = :cube)`), the cube of the authors' code, half a site off center in ``x`` and ``y`` as there |
+# | Start | a spherical cell resting on the substrate with a cubic nucleus, no lamellipodium; cube size not stated | the outer ball of the model above with a 6³ nucleus cube (`fortuna_layout(R, sys; nucleus = :cube)`), the size of the authors' cube; with ``m = L/2 + 1`` it spans ``m-3{:}m+2`` in ``x`` and ``y`` (half a site off center) and ``R-1{:}R+4`` in ``z``; the authors' code centers it with `range(-3, 3)` on an integer point on all three axes, so ``z`` differs by half a site |
 # | Drive (Eq. 8) | on the lamellipodium–medium boundary, direction not stated | extensions only, as Eq. 7 of Fortuna et al.; `drive = :extension_retraction` adds retractions |
 # | Other parameters | "as in Ref. [9]" | those of the model above, ``c`` included (the reproduction uses the calibrated ``c``) |
 # | Warm-up | 1000 MCS | the same, in the protocol |
@@ -233,7 +235,7 @@ fig_p
 # | Natural units | ``τ = t/P``, ``ρ = r/\sqrt{2DP/(1-S)}`` with the fit of each set | the same, with the modified Fürth fit of the Fortuna reproduction |
 # | ``ξ`` (Eq. 14) | ``⟨\cos θ⟩/⟨\sin θ⟩`` | ``θ \in [0, π]`` unsigned, so ``\sin θ \ge 0``; ``σ_θ`` uses the signed angle |
 # | ``u_∥`` (Eq. 16) | ``Π \cdot Δρ/δ`` | the same, not divided by ``\lvert Π \rvert``; `unit = true` divides |
-# | Fig. 5 power laws | fitted over the ``S`` of every simulation of Fortuna et al. | `optimal_interval` matches the ``α_\text{opt}`` law within 1 % at the ``S`` of their Table 2; the ``Δτ_\text{opt}`` law differs by up to 16 % at the smallest ``S`` (a fit over other points), while both printed values (0.048, 0.672) agree to 0.001 |
+# | Fig. 5 power laws | fitted over the ``S`` of every simulation of Fortuna et al. | `optimal_interval` matches the ``α_\text{opt}`` law within 1 % at the ``S`` of their Table 2; the ``Δτ_\text{opt}`` law differs by up to 16 % at the smallest ``S``: it is a least-squares fit in linear space over the same ``S``, which weights the large ``Δτ`` (our refit gives ``1.948\,S^{0.4575}``, ``R^2 = 0.9993``); the tests use 3 % for the ``α_\text{opt}`` law and 20 % for the ``Δτ_\text{opt}`` law, while both printed values (0.048, 0.672) agree to 0.001 |
 #
 # ```@raw html
 # </details>

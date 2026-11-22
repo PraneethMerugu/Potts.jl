@@ -25,8 +25,9 @@ function slope_fd(τ, S; h = big"1e-20")
     return Float64((log(eq4(x * exp(h), s)) - log(eq4(x * exp(-h), s))) / 2h)
 end
 
-# Tracks with the modified Fürth MSD (Eq 3): an exact AR(1) velocity per axis plus
-# Brownian increments of D_fast = DS/(1 − S), sampled every `dt` MCS.
+# Tracks with the modified Fürth MSD (Eq 3): an exact AR(1) velocity per axis, the
+# position Euler-integrated from it (the error is O(dt/P), negligible here), plus Brownian
+# increments of D_fast = DS/(1 − S), sampled every `dt` MCS.
 function furth_tracks(rng; S, D, P, n, dt = 1.0, ntracks = 10)
     a, sv, sb = exp(-dt / P), sqrt(D / (2P)), sqrt(D * S / (1 - S) * dt)
     out = Vector{Vector{NTuple{2, Float64}}}()
@@ -117,15 +118,31 @@ end
         @test o.α ≈ furth_exponent(τs[k], S) rtol = 1.0e-9
         @test o.α ≈ furth_exponent(o.Δτ, S)
         @test abs(slope_fd(o.Δτ * 1.0001, S) - o.α) < 1.0e-7
-        @test S <= o.Δτ <= 1.2                       # "a maximum for S ≤ Δτ ≤ 1" (p. 7)
+        # p. 7 says "a maximum for S ≤ Δτ ≤ 1", which fails for S ≳ 0.25 (Δτ_opt(0.3) ≈
+        # 1.12); 1.2 covers the S of this loop
+        @test S <= o.Δτ <= 1.2
     end
-    # Fig 5 at the S values of Table 2: the α_opt law holds within 1 %. The Δτ_opt law is
-    # a power-law fit over the paper's own S values: it holds within 20 % here (16 % at
-    # S = 1.09e-4, the smallest), while the two printed values above hold to 1e-3
+    # Fig 5 at the S values of Table 2: the α_opt law holds within 3 % (spec band; 1 % in
+    # fact). The Δτ_opt law holds within 20 % (16 % at S = 1.09e-4, the smallest), while
+    # the two printed values above hold to 1e-3
     S = table2_S()
     o = optimal_interval.(S)
-    @test all(k -> abs(o[k].α / (2.022 - 1.115 * S[k]^0.397) - 1) < 0.01, eachindex(S))
+    @test all(k -> abs(o[k].α / (2.022 - 1.115 * S[k]^0.397) - 1) < 0.03, eachindex(S))
     @test all(k -> abs(o[k].Δτ / (1.932 * S[k]^0.455) - 1) < 0.2, eachindex(S))
+    # The 16 %: the Δτ_opt law is a least-squares fit of a·S^b in linear space over these S,
+    # which weights the large Δτ. Our refit gives a = 1.948, b = 0.4575 (R² = 0.9993)
+    # against the printed 1.932, 0.455: a within 1.5 %, b within 0.005. Control: a fit in
+    # log space gives b ≈ 0.479, outside the band.
+    y = [x.Δτ for x in o]
+    afit(b) = sum(y .* S .^ b) / sum(S .^ (2b))              # the best a for a given b
+    sse(b) = sum(abs2, y .- afit(b) .* S .^ b)
+    bs = range(0.3, 0.6; length = 30_001)
+    b = bs[argmin(sse.(bs))]
+    @test abs(afit(b) / 1.932 - 1) < 0.015 && abs(b - 0.455) < 0.005
+    @test 1 - sse(b) / sum(abs2, y .- sum(y) / length(y)) > 0.999
+    X = log.(S)
+    blog = sum((X .- sum(X) / length(X)) .* log.(y)) / sum(abs2, X .- sum(X) / length(X))
+    @test abs(blog - 0.455) > 0.005
     @test_throws ArgumentError optimal_interval(0.0)   # S = 0: no interior maximum
     @test_throws ArgumentError optimal_interval(1.0)
 end
