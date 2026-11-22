@@ -211,7 +211,7 @@ Policy: statistical/qualitative agreement (D-029). 12b gives **one** archetypal 
 
 ## 6. Required general features
 
-**Parallel form (D-332, 2026-11-22).** The exact per-copy ΔH also runs on `CheckerboardCPM`, CPU and device: moments from running sums, per-pair contact aggregates, and read-set claims over both cells and their contact neighbors. No sequential-only exception. The phase-snapshot form (a one-phase lag) is allowed only as a documented deviation after tier 2. The per-MCS lagged director remains a model change, tested by the §5 acceptance test. See `../parallel-mechanisms.md` §5–§6.
+**Parallel form (D-332, 2026-11-22).** The exact per-copy ΔH also runs on `CheckerboardCPM`, CPU and device: moments from running sums, the contact energy re-evaluated over the boundary links of both cells (O(1) per pair only under the mean-point reading, pending Q-Z6), and read-set claims over both cells and their contact neighbors. No sequential-only exception. The phase-snapshot form (a one-phase lag) is allowed only as a documented deviation after tier 2. The per-MCS lagged director remains a model change, tested by the §5 acceptance test. See `../parallel-mechanisms.md` §5–§6.
 
 | ID | Needed? | Use |
 |---|---|---|

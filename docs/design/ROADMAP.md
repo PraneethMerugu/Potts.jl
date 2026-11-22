@@ -777,7 +777,8 @@ merges (phase-end checkpoint).
     or workgroup per cell (D-332);
   - R10 `UnlikeNeighbor`;
   - R2 `Fibres`;
-  - D-075: `uptake` is one host round trip per MCS on Metal (D-035 as amended);
+  - D-075: `uptake` is one host round trip per MCS on Metal (D-035 as amended); superseded by
+    D-332: per-cell operators run on the device, and only FBA solves stay on the host;
     `solvers = [V => …]` for the steady/implicit field.
   - B2 resolved (D-235): 0.554 µm/px, 300 × 192 square lattice, Moore-8 proposals. Keep the PDE step per MCS and per-site vs per-cell uptake configurable: the 05/07 §8b screen picks between them (2007 Fig 4c rules out a 1 h-per-MCS PDE with real D and λ). Also a fixed tip identity and a matrix/fluid underlay (Fig 7B, 7C).
 - [x] (merge, 2026-10-09; D-197, D-201; PC A/B pending) **P6.9a** (D-189 rulings 4, 8, 9; split from P6.9 on 2026-10-09) `Global(; window, adjacency)` as a rule value ("does not increase" pieces for both cells, evaluated after acceptance, bitwise equal to pre-acceptance); window and conservative-rejection counter; cell-scope `pieces` and `largest_piece` with exact after-values in energies; the D-075 device BFS. Test author first.
@@ -813,9 +814,9 @@ merges (phase-end checkpoint).
   - the Eq 6 averaging operator;
   - division plane by draw;
   - copy-time field writes: the `@on_copy` neighbour-target form, sequential first with the
-    08b conservation test. The checkerboard form (`region` widened by the write radius,
-    D-332) is a second item with an A/B. Until it lands, `CheckerboardCPM` rejects the model
-    (D-075). Gate: X5.
+    08b conservation test, and the checkerboard form (`region` widened by the write radius,
+    D-332) in the same item, with tier 0–2 checks and an A/B. The item is not done until
+    both land. Gate: X5.
   - (D-332) random-order FBA with write-back runs in conflict rounds derived from the
     permutation (equal to the sequential result); FBA solves stay on the host.
 

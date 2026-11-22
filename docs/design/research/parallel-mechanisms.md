@@ -27,16 +27,21 @@ Zajac tensor energy, the FBCA neighbor-site writes and the Starruß angle terms 
 |---|---|---|
 | Device lifecycle | `lib/CorePotts/src/lifecycle_device.jl`, D-089 | trigger, plan, partition and update kernels; division, removal and kind change planned on the device; a quiet MCS has 0 syncs and 0 transfers |
 | Footprint spacing | `lib/CorePotts/src/checkerboard.jl`, `docs/src/manual/algorithms.md` | the spacing between active sub-regions covers every copy-time read; a wider read widens `region` |
-| Cell claims (CPU) | `_phase_conflict!` in `checkerboard.jl` | one stamp per cell; a phase whose work items share a cell runs inline, one item after another, which is exact; other phases run threaded |
-| Serial list | `_push_serial!`, `serial_kernel!` in `checkerboard.jl` | a copy that needs a whole-cell decision is deferred and decided after the phase, with nothing in flight, on the CPU and on a device |
+| Cell stamps (CPU) | `_phase_conflict!` in `checkerboard.jl` | one stamp per cell over a lattice box of radius `need` around each work item's sub-region; a phase whose work items share a cell runs inline, one item after another, which is exact; other phases run threaded. On a device `_phase_conflict!` returns false |
+| Serial list | `_push_serial!`, `serial_kernel!` in `checkerboard.jl` | a copy that needs a whole-cell decision is deferred and decided after the phase, with nothing in flight, on the CPU and on a device. It is allocated only for models with whole-cell connectivity |
 | Lockless device cells | `checkerboard.jl` header, D-271 | on a device, cell totals change by atomic adds and copies read them live; no cell guarantee |
+| Reference and link reads | D-271 (claim machinery removed), D-065 Q7 | nothing claims the cells reached through references or links today. A copy reads them live: on the CPU only the box stamps above protect them, and on a device nothing does. The Starruß propulsion drive (D-330) runs on `CheckerboardCPM` this way |
 | Exact finite-time oracle | `lib/CorePotts/test/oracle_core.jl` | the exact distribution of states after m MCS of each algorithm on a tiny lattice, compared by total-variation distance |
 | Kinetics harness | `benchmark/kinetics.jl`, `research/checkerboard-kinetics.md` §3–§4 | ratio to `SequentialCPM` with bootstrap intervals; equivalence margins 5 % (kinetic) and 2 % (static); positive, clock and negative controls |
 
 ## 3. Lifecycle rules on the device
 
 - `@transition`, `@retire`, `@create`, `@discrete_events` and `@terminate` lower onto the
-  D-089 planner. There is one path: the CPU runs the same plan and update functions.
+  existing lifecycle events. Today there are two planners: the CPU runs the D-035 host
+  planner (`_step_lifecycle!` in `lib/CorePotts/src/problem.jl`), and a device runs the
+  D-089 planner. `SequentialCPM` never runs the device planner. Each new rule therefore
+  needs a host form and a device form, with one test that runs both. Merging the two
+  planners is a separate choice, not part of this record.
 - New device work:
   - **Retire into a collective.** A partition kernel moves the cell's sites to the
     collective. An atomic add updates the collective's volume and target.
@@ -98,13 +103,39 @@ other copy in flight may change a cell that the term reads.
   - their contact neighbors, for terms over contacts that read neighbor cell state;
   - the cells reached through references and ordered links (`prev`, `next`, up to the
     depth the expression uses, two for angle terms).
-- **CPU.** `_phase_conflict!` stamps the written cells of each work item and checks the
-  read sets of the other items against them. A phase with a conflict runs inline, which is
-  exact. This extends D-053 item 7 (references widen claims) to contacts and links.
-- **Device.** Each work item claims its written cells with an atomic stamp and checks its
-  read set. A copy with a conflict goes to the serial list and is decided after the phase.
-  This is exact. If the serial list grows so long that the device gains nothing, the
-  close-to-exact form of 5.3 applies.
+- **Sets per work item.** Claims are per work item, not per copy, because one item makes
+  all the attempts of its sub-region. Its write set W is the set of cells in its box of
+  radius `need`, as `_phase_conflict!` already computes. W also includes the third cells
+  whose per-pair aggregates a commit changes (the target's neighbor cells, as with
+  `commit_contact_count!`). Its read set R is the declared read set of every cell in W.
+- **Conflict test (symmetric).** Two items conflict if W of one meets R ∪ W of the other.
+  Read-read overlap is not a conflict.
+- **Protocol (CPU and device).**
+  1. A marking pass, one launch: each item marks every cell of W with a writer stamp
+     (compare-and-swap; a second writer sets the cell to "contested") and every cell of R
+     with a reader stamp (its block id, or "many" if another reader came first).
+  2. The kernel boundary orders all marks before all checks.
+  3. A check pass: an item is clear if every cell of its W has itself as the only writer
+     and no reader other than itself, and every cell of its R has no writer other than
+     itself.
+
+  Clear items run in parallel. Items that are not clear run after the phase, one after
+  another, in block order. This is the serial pass, applied to whole items; it needs the
+  serial list allocated whenever a model declares extra read sets. A clear item neither
+  reads nor writes anything that another item writes, so its attempts commute with every
+  other item's. The phase is therefore equal to a sequential run of its items, and every
+  committed ΔH is exact.
+- **On the CPU** this replaces the same-cell test of `_phase_conflict!` for models with
+  extra read sets. A phase with a conflict can still run inline as a whole, as today.
+- **Preconditions.** Read sets come from the state at the start of the phase. That is
+  sound because ordered links change only between sweeps, and a contact that appears
+  inside a phase lies inside the writer's box, so the box already conflicts. Contact
+  read sets need the box radius to cover the contact relation, as `need` already does.
+- **Cost.** The marking pass costs about (sites in the box) × (read-set size) per item per
+  phase. Tier 2 reports it with the fraction of items deferred.
+- This restores claims for these models only. It amends D-065 Q7 (exact again under claims,
+  for terms with declared read sets) and D-271 (claims return as an option on the
+  lockless checkerboard).
 - Models without such terms have empty extra read sets. They pay nothing (the same
   criterion as D-051 item 2), and their generated code does not change.
 
@@ -131,12 +162,12 @@ The fallback when claims cost too much: snapshot the cell state that other copie
 |---|---|---|---|
 | Lifecycle rules | Bauer 2007 and 2009, Jiang 2005, FBCA, Jafari Nivlouei, Dal-Castel | between sweeps, device planner (section 3) | exact |
 | Per-cell operators, uptake | FBCA; Bauer per-cell uptake if chosen | between sweeps, one item or workgroup per cell (section 4) | exact |
-| Proposal laws: `UnlikeNeighbor`, Hastings acceptance, `attempts = k` | Bauer 2007, FBCA | local reads; the Hastings ratio counts unlike neighbors at the target and at the source, both within the footprint | exact |
+| Proposal laws: `UnlikeNeighbor`, Hastings acceptance, `attempts = k` | Bauer 2007, FBCA | local reads; the Hastings ratio needs the forward and reverse proposal probabilities (for a site-then-unlike-neighbor law, the unlike-neighbor count at the target before and after the copy), both within the footprint | exact |
 | Neighbor loops `neighbors(c)`, `contact(c, n)` | Jafari Nivlouei | per-pair contact aggregates kept on every copy | exact |
 | Lags and windowed means on cell variables | Dal-Castel | between sweeps | exact |
 | Small folds (`argmax`, `var`), division plane by draw | Bauer 2007, FBCA, Dal-Castel | between sweeps | exact |
-| Ordered chains: angle terms and propulsion | Starruß | read-set claims over `prev`, `next` and their neighbors (two links from each changed cell) | exact; fallback 5.3 |
-| Moment tensor in energies, contact geometry per pair | Zajac | moments from running sums (Σx, Σy, Σx², Σy², Σxy, N); per-pair contact aggregates (link count, summed contact-point positions); read-set claims over both cells and their contact neighbors | exact; fallback 5.3 |
+| Ordered chains: angle terms and propulsion | Starruß | read-set claims over `prev`, `next` and their `prev` and `next` (two links from each changed cell, from the six pivots of D-329) | exact; fallback 5.3 |
+| Moment tensor in energies, contact geometry per pair | Zajac | moments from running sums (Σx, Σy, Σx², Σy², Σxy, N); contact energy re-evaluated over the boundary links of both cells (see below); read-set claims over both cells and their contact neighbors | exact; fallback 5.3 |
 | Copy-time writes to neighbor sites | FBCA 08b | `region` widened by the write radius, so writes of two items never overlap; conserved quantities by atomic adds on a device | exact; conservation exact |
 | Random-order operators with write-back | FBCA 08b | see below | exact |
 | Layouts, analysis helpers | Bauer 2007 and 2009, Starruß, FBCA | setup and post-processing | not affected |
@@ -152,29 +183,37 @@ or write site set overlaps the other's. So:
 Every cell sees exactly the field it would see in the sequential order, so the result
 equals the sequential result for the same permutation, not only in distribution. The
 rounds come from the owner-sorted site index (section 4). On the host they are threaded LP
-solves.
+solves. Preconditions:
+- site sets, retirements and divisions do not change during the pass;
+- per-cell draws are keyed by cell, not by position in the permutation;
+- overlap between two read sets alone is not a conflict.
 
-**Zajac aggregates.** The paper averages over each contact segment (12 spec, P-Z9: one
-segment per cell pair). With per-pair link counts and summed contact-point positions, the
-segment's mean point gives r sin θ for each cell from the cell's centroid and axis in O(1)
-per pair. The cost of an exact ΔH is then O(contact neighbors of the two cells). If the
-screens rule that r sin θ is averaged per link and not taken at the mean point, the
-absolute value prevents an O(1) update when the axis turns. The cost is then
-O(boundary links of the two cells). Both are exact. The choice follows the spec's A-Z4
-screen, not this note.
+In compact tissue, where every cell overlaps its neighbors, the number of rounds can grow
+to O(number of cells). Tier 2 reports the round count.
+
+**Zajac contact cost.** The spec's working inference (12 spec, P-Z9) averages r sin θ over
+the links of each cell pair. Because of the absolute value in r sin θ, that average must
+be recomputed link by link when a cell's axis turns. The default exact ΔH therefore costs
+O(boundary links of the two cells). An alternative takes r sin θ at the mean contact point
+of each pair. Per-pair link counts and summed positions then give O(1) per pair, and the
+ΔH costs O(contact neighbors of the two cells). That alternative changes the model, so it
+is used only if the authors confirm it (question Q-Z6). Both costs are exact.
 
 ## 7. Kinetic checks in tiers
 
 | Tier | Check | Cost | When |
 |---|---|---|---|
-| 0 | per-copy exactness on both algorithms: brute-force ΔH at commit, trackers equal recounts, conservation; each with a negative control (for example, with read-set claims disabled the test must fail) | seconds | every gate |
+| 0 | per-copy exactness on both algorithms: brute-force ΔH at commit, trackers equal recounts, conservation; each with a negative control (for example, with read-set claims disabled the test must fail). The checkerboard runs use `threads = true` with enough blocks that phases really run threaded, plus one device run | seconds | every gate |
 | 1 | the exact finite-time oracle extended to each new copy-time term, for both algorithms, on a tiny lattice | seconds to minutes | every gate |
 | 2 | the kinetics harness on a minimal case per mechanism (the smallest lattice where the term matters); seeds start at 8 and are added until the positive control resolves (half-width at most half the margin), up to a cap; positive, clock and negative controls; the margins of `checkerboard-kinetics.md` §4 | about 1 core-hour per mechanism | once, when the parallel form lands, with an A/B |
 | 3 | full-model kinetics | full-run cost | only for checkerboard claims in the paper |
 
-- Tier 1 is the conclusive check: it compares with an exact distribution, so no tolerance
-  can hide a bias, and it is cheap. Tiny lattices cannot show cell-scale effects, such as a
-  Zajac axis turning over a large cell. Tier 2 covers those.
+- Tier 1 checks a term's law exactly: it compares with an exact distribution, so no
+  tolerance can hide a bias, and it is cheap. It does not test claims: on a tiny lattice
+  every phase runs inline (the oracle models in-order block execution). Tier 0 tests the
+  claims.
+- Tiny lattices cannot show cell-scale effects, such as a Zajac axis turning over a large
+  cell. Tier 2 covers those.
 - A close-to-exact form (5.3) passes only if tier 2 passes. Its measured ratios go into the
   model's deviation table.
 - The oracle re-derives every term from its specification and does not call production code

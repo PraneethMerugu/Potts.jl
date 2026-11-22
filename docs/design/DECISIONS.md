@@ -677,7 +677,7 @@ the models-and-publications session, which relayed it here.
 
 ## D-053 Remaining review answers and agent-driven development (2026-09-30, maintainer)
 
-Amended by D-332 (item 7: claims widen to read sets over contact neighbors and ordered links, on the CPU and a device).
+Item 7 was replaced by D-065 Q7, which D-332 amends in turn (exact read-set claims for terms with declared read sets).
 
 **Review questions 6–10** (`research/feature-roadmap-review.md` §7): the reviewers'
 recommendations are adopted.
@@ -932,6 +932,7 @@ The maintainer gave these answers in the coordinator session on 2026-09-30. They
 D-053 items 6–10 where the two differ.
 
 - **Q7, cell references and claim sets: approved, and relaxed.**
+  - (Amended by D-332: exact again under read-set claims, for terms with declared read sets.)
   - Sequential is the reference for every energy that reads a cell reference.
   - The checkerboard sweep is validated **statistically** against sequential, as for Y2.
     This replaces D-053 item 7's requirement that the checkerboard stay exact under
@@ -1340,7 +1341,7 @@ Amended by D-311: a field with no solver gets the default `ExplicitEuler()`, so 
   - **D-035:** plus one device↔host round trip per declared host pass per firing, each a
     named `@schedule` phase.
   - **D-038:** "the problem's `ode_solver`" (default `ExplicitEuler()`).
-  - **D-051 item 5:** time-boxed exceptions. `@on_copy` neighbour-target writes and
+  - **D-051 item 5:** time-boxed exceptions (superseded by D-332: no sequential-only forms). `@on_copy` neighbour-target writes and
     `interfaces(k,k)` energies are sequential-only until P6.12/P6.7; `CheckerboardCPM`
     rejects such a model by name. Q6's per-model sequential fallback is covered here too.
   - **D-057:** `paint!(op::LayoutState, l, lat)`; every layer is rewritten in the same
@@ -4892,6 +4893,7 @@ Amended by D-330: drives may read `centroid(c, k)` and `separation(a, b)` of ref
   - `ring_arcs`, `ring_cells`, `ring_medium` and `local_components`: current vocabulary (user ruling).
 
 ## D-271 The lockless block checkerboard replaces the claiming one; frozen tests follow (2026-11-05; maintainer-approved: "go ahead w the replacement, and u may repin", "drop the claims stripped arm"; under D-065 Q7, D-231, D-250)
+Amended by D-332 (claims return, exact, for models whose copy-time terms declare extra read sets; the lockless scheme is unchanged for all other models).
 
 - **Why.** The lockless scheme (after Sultan et al., arXiv 2312.09317) claims nothing: per-cell totals change by atomic adds and are read live. Research note: `docs/design/research/checkerboard-kinetics.md`.
 - **p6_5a_cell_refs.jl.** The negative control of section 6 built the same problem with `reads`/`claims` stripped and required it to differ from SequentialCPM. Without claims, the stripped problem is the candidate itself (light tier |t| = 1.03 against > 3.89), so the arm is dropped from the light and FULL tiers. The null and the agreement test stay.
@@ -5875,12 +5877,12 @@ Thomas et al. (2022, Physica A 587:126511) restate the Fortuna model. Each diffe
 - **u_∥ convergence rows (user ruling P6, review major 2).** Pass if |u_∥(1) − u_∥(10)| ≤ 0.10·|u_∥(10)| or the change is below 1.96 replicate standard errors (the standard error of the per-replicate change over the 10 replicates), on all R = 15 sets. The SE multiplier is the constant `UPAR_SE_MULT` = 1.96 (user ruling 2026-11-22, set before any data: at 1 SE a converged u_∥ on a weak set passes only about 68% of the time). A non-finite value fails the row. The relative band alone has no noise floor where u_∥ is near 0.
 - **Trend rows (spec P4, P5).** The spec asks for "the same monotonic trends". The rule is tightened from "≥ 2 of 3 λ_F curves" to all 3 curves. The remaining relaxation is deliberate: a curve's trend is the sign of Kendall's τ over its four φ points, not strict monotonicity, so one swapped pair still passes.
 
-## D-332 Parallel-first mechanisms: no sequential-only forms, device lifecycle and operators, tiered kinetic checks (2026-11-22; user rulings of 2026-11-22; amends D-051 item 5, D-053 item 7, D-329 "Solvers" and the sequential-only parts of the 2026-11-22 model-list rulings)
+## D-332 Parallel-first mechanisms: no sequential-only forms, device lifecycle and operators, tiered kinetic checks (2026-11-22; user rulings of 2026-11-22; amends D-051 item 5, D-065 Q7, D-075 (the time-boxed D-051 item 5 exceptions), D-271, D-329 "Solvers" and the sequential-only parts of the 2026-11-22 model-list rulings)
 - **Design record.** `docs/design/research/parallel-mechanisms.md`.
 - **No sequential-only mechanisms.** Every mechanism runs on `SequentialCPM` and `CheckerboardCPM`, on the CPU and a device. Each has an exact parallel form. Where the exact form costs too much, a close-to-exact form is allowed as a documented deviation with a measured bound. This replaces D-051 item 5's exception list, and it reverses the earlier 2026-11-22 rulings that allowed sequential-only forms for the Zajac tensor energy, the FBCA neighbor-site writes and the Starruß angle terms. D-329's refusal of non-sequential algorithms for angle terms stays in the code until the claims below land.
-- **Read-set claims (amends D-053 item 7).** The compiler derives each copy-time term's read set: the copy's two cells, their contact neighbors for terms that read neighbor cell state, and cells reached through references and ordered links. On the CPU, `_phase_conflict!` checks read sets against the written cells, and a conflicting phase runs inline (exact). On a device, a work item claims its written cells atomically and a conflicting copy goes to the serial list (exact). Models without such terms pay nothing.
+- **Read-set claims (amends D-065 Q7 and D-271).** Today nothing claims cells reached through references or links (D-271 removed the claim machinery; D-065 Q7 dropped exactness under claims). For models whose copy-time terms read other cells' live state, claims return: the compiler derives each term's read set (the copy's two cells, contact neighbors for terms that read neighbor state, cells reached through references and ordered links). Per work item, W is the cells of its `need` box plus third cells whose pair aggregates a commit changes, and R is their read sets. A marking launch sets writer stamps (compare-and-swap, a second writer makes the cell contested) and reader stamps; after the kernel boundary a check pass clears an item if it is the only writer and only reader of its W and the only writer of its R. Clear items run in parallel; the others run after the phase in block order through the serial pass (the serial list is then always allocated). The phase equals a sequential run of its items, so every committed ΔH is exact, on the CPU and on a device. Models without such terms pay nothing. Details and preconditions: design record §5.2.
 - **Close-to-exact form.** Phase snapshots of the cell state read by other copies (one phase, about 1/64 MCS). It is allowed only after tier 2 passes, with its ratios in the model's deviation table. The per-MCS lagged director stays a model change, not this form.
 - **Design rule.** Every copy-time term gives an exact ΔH from footprint reads or from per-cell or per-pair aggregates kept on every copy. No threading inside one ΔH unless a measurement shows a gain.
-- **Lifecycle and operators on the device.** `@transition`, `@retire`, `@create`, `@discrete_events` and `@terminate` lower onto the D-089 planner; a quiet MCS stays at 0 syncs and 0 transfers. Per-cell operators run one work item or workgroup per cell. FBA solves stay on the host. Random-order operators with write-back run in conflict rounds derived from the permutation, which equals the sequential result for the same permutation.
-- **Kinetic checks.** Tier 0, per-copy exactness with negative controls, and tier 1, the exact finite-time oracle (`lib/CorePotts/test/oracle_core.jl`) extended to each new term, run at every gate. Tier 2, the kinetics harness on a minimal case per mechanism with adaptive seeds and the controls and margins of `research/checkerboard-kinetics.md` §4, runs once per parallel form with an A/B. Tier 3, full-model kinetics, runs only for checkerboard claims in the paper.
+- **Lifecycle and operators on the device.** `@transition`, `@retire`, `@create`, `@discrete_events` and `@terminate` get a host-planner form (D-035, CPU) and a D-089 device-planner form, tested together; a quiet device MCS stays at 0 syncs and 0 transfers. Per-cell operators run one work item or workgroup per cell. FBA solves stay on the host. Random-order operators with write-back run in conflict rounds derived from the permutation, which equals the sequential result for the same permutation.
+- **Kinetic checks.** Tier 0, per-copy exactness with negative controls, run threaded with many blocks and on a device (it is the claims test), and tier 1, the exact finite-time oracle (`lib/CorePotts/test/oracle_core.jl`) extended to each new term, run at every gate. Tier 2, the kinetics harness on a minimal case per mechanism with adaptive seeds and the controls and margins of `research/checkerboard-kinetics.md` §4, runs once per parallel form with an A/B. Tier 3, full-model kinetics, runs only for checkerboard claims in the paper.
 - **Open.** Q1 device `@terminate` cadence; Q2 FBA on the host for device FBCA runs.
