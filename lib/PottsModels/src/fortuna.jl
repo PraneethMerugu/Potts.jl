@@ -89,6 +89,12 @@ table):
   authors' code inside the paper's range;
 - nucleus track: the nucleus center of mass, in x and y.
 
+The polarization study of Thomas et al. (2022) restates the model with two differences,
+both options here: the F-actin source of their Eq 9 on every lamellipodium site
+(`factin_source = :all_lamellipodium`), and a start from a ball with a cubic nucleus
+(`fortuna_layout(R, sys; nucleus = :cube)`, the 6³ cube of the authors' code; the paper
+does not give its size). Their other parameters are those of Fortuna et al. (2020).
+
 # Keywords
 - `name::Symbol`: the system name (`@named` passes it).
 - `lattice = (120, 120, 31)`: the lattice size (structural); the lattice of `R = 15`.
