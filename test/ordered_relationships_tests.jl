@@ -528,7 +528,6 @@ end
     end
     @test length(props) > 100
     @test worst < 1.0e-12
-    @info "Eq 9 drive" length(props) nmoving worst
     @test nmoving > length(props) ÷ 2
     # a forward copy gains: the head segment pushing into the medium ahead of it (toward
     # −x, away from its successor) lowers ΔH
