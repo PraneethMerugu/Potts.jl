@@ -34,12 +34,13 @@ function default_run()
 end
 
 # The start by hand: the strict ball of radius r around (L/2 + 1, L/2 + 1, R + 3/2), which
-# rests on the substrate's top face, without the planes z = 1 and z = L_z
-function oracle_ball(R, φ_l, r)
+# rests on the substrate's top face, without the planes z = 1 and z = L_z (`zmax` widens
+# the range to see what the lid cuts)
+function oracle_ball(R, φ_l, r; zmax = fortuna_lattice(R, φ_l)[3] - 1)
     L, _, Lz = fortuna_lattice(R, φ_l)
     c = (L / 2 + 1, L / 2 + 1, R + 1.5)
     return Set(
-        (x, y, z) for x in 1:L, y in 1:L, z in 2:(Lz - 1)
+        (x, y, z) for x in 1:L, y in 1:L, z in 2:zmax
             if sqrt((x - c[1])^2 + (y - c[2])^2 + (z - c[3])^2) < r * (1 - 1.0e-12)
     )
 end
@@ -100,7 +101,7 @@ end
         L, _, Lz = dims
         ball = oracle_ball(R, φ_l, Float64(R))
         nucleus = oracle_ball(R, φ_l, cbrt(216 / (4π / 3)))
-        @test nucleus ⊆ ball && 200 <= length(nucleus) <= 216
+        @test nucleus ⊆ ball && length(nucleus) == 216
         # the outer ball holds the whole cell volume, less what the lid cuts off
         @test 0.9 * ball_volume(R) < length(ball) < 1.02 * ball_volume(R)
         # it rests on the substrate: the lowest layer is z = 2
@@ -123,8 +124,9 @@ end
         @test all(isapprox.(oracle_centroid(σ, (2,)), c; atol = 1.0e-9))
     end
     # the lid cuts the top layer z = 2R + 1 at R = 10 and 15, not at R = 20
-    @test maximum(x[3] for x in oracle_ball(20, 0.05, 20.0)) == 41
-    @test maximum(x[3] for x in oracle_ball(10, 0.05, 10.0)) == 20
+    cut(R) = length(oracle_ball(R, 0.05, Float64(R); zmax = 2R + 2)) -
+        length(oracle_ball(R, 0.05, Float64(R)))
+    @test (cut(10), cut(15), cut(20)) == (29, 45, 0)
     # the problem: targets from the kinds, no lamellipodium yet
     u0 = default_problem().u0
     @test volumes(u0)[2:4] == [216, 6400, 6400]
