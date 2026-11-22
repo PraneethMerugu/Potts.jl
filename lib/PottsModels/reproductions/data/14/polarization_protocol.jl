@@ -131,7 +131,7 @@ const DTAU_REF_SD = Dict(FIG4_POLARIZED => 0.187, FIG4_WEAK => 0.151)   # the Δ
 const BOOT_B = 200                                   # bootstrap resamples of Δτ_opt
 const BOOT_SEED = 1_420_999_000
 const UPAR_BAND = 0.1
-const UPAR_SE_MULT = 1.0                             # the u_∥ band's SE multiplier (P6)
+const UPAR_SE_MULT = 1.96                            # the u_∥ band's SE multiplier (P6)
 const CLOUD_SETS = ((15, 0.05, 200), (15, 0.3, 150))                   # Fig 6D, 7A inset
 # name => (x column, y column, expected sign of Kendall's τ)
 const TRENDS = (
