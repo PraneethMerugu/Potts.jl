@@ -222,7 +222,8 @@ end
 function ConvertPass(
         entity, decide; init!, transfer! = nothing, writes! = nothing,
         owner_changed = nothing, release = nothing,
-        fresh::Integer = 0, links::Tuple = (), limit::Integer = _SCRATCH_LIMIT[],
+        fresh::Integer = 0, links::Tuple = (),
+        limit::Integer = something(_SCRATCH_LIMIT[], typemax(Int32)),
         wcols::Tuple = ()
     )
     return ConvertPass(

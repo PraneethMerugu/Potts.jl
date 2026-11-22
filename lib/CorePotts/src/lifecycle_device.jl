@@ -75,8 +75,8 @@ const _ACC_BADTRANS = 8
 const _NACC = 8
 
 # The bound of `_scratch_ok`: `nothing` is the scratch type's own (`typemax(Int64)` where
-# `_atomic64(backend)` holds, else `typemax(Int32)`); a `Ref` read when the scratch is
-# built, so that tests can lower it (not public API)
+# `_atomic64(backend)` holds, else `typemax(Int32)`; `@convert` keeps `typemax(Int32)`); a
+# `Ref` read when the scratch is built, so that tests can lower it (not public API)
 const _SCRATCH_LIMIT = Ref{Union{Nothing, Int64}}(nothing)
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
