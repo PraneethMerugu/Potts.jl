@@ -45,15 +45,10 @@ One KernelAbstractions planner replaces the two planners. It runs on the CPU bac
 a device, for every algorithm, `SequentialCPM` included. `@transition`, `@retire`,
 `@create`, `@convert`, `@discrete_events` and `@terminate` are built once, in this planner.
 
-This section is enough to unify the existing rules (divide, remove, transition): their device
-kernels exist, and the acceptance bar below is concrete. The new rules (retire, create,
-discrete events, terminate) need the three PROPOSED rulings below (precedence, collective,
-fallback) before they are built.
-
 - **New device work.**
   - **Retire into a collective.** A partition kernel moves the cell's sites to the
-    collective. An atomic add updates the collective's volume, and the rule's own update
-    statement updates its target (see "Collective and target" below).
+    collective. An atomic add updates the collective's volume (an integer), and the rule's
+    own update statement updates its target (see "Collective and target" below).
   - **Create at a site set.** The planner allocates the id (the same prefix scan as for
     daughters). The partition kernel assigns the sites. `@create` and `@convert` (D-066,
     `convert.jl`, today a host routine plus kernels) move into the planner.
@@ -67,7 +62,7 @@ fallback) before they are built.
 - Lifecycle rules run between sweeps, so they do not change what a copy reads. They need no
   checkerboard work.
 
-**Event precedence in one lifecycle round (PROPOSED, pending a user ruling).** Every trigger
+**Event precedence in one lifecycle round (user ruling, 2026-11-22).** Every trigger
 reads the state before the round. The events then apply in the order retire and remove,
 convert, transition, divide, create, then model-scope discrete events, then the terminate
 check. Reason: it extends the existing priority list (remove > convert > transition > divide
@@ -86,19 +81,32 @@ cell index.
 | a discrete event and any cell event | cell triggers read the state before the round; model-scope affects apply after the cell events |
 | `@terminate` | checked after the whole round; the round's events stay applied, then the run stops |
 
-**Collective and target (PROPOSED, pending a user ruling).** A collective is an ordinary
+**Retirement chains and cycles.** A retire `sites => ref` whose `ref` also retires forms a
+chain; a retires into b while b retires into a forms a cycle. The planner resolves every
+destination by pointer doubling: each step sets dest[c] = dest[dest[c]] for every cell whose
+destination also retires, reading the previous step's array (double buffered). Four steps
+resolve every chain of up to 16 links. A cell whose destination still retires after the
+four steps is in a cycle or in a chain longer than 16 links. Its sites go to the medium, and
+the event is counted in the lifecycle statistics. The resolution takes a fixed number of
+steps, is deterministic and does not depend on cell index or launch order.
+
+**Collective and target (user ruling, 2026-11-22).** A collective is an ordinary
 cell: one id, its own kind, declared `collective = true` so that it may have several pieces
 without a split warning (api-synthesis §2). Its target is a cell variable of that cell (for
 example `V_target`), not a parameter. A retire into the collective always adds the retired
 volume to the collective's volume tracker. The target changes only through the rule's own
-update statement (`V_target[core] += volume`), applied by atomic add. Reason: this is the
-Jiang 2005 sketch of api-synthesis §5.2, and no hidden rule changes a target.
+update statement (`V_target[core] += volume`). Reason: this is the Jiang 2005 sketch of
+api-synthesis §5.2, and no hidden rule changes a target.
+- **Order-independent target updates.** The planner applies the rule's target updates in
+  cell order (increasing id of the retiring cell), not by float atomic add. Generic number
+  types (Duals, mixed precision) then work, and results are deterministic. An integer target
+  may use atomic adds, because integer addition does not depend on order.
 
 **Acceptance.** The host planner is deleted only after all of the following hold.
 1. **Five host behaviors.**
    - Host hooks (`Lifecycle.rebuild!`, a custom `remake_frozen`, cell-scope `pieces` with a
      lifecycle) run as an explicit host stage after the planner, not as a second planner.
-   - No silent handover. **PROPOSED, pending a user ruling:** a staged form that always
+   - No silent handover. **User ruling, 2026-11-22:** a staged form that always
      launches, with `PLAN_WG` adapted to the backend's workgroup limit (more stages where
      needed), and no host fallback. Reason: it keeps one planner, as ruled, and the limits
      are known at `init`, so a test can cover the smallest workgroup.
@@ -498,9 +506,10 @@ the axis of a near-isotropic cell and checks the Float32 conditioning of the eig
   read-back syncs and tier 2. (Settled: the CPU default is `:exact`; the `:live` retry cap
   behavior is in 5.6.)
 
-PROPOSED in section 3, pending a user ruling before the new lifecycle rules are built:
-- **P1.** The event precedence table.
-- **P2.** What a collective and its target are.
+Settled by the user on 2026-11-22 (section 3):
+- **P1.** The event precedence table, with bounded resolution of retirement chains and
+  cycles.
+- **P2.** What a collective and its target are, with target updates in cell order.
 - **P3.** A staged planner form that always launches, with no host fallback.
 
 Settled when the model is built, from its paper:
