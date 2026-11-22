@@ -823,10 +823,16 @@ merges (phase-end checkpoint).
   - (D-332) random-order FBA with write-back runs in priority rounds over cells (asymmetric
     read/write conflict test, LPs started per cell), equal to the sequential result for the
     same permutation; FBA solves stay on the host.
-- **P6.13** division log: a daughter-only `Int32` parent column next to `birth` (or a
-  per-division record), written by the lifecycle planner, so `lineage` no longer needs a
-  `mother` cell variable, dense saves, or self-record filtering, and keeps records of cells
-  that die between saves. Exact on every backend (no Float32 2^24 limit).
+- **P6.13** division log (user ruling 2026-11-22: the full log, not a parent column): an
+  append-only device buffer of `(mcs, parent serial, daughter serial)` records written by the
+  lifecycle planner at the serials' block offset (`next + k`, no extra atomic), drained only
+  at existing host reads (saves, run end, near-full), overflow counted in the statistics and
+  flagged in the status word; `lineage(sol)` reads it, no `mother` variable or dense saves.
+  Checkpoints and `remake` carry the log offset. Designed to extend to removals,
+  transitions, `@convert` and discrete events. Precondition: a lifecycle-kernel efficiency
+  pass (ROCm profile of quiet and event MCS: launches, syncs, kernel time per stage vs the
+  sweep), with budgets set before the log lands and checked after; quiet MCS stays at 0
+  syncs and 0 transfers.
 
 ## Field compiler: LatticeFields and LatticePDE (D-256 onward)
 
