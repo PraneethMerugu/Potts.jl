@@ -218,9 +218,10 @@ fig_p
 # ``R \in \{10, 15, 20\}``), 10 replicates of ``10^5`` MCS each, every MCS recorded, and
 # the bands for Figs. 3–7, fixed before the runs. `run_polarization.jl` makes the tracks
 # and `analyze_polarization.jl` the record. The record and its videos come later. The
-# ``Δτ_\text{opt}`` rows pass within the sampling spread of both fits (a bootstrap over our
-# replicates and the spread of one ideal fit at the set's ``S``), and the ``u_∥`` rows within
-# 10 % or 1.96 replicate standard errors; the record also gives ``u_∥`` on the CN track ``r_N + Π_{CN-N}``.
+# ``Δτ_\text{opt}`` rows pass within the sampling spread of both fits (a bootstrap
+# over our replicates and the spread of one ideal fit at the set's ``S``), and the
+# ``u_∥`` rows within 10 % or 1.96 replicate standard errors; the record also gives
+# ``u_∥`` on the CN track ``r_N + Π_{CN-N}``.
 #
 # ### Differences from the paper
 #
