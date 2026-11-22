@@ -3,6 +3,7 @@
 # oracles that read σ alone.
 using Potts, PottsModels
 using Potts: CorePotts
+using Potts.Layouts: Fill, Group, Interior, Objects, Point, Sphere, layout, overlay
 
 const KINDS = (:medium, :substrate, :lid, :cytoplasm, :lamellipodium, :nucleus)
 const SUBSTRATE, LID, CYTOPLASM, LAMELLIPODIUM, NUCLEUS = 1, 2, 3, 4, 5   # kind codes
@@ -40,9 +41,32 @@ function alive(u, k)
     return [c for c in eachindex(v) if v[c] > 0 && kd[c] == k]
 end
 
-# A hand state from the shipped R = 10, φ_l = 0.05 start: a lamellipodium (cell 5) made of
-# the cytoplasm sites at z = 2 with x ≥ 44 and at z = 3 with x ≥ 46, so it has sites that
-# touch the substrate (z = 2) and sites that do not (z = 3). `shift` moves the nucleus in x.
+# A hand state for the mechanism items: the cell at rest on the substrate. The cytoplasm
+# ball of the shipped start (radius r₀) is centered at (L ÷ 2 + 1, L ÷ 2 + 1, r₀ + 1), so
+# it rests on z = 2, with a 6³ nucleus box around (L ÷ 2 + 1, L ÷ 2 + 1, round(r₀ + 1)).
+# At R = 10, φ_l = 0.05 it has 57 cytoplasm sites at z = 2.
+function resting_op(sys, R, φ_l)
+    L, _, Lz = Potts.lattice(sys).dims
+    r0 = cbrt(((1 - 0.15 - φ_l) * ball_volume(R) + 216) / (4π / 3))
+    m = L ÷ 2 + 1
+    a = (m, m, round(Int, r0 + 1))
+    body = Group(
+        Objects(
+            Interior(Sphere(Point(Float64(m), Float64(m), r0 + 1), r0));
+            kinds = [:cytoplasm]
+        ),
+        Fill(:nucleus; region = map(x -> (x - 3):(x + 2), a))
+    )
+    planes = (
+        Fill(:substrate; region = (1:L, 1:L, 1:1)), Fill(:lid; region = (1:L, 1:L, Lz:Lz)),
+    )
+    return layout(overlay(body, planes...), sys)
+end
+
+# A hand state from the resting state at R = 10, φ_l = 0.05: a lamellipodium (cell 5) made
+# of the cytoplasm sites at z = 2 with x ≥ 44 and at z = 3 with x ≥ 46, so it has sites
+# that touch the substrate (z = 2) and sites that do not (z = 3). `shift` moves the nucleus
+# in x.
 function hand_op(op; shift = 0)
     σ = copy(entry(op, ownership))
     if shift != 0

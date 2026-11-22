@@ -3,11 +3,12 @@
 # has its own file, fortuna_field_tests.jl.
 # - build: the lattice rule, the compiled model and its copy-blocked twin;
 # - Table 1: the parameters and the contact matrix (J_cytoplasm–lamellipodium = 20);
-# - the start: the ball sized to the cytoplasm target plus the 216 nucleus sites, for the
-#   twelve (R, φ_l) of the paper;
+# - the start: the concentric balls of the supplement, sized to the cytoplasm target plus
+#   the 216 nucleus sites, for the twelve (R, φ_l) of the paper;
 # - the protrusion pass equals a counter-addressed draw oracle; p > 1, V₃ ≥ φ_l V and the
-#   φ_l = 0 NaN path;
-# - the drive is λ_F (F(target) − F(source)) on lamellipodium–medium copies and 0 otherwise;
+#   φ_l = 0 NaN path; the field step comes before the protrusion pass;
+# - the drive is λ_F (F(target) − F(source)) on lamellipodium extensions into the medium
+#   (and on retractions in the `:extension_retraction` variant), 0 otherwise;
 # - a short run: fixed targets, volumes against σ, the brute-force ΔH, determinism, and the
 #   controls c = 0 and φ_l = 0 (no lamellipodium);
 # - the observables across the periodic seam.
@@ -31,42 +32,19 @@ function default_run()
     end
 end
 
-# The start by hand: the strict ball of radius r₀ around (L ÷ 2 + 1, L ÷ 2 + 1, r₀ + 1)
-# and the 6³ nucleus box
+# The start by hand: the strict balls of radius r₀ (cytoplasm) and r_n (nucleus) around
+# (L/2 + 1, L/2 + 1, L_z/2 + 1)
 start_radius(R, φ_l) = cbrt(((1 - 0.15 - φ_l) * ball_volume(R) + 216) / (4π / 3))
-function oracle_ball(R, φ_l)
+function oracle_ball(R, φ_l, r)
     L, _, Lz = fortuna_lattice(R, φ_l)
-    r = start_radius(R, φ_l)
-    c = (L ÷ 2 + 1, L ÷ 2 + 1, r + 1)
+    c = (L / 2 + 1, L / 2 + 1, Lz / 2 + 1)
     return Set(
         (x, y, z) for x in 1:L, y in 1:L, z in 1:Lz
             if sqrt((x - c[1])^2 + (y - c[2])^2 + (z - c[3])^2) < r * (1 - 1.0e-12)
     )
 end
-function oracle_box(R, φ_l)
-    L = fortuna_lattice(R, φ_l)[1]
-    a = (L ÷ 2 + 1, L ÷ 2 + 1, round(Int, start_radius(R, φ_l) + 1))
-    return Set(
-        (x, y, z) for x in (a[1] - 3):(a[1] + 2), y in (a[2] - 3):(a[2] + 2),
-            z in (a[3] - 3):(a[3] + 2)
-    )
-end
-# (R, φ_l, lattice, r₀, ball sites, cytoplasm sites, cytoplasm target, ball z range,
-# ball sites at z = 2, nucleus z range), computed by hand from the rules above
-const START = [
-    (10, 0.05, (80, 80, 21), 9.478497, 3546, 3330, 3351.0, 2:19, 57, 7:12),
-    (10, 0.1, (80, 80, 21), 9.289232, 3374, 3158, 3141.6, 2:19, 57, 7:12),
-    (10, 0.2, (80, 80, 21), 8.885657, 2933, 2717, 2722.7, 2:18, 49, 7:12),
-    (10, 0.3, (80, 80, 21), 8.441659, 2528, 2312, 2303.8, 2:17, 45, 6:11),
-    (15, 0.05, (120, 120, 31), 14.012856, 11512, 11296, 11309.7, 2:29, 89, 12:17),
-    (15, 0.1, (120, 120, 31), 13.720328, 10835, 10619, 10602.9, 2:28, 89, 12:17),
-    (15, 0.2, (120, 120, 31), 13.094608, 9398, 9182, 9189.2, 2:27, 81, 11:16),
-    (15, 0.3, (120, 120, 31), 12.402584, 7980, 7764, 7775.4, 2:25, 69, 10:15),
-    (20, 0.05, (160, 160, 42), 18.616086, 27029, 26813, 26808.3, 2:38, 113, 17:22),
-    (20, 0.1, (160, 160, 42), 18.223114, 25320, 25104, 25132.7, 2:37, 109, 16:21),
-    (20, 0.2, (200, 200, 42), 17.381861, 21998, 21782, 21781.7, 2:35, 101, 15:20),
-    (20, 0.3, (200, 200, 42), 16.450191, 18616, 18400, 18430.7, 2:33, 97, 14:19),
-]
+# the twelve (R, φ_l) of the paper (Table 2, Fig 5)
+const START = [(R, φ_l) for R in (10, 15, 20) for φ_l in (0.05, 0.1, 0.2, 0.3)]
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
@@ -77,10 +55,11 @@ end
     @test fortuna_lattice(15, 0.3) == (120, 120, 31)
     @test fortuna_lattice(20, 0.1) == (160, 160, 42)
     @test fortuna_lattice(20, 0.2) == (200, 200, 42)    # int(10R) when R ≥ 20, φ_l ≥ 0.2
-    @test all(row -> fortuna_lattice(row[1], row[2]) == row[3], START)
+    @test fortuna_lattice(10, 0.3) == (80, 80, 21)
     @test mtkcompile(model_sys(R10)) isa CompiledPottsSystem
     @test mtkcompile(twin_sys(R10)) isa CompiledPottsSystem
     @test Potts.lattice(FortunaMigration(; name = :d)).dims == (120, 120, 31)
+    @test_throws ArgumentError FortunaMigration(; name = :d, drive = :retraction_only)
     @test occursin("Fortuna", string(@doc FortunaMigration))
 end
 
@@ -116,36 +95,41 @@ end
 @testitem "FortunaMigration: the start at the paper's twelve (R, φ_l)" setup = [
     FortunaModelSetup,
 ] tags = [:pottsmodels, :core] begin
-    @testset "R = $(row[1]), φ_l = $(row[2])" for row in START
-        R, φ_l, dims, r0, nball, ncyto, tcyto, zr, nz2, nz = row
-        # the hand numbers against the rules
-        @test start_radius(R, φ_l) ≈ r0 atol = 1.0e-6
-        @test round((1 - 0.15 - φ_l) * ball_volume(R); digits = 1) == tcyto
-        ball, box = oracle_ball(R, φ_l), oracle_box(R, φ_l)
-        @test length(ball) == nball && length(box) == 216 && box ⊆ ball
-        @test extrema(x[3] for x in ball) == extrema(zr)
-        @test count(x -> x[3] == 2, ball) == nz2
-        @test extrema(x[3] for x in box) == extrema(nz)
-        @test abs(ncyto - tcyto) < 31                   # sized to the target
-        # the layout against them
+    @testset "R = $R, φ_l = $φ_l" for (R, φ_l) in START
+        dims = fortuna_lattice(R, φ_l)
+        L, _, Lz = dims
+        ball = oracle_ball(R, φ_l, start_radius(R, φ_l))
+        nucleus = oracle_ball(R, φ_l, cbrt(216 / (4π / 3)))
+        @test nucleus ⊆ ball && 200 <= length(nucleus) <= 216
+        ncyto = length(ball) - length(nucleus)
+        # sized to the target: within the protocol's 2 % volume band (the lattice count of
+        # a ball off the site grid differs from its volume by up to about 1.7 % here)
+        tcyto = (1 - 0.15 - φ_l) * ball_volume(R)
+        @test abs(ncyto - tcyto) < 0.02 * tcyto
+        # the ball sits between the planes without touching either
+        @test 2 < minimum(x[3] for x in ball) && maximum(x[3] for x in ball) < Lz
+        # the layout against the oracle
         sys = FortunaMigration(; name = :fortuna, lattice = dims)
         op = fortuna_layout(R, φ_l, sys)
         σ = entry(op, ownership)
         @test size(σ) == dims
         @test entry(op, kind) == [:cytoplasm, :nucleus, :substrate, :lid]
         @test entry(op, cluster) == [1, 1, 3, 4]
-        @test Set(Tuple.(findall(==(1), σ))) == setdiff(ball, box)
-        @test count(==(1), σ) == ncyto
-        @test Set(Tuple.(findall(==(2), σ))) == box
-        @test all(==(3), view(σ, :, :, 1)) && all(==(4), view(σ, :, :, dims[3]))
-        @test count(==(0), σ) == prod(dims) - ncyto - 216 - 2 * dims[1]^2
+        @test Set(Tuple.(findall(==(1), σ))) == setdiff(ball, nucleus)
+        @test Set(Tuple.(findall(==(2), σ))) == nucleus
+        @test all(==(3), view(σ, :, :, 1)) && all(==(4), view(σ, :, :, Lz))
+        @test count(==(0), σ) == prod(dims) - length(ball) - 2 * L^2
+        # concentric: both centroids sit on the center
+        c = (L / 2 + 1, L / 2 + 1, Lz / 2 + 1)
+        @test all(isapprox.(oracle_centroid(σ, (1,)), c; atol = 1.0e-9))
+        @test all(isapprox.(oracle_centroid(σ, (2,)), c; atol = 1.0e-9))
     end
-    # negative control: a ball of radius R centered at z = R + 1 (the authors' code) is far
-    # above the cytoplasm target at R = 10 (4139 − 216 sites against 3351)
-    @test 4139 - 216 - 0.8 * ball_volume(10) > 500
+    # negative control: a ball of radius R (the authors' code) is far above the cytoplasm
+    # target at R = 10
+    @test length(oracle_ball(10, 0.05, 10.0)) - 216 - 0.8 * ball_volume(10) > 500
     # the problem: targets from the kinds, no lamellipodium yet
     u0 = default_problem().u0
-    @test volumes(u0)[1:4] == [3330, 216, 6400, 6400]
+    @test volumes(u0)[2:4] == [216, 6400, 6400]
     @test cell_kinds(u0)[1:4] == [CYTOPLASM, NUCLEUS, SUBSTRATE, LID]
     @test isempty(alive(u0, LAMELLIPODIUM))
     @test u0.cell.V_target[1] ≈ 0.8 * ball_volume(10) rtol = 1.0e-12
@@ -157,7 +141,10 @@ end
     FortunaModelSetup,
 ] tags = [:pottsmodels, :core] begin
     sys = twin_sys(R10)
-    op = default_op(sys)
+    op = resting_op(sys, 10, 0.05)
+    # the shipped start has no candidate: the ball does not touch the substrate
+    shipped = fortuna_problem(sys, default_op(sys), 10, 0.05).u0
+    @test isempty(oracle_pass(shipped, 0, 1; c = 0.1, φ_l = 0.05, R = 10)[2])
     for seed in 1:4
         prob = fortuna_problem(sys, op, 10, 0.05; tspan = (0, 4), seed)
         sol = solve(prob, SequentialCPM(); saveat = 1)
@@ -191,7 +178,7 @@ end
     FortunaModelSetup,
 ] tags = [:pottsmodels, :core] begin
     sys = twin_sys(R10)
-    op = default_op(sys)
+    op = resting_op(sys, 10, 0.05)
     go(o, tend; p) = solve(
         fortuna_problem(sys, o, 10, 0.05; tspan = (0, tend), p), SequentialCPM();
         saveat = 1
@@ -220,35 +207,66 @@ end
     @test cytoplasm_at_z2(sε.u[2]) == 0
 end
 
+@testitem "FortunaMigration: the field step comes before the protrusion pass" setup = [
+    FortunaModelSetup,
+] tags = [:pottsmodels, :core] begin
+    # the twin at c = 2.5 converts every cytoplasm site at z = 2 in the first pass. The
+    # field step of MCS 1 runs before it, with no source, so F = 0 there after MCS 1; the
+    # step of MCS 2 adds k_source = 0.9 to F = 0. Protrusion first would give 0.9 after
+    # MCS 1.
+    sys = twin_sys(R10)
+    prob = fortuna_problem(
+        sys, resting_op(sys, 10, 0.05), 10, 0.05; tspan = (0, 2), p = (:c => 2.5,)
+    )
+    sol = solve(prob, SequentialCPM(); saveat = 1)
+    lam(u) = findall(==(only(alive(u, LAMELLIPODIUM))), vec(Array(ownership(u))))
+    sites = lam(sol.u[2])
+    @test !isempty(sites) && all(i -> CartesianIndices(R10)[i][3] == 2, sites)
+    @test lam(sol.u[3]) == sites                        # no candidate is left at MCS 2
+    @test all(==(0), vec(observe(prob, :F, sol.u[2]))[sites])
+    @test all(≈(0.9; atol = 1.0e-12), vec(observe(prob, :F, sol.u[3]))[sites])
+end
+
 @testitem "FortunaMigration: the F-actin drive" setup = [FortunaModelSetup] tags = [
     :pottsmodels, :core,
 ] begin
     # a hand lamellipodium, 3 MCS without protrusion, so F is about 1 on the
     # lamellipodium sites at z = 2 and small elsewhere
     sys = model_sys(R10)
-    prob = fortuna_problem(sys, hand_op(default_op(sys)), 10, 0.05; p = (:c => 0.0,))
+    op = hand_op(resting_op(sys, 10, 0.05))
+    prob = fortuna_problem(sys, op, 10, 0.05; p = (:c => 0.0,))
     u = solve(remake(prob; tspan = (0, 3)), SequentialCPM()).u[end]
     F = observe(prob, :F, u)
     @test maximum(F) > 0.99
     kd = cell_kinds(u)
     lam(c) = c != 0 && kd[c] == LAMELLIPODIUM
     props = boundary_proposals(prob, u)
-    want(p) = ((lam(p.new) && p.old == 0) || (lam(p.old) && p.new == 0)) ?
-        150.0 * (F[p.target] - F[p.source]) : 0.0
-    @test maximum(p -> abs(drive(prob, u, p) - want(p)), props) < 1.0e-6
-    # extension down the F gradient is favored, retraction opposed, other copies 0
-    ext = filter(p -> p.old == 0 && lam(p.new) && F[p.source] - F[p.target] > 0.5, props)
-    ret = filter(p -> lam(p.old) && p.new == 0 && F[p.target] - F[p.source] > 0.5, props)
+    extension(p) = lam(p.new) && p.old == 0
+    retraction(p) = lam(p.old) && p.new == 0
+    gain(p) = 150.0 * (F[p.target] - F[p.source])
+    # the default, Eq 7 as printed: extensions only
+    @test maximum(p -> abs(drive(prob, u, p) - extension(p) * gain(p)), props) < 1.0e-6
+    # extension down the F gradient is favored; retractions and other copies get 0
+    ext = filter(p -> extension(p) && F[p.source] - F[p.target] > 0.5, props)
+    ret = filter(p -> retraction(p) && F[p.target] - F[p.source] > 0.5, props)
     other = filter(p -> !lam(p.old) && !lam(p.new), props)
     @test !isempty(ext) && !isempty(ret) && !isempty(other)
     @test all(p -> drive(prob, u, p) < -75, ext)
-    @test all(p -> drive(prob, u, p) > 75, ret)
-    @test all(p -> abs(drive(prob, u, p)) < 1.0e-6, other)
+    @test all(p -> abs(drive(prob, u, p)) < 1.0e-6, [ret; other])
     # λ_F scales it and λ_F = 0 removes it
     p0 = remake(prob; p = [:λ_F => 0.0])
-    @test all(p -> abs(drive(p0, u, p)) < 1.0e-6, [ext; ret])
+    @test all(p -> abs(drive(p0, u, p)) < 1.0e-6, ext)
     p75 = remake(prob; p = [:λ_F => 75.0])
     @test all(p -> drive(p75, u, p) ≈ drive(prob, u, p) / 2, ext)
+    # the variant (the authors' code) also opposes retractions up the gradient
+    sys_er = FortunaMigration(;
+        name = :fortuna, lattice = R10, drive = :extension_retraction
+    )
+    per = fortuna_problem(sys_er, op, 10, 0.05; p = (:c => 0.0,))
+    both(p) = (extension(p) || retraction(p)) * gain(p)
+    @test maximum(p -> abs(drive(per, u, p) - both(p)), props) < 1.0e-6
+    @test all(p -> drive(per, u, p) > 75, ret)
+    @test all(p -> abs(drive(per, u, p)) < 1.0e-6, other)
 end
 
 @testitem "FortunaMigration: a short run" setup = [FortunaModelSetup] tags = [
@@ -302,7 +320,7 @@ end
     FortunaModelSetup,
 ] tags = [:pottsmodels, :core] begin
     sys = model_sys(R10)
-    op = hand_op(default_op(sys); shift = 3)            # Π ≠ 0
+    op = hand_op(resting_op(sys, 10, 0.05); shift = 3)  # Π ≠ 0
     σ0 = entry(op, ownership)
     base = fortuna_problem(sys, op, 10, 0.05)
     Πh = oracle_polarization(σ0, 1, 2)
@@ -324,10 +342,10 @@ end
     @test any(k -> frames[k + 1][1] < frames[k][1], 1:15)   # the raw track jumps
     tr = unwrap_track(frames, (80, 80), true)
     @test all(k -> all(isapprox.(tr[k + 1] .- tr[1], (7.0k, 3.0k); atol = 1.0e-9)), 0:15)
-    # the shipped start: the 6³ box sits half a site off the ball center in x and y
+    # the shipped start: the balls are concentric, so Π = 0
     prob0 = default_problem()
-    @test observe(prob0, :Πx)[1] ≈ 0.5 atol = 1.0e-9
-    @test observe(prob0, :Πy)[1] ≈ 0.5 atol = 1.0e-9
+    @test observe(prob0, :Πx)[1] ≈ 0 atol = 1.0e-9
+    @test observe(prob0, :Πy)[1] ≈ 0 atol = 1.0e-9
     # a lamellipodium cut off from the cytoplasm reads lam_cyto = 0
     σd = copy(σ0)
     σd[σd .== 5] .= 1

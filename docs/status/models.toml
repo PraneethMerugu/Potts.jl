@@ -131,7 +131,10 @@ models_page = "model-fortuna"
 deviations = [
     "The protrusion rate c is not stated: 0.1 (the authors' code) is provisional until the runner calibrates it on the volume check.",
     "Not stated in the paper, taken from the authors' code: the lid plane and its contact row, the field solver (one explicit Euler step per MCS) and the lattice rule.",
-    "The update order is not stated: sweep, field step, protrusion; the source is added in the same step as diffusion and decay (split and unsplit differ by about 5e-20).",
+    "Not stated in the paper, as in the authors' code: the field is periodic in x and y with zero flux in z, on the whole lattice including both planes.",
+    "The update order is not stated: sweep, field step, protrusion. The field step is the same update as the authors' code (CompuCell3D diffuses and decays, then secretes; with one explicit step per MCS and a source that does not depend on F the two are identical). Secreting first would give F ≈ 0.1.",
+    "The drive is Eq 7 as printed (extensions only); the authors' code form with retractions is the option drive = :extension_retraction.",
+    "The start is the supplement's concentric spheres at (L_x/2, L_y/2, L_z/2), sized to the cytoplasm target plus 216 nucleus sites; the authors' code starts on the substrate with a cube nucleus.",
 ]
 
 [[model]]

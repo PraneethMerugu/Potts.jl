@@ -8,7 +8,7 @@ module FortunaField
     using Potts.LatticePDE: laplacian, lattice_domain
     const Dt = Differential(t)
     @parameters x y z
-    @variables F(..) source(..) [input = true]
+    @variables F(..) source(..)::Bool [input = true]
 
     # Eq 6: `∂F/∂t = D_F ΔF − k_decay F + k_source [source]`, on the whole lattice. The
     # periodic x and y axes and the closed z axis come from the model's lattice (no
@@ -25,8 +25,8 @@ module FortunaField
 end
 
 """
-    FortunaMigration(; name, lattice = (120, 120, 31), R = 15.0, φ_n = 0.15,
-        φ_l = 0.05, T = 100.0, λ = 10.0, λ_F = 150.0, c = 0.1, D_F = 1.0e-4,
+    FortunaMigration(; name, lattice = (120, 120, 31), drive = :extension_only, R = 15.0,
+        φ_n = 0.15, φ_l = 0.05, T = 100.0, λ = 10.0, λ_F = 150.0, c = 0.1, D_F = 1.0e-4,
         k_decay = 0.9, k_source = 0.9, J)
 
 Build the 3D crawling-cell model of Fortuna et al. (2020): one cell made of a cytoplasm, a
@@ -45,8 +45,10 @@ lamellipodium makes where it touches the substrate.
 - **F-actin.** Eq 6: `∂F/∂t = D_F ΔF − k_decay F + k_source` on lamellipodium sites with
   a substrate face neighbor, on the whole lattice. The field is the `PDESystem`
   `FortunaField.factin`, coupled with `@fields`; the site predicate is its input.
-- **Drive.** Eq 7, in both directions: a copy of a lamellipodium into the medium, or of
-  the medium into a lamellipodium, adds `λ_F (F(target) − F(source))` to ΔH.
+- **Drive.** Eq 7 as printed: a copy of a lamellipodium into the medium (an extension)
+  adds `λ_F (F(target) − F(source))` to ΔH. With `drive = :extension_retraction` the same
+  term also applies to a copy of the medium into a lamellipodium (a retraction), as in the
+  authors' code.
 - **Protrusion.** Once per MCS, after the sweep and the field step, each cytoplasm site
   with a substrate face neighbor converts to the lamellipodium with probability
   `p = c (1 − V₃/(φ_l V))`, with `V₃` the lamellipodium volume at the start of the pass.
@@ -56,22 +58,41 @@ lamellipodium makes where it touches the substrate.
   cytoplasm–nucleus polarization Π_CN−N, minimum image) and `lam_cyto` (the lamellipodium
   sites with a cytoplasm face neighbor; 0 means that the lamellipodium is detached).
 
-The paper does not state the protrusion rate `c`; the default 0.1 is the constant of the
-authors' code. It is provisional: the reproduction runner calibrates `c` on the volume
-check (0.1, then 0.3, then 1.0). The paper does not state the
-field solver either. This model's is one explicit Euler step per MCS, the schedule of the
-authors' code: `field_solver = ExplicitEuler(substeps = 1)`. The fields run on the default
-discretization (the fused lattice fields of LatticePDE).
+The fields run on the default discretization (the fused lattice fields of LatticePDE).
 
-Differences from the paper:
-- the lid plane and its contact row are not in the paper (the authors' code has them);
-- the paper does not say whether the source is added in the same update as diffusion and
-  decay; with one explicit step per MCS the two orders give the same values to rounding
-  (the largest difference over 20 MCS is about 5e-20).
+Differences from the paper, and choices where it is silent (the model page has the same
+table):
+- protrusion rate `c`: not stated; 0.1, the constant of the authors' code, provisional
+  until the reproduction runner calibrates it on the volume check (0.1, then 0.3, then
+  1.0);
+- `V₃` in `p`: the actual lamellipodium volume at the start of each protrusion pass;
+- J_cytoplasm–lamellipodium: 20 as in Table 1 (the authors' code uses 10);
+- lid: not in the paper; a frozen lid plane at z = L_z with the contact row of the
+  authors' code;
+- field solver: not stated; one explicit Euler step per MCS, as in the authors' code
+  (`field_solver = ExplicitEuler(substeps = 1)`);
+- field boundary conditions: not stated; periodic in x and y, zero flux in z, on the
+  whole lattice including the substrate and lid planes, as in the authors' code;
+- update order: not stated; sweep, then field step, then protrusion. The field step is the
+  same update as the authors' code (CompuCell3D diffuses and decays, then secretes; with
+  one explicit step per MCS and a source that does not depend on F the two are
+  identical). Secreting first would give F ≈ 0.1;
+- drive: Eq 7 as printed, extensions only (the default); `drive = :extension_retraction`
+  adds retractions, as in the authors' code;
+- targets: the paper's, fixed from t = 0;
+- start: the concentric spheres of the supplement (S1, p. 6), with the sizes of
+  [`fortuna_layout`](@ref); the authors' code instead puts a cube nucleus in a ball that
+  rests on the substrate;
+- lattice: `8R`, or `10R` when `R ≥ 20` and `φ_l ≥ 0.2`, truncated, the rule of the
+  authors' code inside the paper's range;
+- nucleus track: the nucleus center of mass, in x and y.
 
 # Keywords
 - `name::Symbol`: the system name (`@named` passes it).
 - `lattice = (120, 120, 31)`: the lattice size (structural); the lattice of `R = 15`.
+- `drive = :extension_only`: the copies that the F-actin drive applies to (structural).
+  `:extension_only` is Eq 7 as printed; `:extension_retraction` adds retractions, as the
+  authors' code does.
 - `R = 15.0`: the cell radius in sites. Pass the radius of the lattice you use.
 - `φ_n = 0.15`, `φ_l = 0.05`: the nucleus and lamellipodium volume fractions.
 - `T = 100.0`, `λ = 10.0`: the temperature and the volume constraint strength.
@@ -103,6 +124,7 @@ See also [`fortuna_lattice`](@ref), [`fortuna_layout`](@ref).
 @potts_model FortunaMigration begin
     @structural_parameters begin
         lattice = (120, 120, 31)                   # R = 15: int(8R)² × int(2.1R)
+        drive = :extension_only                    # or :extension_retraction
     end
     @kinds medium substrate[frozen] lid[frozen] cytoplasm lamellipodium nucleus
     @parameters begin
@@ -148,20 +170,28 @@ See also [`fortuna_lattice`](@ref), [`fortuna_layout`](@ref).
     # Eq 6: the source on lamellipodium sites with a substrate face neighbor (the `ifelse`
     # skips the neighbor fold at the other sites)
     @fields F = FortunaField.factin(lattice) (
-        FortunaField.source => ifelse(
-            kind == lamellipodium, 1.0 * touches_substrate(site), 0.0
-        ),
+        FortunaField.source =>
+            ifelse(kind == lamellipodium, touches_substrate(site), false),
     )
     @energy begin
         cells(cytoplasm, lamellipodium, nucleus) => λ * (volume - V_target)^2    # Eq 5
         contacts => J[kind, neighbor_kind]                                       # Eq 4
     end
-    # Eq 7, both directions: extension is favored, retraction opposed
-    @drive copy => ifelse(
-        ((kind[new] == lamellipodium) & (old == 0)) |
-            ((kind[old] == lamellipodium) & (new == 0)),
-        λ_F * (F[target] - F[source]), 0.0
-    )
+    # Eq 7: the F-actin term on an extension (a lamellipodium copied into the medium); the
+    # variant also applies it to a retraction (the medium copied into a lamellipodium)
+    if _structural_choice(
+            drive, (:extension_only, :extension_retraction), "FortunaMigration", :drive
+        ) === :extension_only
+        @drive copy => ifelse(
+            (kind[new] == lamellipodium) & (old == 0), λ_F * (F[target] - F[source]), 0.0
+        )
+    else
+        @drive copy => ifelse(
+            ((kind[new] == lamellipodium) & (old == 0)) |
+                ((kind[old] == lamellipodium) & (new == 0)),
+            λ_F * (F[target] - F[source]), 0.0
+        )
+    end
     # p on the start-of-pass lamellipodium volume; clamped to [0, 1]; NaN converts nothing
     @convert protrusion clusters(cytoplasm) begin
         to = sibling(lamellipodium)
@@ -212,14 +242,18 @@ end
         -> [ownership => σ, kind => kinds, cluster => ids]
 
 Return the start of [`FortunaMigration`](@ref) on the lattice of `sys`: a ball of
-cytoplasm with a 6³ nucleus inside it, no lamellipodium, the substrate plane at z = 1 and
-the lid at z = L_z.
+cytoplasm with a concentric nucleus ball, no lamellipodium, the substrate plane at z = 1
+and the lid at z = L_z.
 
-- The ball is sized to the cytoplasm target plus the 216 nucleus sites,
-  `r₀ = ∛(((1 − φ_n − φ_l)V + 216)/(4π/3))`, `V = (4π/3)R³`. It is strict (`d < r₀`) and
-  centered at `(L ÷ 2 + 1, L ÷ 2 + 1, r₀ + 1)`, so it rests on z = 2.
-- The nucleus is the box `(a − 3):(a + 2)` per axis around
-  `a = (L ÷ 2 + 1, L ÷ 2 + 1, round(Int, r₀ + 1))`.
+- Both balls are centered at `(L/2 + 1, L/2 + 1, L_z/2 + 1)`: the center
+  `(L_x/2, L_y/2, L_z/2)` of the paper's supplement (S1, p. 6) in the authors' 0-based
+  coordinates. Both are strict (`d < r`).
+- The cytoplasm ball is sized to the cytoplasm target plus the 216 nucleus sites,
+  `r₀ = ∛(((1 − φ_n − φ_l)V + 216)/(4π/3))`, `V = (4π/3)R³`. It does not touch the
+  substrate at t = 0: the cell reaches it by its own fluctuations.
+- The nucleus ball has the volume of 216 sites, `r_n = ∛(216/(4π/3))`. Its site count
+  depends on where the center falls on the lattice (216 for a center between sites in z,
+  fewer for a center on a site).
 - Cells: 1 cytoplasm, 2 nucleus, 3 substrate, 4 lid; the cytoplasm and the nucleus share
   a cluster.
 
@@ -237,14 +271,11 @@ function fortuna_layout(R::Real, φ_l::Real, sys; φ_n::Real = 0.15)
     L, _, Lz = Potts.lattice(sys).dims
     V = 4 / 3 * 3.141592653589793 * R^3
     r0 = cbrt(((1 - φ_n - φ_l) * V + 216) / (4π / 3))
-    m = L ÷ 2 + 1
-    a = (m, m, round(Int, r0 + 1))
+    rn = cbrt(216 / (4π / 3))
+    center = Point(L / 2 + 1, L / 2 + 1, Lz / 2 + 1)
     body = Group(
-        Objects(
-            Interior(Sphere(Point(Float64(m), Float64(m), r0 + 1), r0));
-            kinds = [:cytoplasm]
-        ),
-        Fill(:nucleus; region = map(x -> (x - 3):(x + 2), a))
+        Objects(Interior(Sphere(center, r0)); kinds = [:cytoplasm]),
+        Fill(:nucleus; region = Interior(Sphere(center, rn)))
     )
     return layout(
         overlay(

@@ -3,25 +3,26 @@
 # - the source recurrence F = 1 − 0.1ⁿ at a source site (k_decay = k_source = 0.9);
 # - the whole lattice after each MCS equals one explicit Euler step of Eq 6 with the
 #   7-point Laplacian, x and y periodic, zero flux in z;
-# - negative controls: no periodic wrap, the source without the substrate test, two
-#   substeps per MCS, and the secrete-then-diffuse order all give other values;
-# - the split update (diffuse and decay, then add the source: CompuCell3D's order) and the
-#   unsplit update agree to rounding with one step per MCS.
+# - negative controls: no periodic wrap (on either axis alone), the source without the
+#   substrate test, two substeps per MCS, and the secrete-then-diffuse order all give
+#   other values;
+# - the update order: the model's step equals CompuCell3D's (diffuse and decay, then add
+#   the source).
 
 @testsetup module FortunaFieldSetup
 include(joinpath(@__DIR__, "shared", "common.jl"))
 include(joinpath(@__DIR__, "shared", "fortuna.jl"))
 
-# A 12 × 12 × 6 hand state: substrate at z = 1, lid at z = 6, a lamellipodium (cell 3) at
-# the x seam with sites at z = 2 (sources) and z = 3 (no substrate neighbor), and a
-# cytoplasm (cell 4) at z = 2 (not a lamellipodium: no source).
+# A 12 × 12 × 6 hand state: substrate at z = 1, lid at z = 6, a lamellipodium (cell 3) in
+# the corner where the x and y seams meet, with sites at z = 2 (sources) and z = 3 (no
+# substrate neighbor), and a cytoplasm (cell 4) at z = 2 (not a lamellipodium: no source).
 const SMALL = (12, 12, 6)
 function small_op()
     σ = zeros(Int, SMALL)
     σ[:, :, 1] .= 1
     σ[:, :, 6] .= 2
-    σ[1:3, 4:6, 2] .= 3
-    σ[1:2, 4:5, 3] .= 3
+    σ[1:3, 1:3, 2] .= 3
+    σ[1:2, 1:2, 3] .= 3
     σ[11:12, 8:9, 2] .= 4
     return [
         ownership => σ, kind => [:substrate, :lid, :lamellipodium, :cytoplasm],
@@ -96,11 +97,15 @@ end
     ours = field_run(n)
     want = oracle_run(n)
     @test maxdiff(ours, want) < 1.0e-12
-    # the field reached across the x seam (x = 12 next to the source at x = 1) and up to
-    # the lid plane, so the periodic and closed faces are both exercised
-    @test last(ours)[12, 5, 2] > 1.0e-3 && last(ours)[1, 5, 6] > 0
-    # negative controls
+    # the field reached across the x seam (x = 12 next to the source at x = 1), across the
+    # y seam (y = 12 next to y = 1) and up to the lid plane, so the periodic and closed
+    # faces are all exercised
+    @test last(ours)[12, 2, 2] > 1.0e-3 && last(ours)[2, 12, 2] > 1.0e-3
+    @test last(ours)[1, 1, 6] > 0
+    # negative controls: no wrap at all, no wrap on y only, no wrap on x only
     @test maxdiff(ours, oracle_run(n; periodic = (false, false, false))) > 1.0e-3
+    @test maxdiff(ours, oracle_run(n; periodic = (true, false, false))) > 1.0e-3
+    @test maxdiff(ours, oracle_run(n; periodic = (false, true, false))) > 1.0e-3
     @test maxdiff(ours, oracle_run(n; periodic = (true, true, true))) > 1.0e-6
     @test maxdiff(ours, oracle_run(n; substrate = false)) > 0.1
     two = field_run(n; solver = ExplicitEuler(substeps = 2))
@@ -108,18 +113,17 @@ end
     @test maxdiff(two, want) > 1.0e-3
 end
 
-@testitem "Fortuna field: split and unsplit updates agree" setup = [
-    FortunaFieldSetup,
-] tags = [:pottsmodels, :core] begin
-    # One explicit step per MCS: diffuse and decay, then add the source (CompuCell3D's
-    # DiffusionSolverFE) is F + D ΔF − kF + k_s S, the same sum as the unsplit step, so
-    # the two differ by rounding only. The model's parameters, 20 MCS.
+@testitem "Fortuna field: the update order" setup = [FortunaFieldSetup] tags = [
+    :pottsmodels, :core,
+] begin
+    # CompuCell3D diffuses and decays, G = F + D ΔF − kF, then secretes, G += k_s S. The
+    # model takes one explicit step per MCS, G = F + D ΔF − kF + k_s S. The source term does
+    # not depend on F, so with one step per MCS the two are the same update and differ only
+    # in the order of the floating-point additions. The check below guards that identity;
+    # the whole-lattice item checks the values. The model's parameters, 20 MCS.
     p = (; D = 1.0e-4, k = 0.9)
     ours = field_run(20; p...)
-    split = oracle_run(20; p..., order = :split)
-    gap = maxdiff(ours, split)
-    @info "Fortuna field: split against unsplit over 20 MCS" max_abs_difference = gap
-    @test gap < 1.0e-14
+    @test maxdiff(ours, oracle_run(20; p..., order = :split)) < 1.0e-14
     # negative control: secreting first and then diffusing gives the fixed point
     # (1 − k)k_s/k = 0.1 at an isolated source site instead of k_s/(k + 6D) ≈ 1
     late = oracle_run(20; p..., order = :secrete_first)

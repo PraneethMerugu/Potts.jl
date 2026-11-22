@@ -961,6 +961,8 @@ D-053 items 6–10 where the two differ.
 
 ## D-067 C7 and X5 changed on new source evidence (2026-09-30, maintainer approved)
 
+Amended by D-327: the C7 drive default is Eq 7 as printed (extension only), under the paper-over-code rule of 2026-10-09; the code's both-directions form is the `drive = :extension_retraction` option of `FortunaMigration`.
+
 The P6.0i2 pre-send checks read sources that were not available when the §4 decisions were
 approved. The maintainer approved both changes in the coordinator session on 2026-09-30
 ("theyre approved").
@@ -5812,3 +5814,13 @@ The user ruled on the field-docs plan (`research/field-compiler/c10/C10-plan.md`
 - **Unmarked in a77bca96.** LatticeFields.Problems: `cover_text`, `steady_gain_words`, `coupling_unseen_text`, `computed_slot`, `check_values`, `check_inputs_set`, `upload_inputs!`, `clamp_now!`, `remake_params`, `remake_u0`, `with_values`, `StateView`, `RHSLaunch`, `ImplicitRow`, `StatusTotals`, `EulerRule`. LatticeFields.IR: `KernelBuilder`, `print_program`, `FACE_RTOL`. LatticePDE: `euler_update`, `steady_sign`, `steady_form`, `OPERATOR_BUILDS`. CorePotts: `CHECKPOINT_FORMAT`, `GlobalBoard`, `GlobalLocal`, `phase_context`, `shell_mask`, `shell_owners`, `ShellRead`, `STATUS_SUM_RANGE`. Kept there: `typewith`, `check_setp` and `rhs_tables` (the OrdinaryDiffEqCore extension uses them qualified) and `nbuffers` (an algorithm hook that tests in other packages extend).
 - **Unmarked in the follow-up commit.** Potts: `resolve` (a one-line reader of a `FieldBinding`, used by one test only).
 - **Kept public in the follow-up review.** Potts: `wrap_system`, `PottsPart` and `part` (the `PottsSystem` docstring names `wrap_system` as a constructor; together they are the front-end extension point, and `PottsPart` is its argument and the return type of `part`); `FieldBinding` (the element type of the `bindings` keyword of `PottsPart`, which only a front end fills); `LatticeSpec` (the lattice argument of the `paint!` layout hook); `PottsEntity` (the `potts_entity` metadata key, read with MTK's metadata API); `is_kind` (the `couple` docstring and its error messages tell users to write it). MakiePotts: `LegendEntry` (the element type of what `legend_entries` returns); `field_frames` and its return type `FieldFrames` (a user-facing read of a field solution's saves).
+
+## D-327 Fortuna: the paper's extension-only drive and the supplement's concentric start (2026-11-21; coordinator ruling on the review of the Fortuna port, under the user's paper-over-code rule of 2026-10-09; amends D-067 item C7)
+
+D-067 (2026-09-30) made the code's two-direction chemotaxis the default for 14a. It predates the paper-over-code rule (2026-10-09): the paper wins over the authors' code, and the code is research evidence only.
+
+- **Drive.** `FortunaMigration` applies Eq 7 as printed: the F-actin term `λ_F (F(target) − F(source))` acts on extensions only (a lamellipodium site copied into the medium). The authors' code form, which also acts on retractions (the medium copied into a lamellipodium), stays as the structural option `drive = :extension_retraction`, a keyword on the model, not a model-named path in core.
+- **Start.** `fortuna_layout` builds the start that the supplement states (14a-S1, p. 6): two concentric balls centered at `(L_x/2, L_y/2, L_z/2)`, that is `(L/2 + 1, L/2 + 1, L_z/2 + 1)` in 1-based sites. The ruled sizing stays: the cytoplasm ball holds the cytoplasm target plus 216 nucleus sites, the nucleus ball has the volume of 216 sites, both strict (`d < r`). The authors' code start (a ball resting on the substrate with a 6³ nucleus box) is no longer the default; the tests keep it as a hand state for the mechanism items.
+- **Consequences.** The cell starts off the substrate (a gap of 1 to 4 medium layers over the twelve (R, φ_l)) and settles by its own fluctuations before the first protrusion. Probes at seed 1: the first lamellipodium appears at MCS 1 to 107 for R = 10 and 15, at MCS 14 and 278 for R = 20 with φ_l = 0.05 and 0.2, and at MCS 5075 for R = 20, φ_l = 0.3; at that set seeds 2 to 4 had not reached the substrate by MCS 7500. The coordinator decides whether that delay is acceptable. The polarization at t = 0 is 0 (concentric), not √0.5. The nucleus ball has 203 sites where the center falls on a site in z (R = 20), 216 otherwise.
+- **Record.** Both changes are rows of the model page's differences table and items of the docstring's list. No FULL record existed, so nothing is re-run.
+

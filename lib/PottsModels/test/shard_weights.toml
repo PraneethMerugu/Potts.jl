@@ -100,6 +100,7 @@
 "foam_model_source_tests.jl" = 4.0
 "fortuna_field_tests.jl" = 26.0
 "fortuna_model_tests.jl" = 44.0
+"fortuna_sibling_tests.jl" = 8.0
 "guardrails_tests.jl" = 79.0
 "mechanisms_tests.jl" = 50.0
 "openvt_analysis_tests.jl" = 4.0
@@ -125,5 +126,5 @@
 "reproductions/15_openvt_package_tests.jl" = 13.0
 "reproductions/15_openvt_page_tests.jl" = 5.0
 "reproductions/15_openvt_sweeps_tests.jl" = 13.0
-"siblings_tests.jl" = 46.0
+"siblings_tests.jl" = 40.0
 "tutorial_models_tests.jl" = 4.0

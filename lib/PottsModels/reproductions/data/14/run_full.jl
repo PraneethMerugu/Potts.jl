@@ -2,15 +2,16 @@
 # and the FULL record that `protocol.jl` checks.
 #
 # Two stages, each a launch of its own:
-#   1. `--stage qtier`: S-cal, Q1–Q5 and the Q6 timing (`qtier_calibration`,
-#      `qtier_controls`, `qtier_timing`). It writes <out>/qtier.toml: the commit, the chosen
-#      c, the S-cal rows, the Q6 ns per copy attempt at R = 10, 15, 20, every check and
-#      `pass`. Exit status 0 only if every check passed. After a pass it makes one info-only
-#      run at the Q1 setting (the chosen c, seed 1, 2 × 10⁴ MCS) with the diagnostics of
-#      record.jl: qtier_q1_track.tsv.gz, qtier_q1_diag.tsv.gz and qtier_q1_diag.toml.
-#   2. `--stage full` (the default): refuses to start unless <out>/qtier.toml exists, passed,
-#      and names this commit with a clean tree. Then the 700 FULL runs (68 sets, 10⁵ MCS
-#      each) at the calibrated c, one run per thread, in priority order (the persistence
+#   1. `--stage qtier`: the c calibration, the short checks and the timing
+#      (`qtier_calibration`, `qtier_controls`, `qtier_timing`). It writes <out>/qtier.toml:
+#      the commit, the chosen c, the calibration rows, the ns per copy attempt at R = 10,
+#      15, 20, every check and `pass`. Exit status 0 only if every check passed. After a
+#      pass it makes one info-only run at the first set (the chosen c, seed 1, 2 × 10⁴ MCS)
+#      with the diagnostics of record.jl: qtier_first_set_track.tsv.gz,
+#      qtier_first_set_diag.tsv.gz and qtier_first_set_diag.toml.
+#   2. `--stage full` (the default): refuses to start unless <out>/qtier.toml exists,
+#      passed, and names this commit with a clean tree. Then the 700 FULL runs (68 sets, 10⁵
+#      MCS each) at the calibrated c, one run per thread, in priority order (the persistence
 #      set, the Fig 6 grid at R = 15, the rest of Table 2, the rest of Fig 5; longest first
 #      inside each group), and the record: sets.tsv, runs.tsv, msd_runs.tsv, msd.tsv,
 #      fits.tsv, oracle.tsv, scal.tsv, verdicts.tsv, job_walls.tsv, provenance.toml,
@@ -30,7 +31,8 @@
 # The record goes to <out>/record/. Copy it to
 # lib/PottsModels/reproductions/data/14/full-<date>/ (exactly one full-* directory may exist
 # there), add deviations.tsv for every FAIL row (<out>/record/deviations_todo.tsv lists them
-# with empty `cause` and `question` columns), and run evaluate.jl, which recomputes every row.
+# with empty `cause` and `question` columns), and run evaluate.jl, which recomputes every
+# row.
 #
 # Usage, from the checkout root (<out> outside the checkout's lib/ and src/, and outside
 # reproductions/data/14):
@@ -45,9 +47,9 @@
 #
 # A trial, to check the scripts on short runs (never a record): `--trial --reps 1 --tmax 100
 # --scal-tmax 100`. It writes only to <out>/trial/, runs every set with `reps` replicates of
-# `tmax` MCS, runs its own short S-cal instead of the Q tier (c = 0.1 if no c passes: short
-# runs have no volume window), allows a dirty tree, marks provenance.toml `trial = true` and
-# checks that the record parses.
+# `tmax` MCS, runs its own short c calibration instead of the qtier stage (c = 0.1 if no c
+# passes: short runs have no volume window), allows a dirty tree, marks provenance.toml
+# `trial = true` and checks that the record parses.
 using Potts, PottsModels, Test, TOML, Dates, Serialization, SHA
 using CodecZlib: GzipCompressorStream
 using Statistics: mean, std
@@ -88,7 +90,7 @@ function parse_args(args)
     (o["reps"] > 0 || o["tmax"] > 0 || o["scal-tmax"] > 0) && !o["trial"] &&
         error("run_full.jl: --reps, --tmax and --scal-tmax need --trial")
     o["trial"] && o["stage"] == "qtier" &&
-        error("run_full.jl: --trial runs its own S-cal; it has no qtier stage")
+        error("run_full.jl: --trial runs its own c calibration; it has no qtier stage")
     return o
 end
 const OPT = parse_args(ARGS)
@@ -162,9 +164,10 @@ logmsg(
 )
 if QTIER && OPT["dry"]
     logmsg(
-        "dry run of --stage qtier, nothing run. It would run S-cal + Q1, Q1′, Q2, Q5 (R = 10, ",
-        "φ_l = 0.05, λ_F = 150; c in the order 0.1, 0.3, 1.0 until Q5 passes; 3 runs of 2 × 10⁴ ",
-        "MCS per c), Q3 (R = 15, φ_l = 0.30, λ_F = 125), Q4 (λ_F = 0) and Q6 (timing at R = 10, ",
+        "dry run of --stage qtier, nothing run. It would run the c calibration and the first-set ",
+        "checks (R = 10, φ_l = 0.05, λ_F = 150; c in the order 0.1, 0.3, 1.0 until volume_window ",
+        "passes; 3 runs of 2 × 10⁴ MCS per c), confined_set (R = 15, φ_l = 0.30, λ_F = 125), ",
+        "no_drive_control (λ_F = 0) and timing (R = 10, ",
         "15, 20) on ", Threads.nthreads(), " threads, then write ", QTIER_FILE,
         DIRTY ? ". This checkout is dirty: the real launch would refuse to start." : "."
     )
@@ -185,12 +188,12 @@ end
 if QTIER
     mkpath(OUT)
     cal = P.qtier_calibration()
-    logmsg("S-cal: ", cal.scal, " → c = ", cal.c)
-    ctl = isfinite(cal.c) ? P.qtier_controls(cal.c, cal.q1_disp) :
-        (; checks = Pair{String, Bool}[], q3_disp = NaN, q4_disp = NaN)
+    logmsg("c calibration: ", cal.scal, " → c = ", cal.c)
+    ctl = isfinite(cal.c) ? P.qtier_controls(cal.c, cal.first_set_disp) :
+        (; checks = Pair{String, Bool}[], confined_disp = NaN, no_drive_disp = NaN)
     checks = [cal.checks; ctl.checks]
     pass = isfinite(cal.c) && all(last, checks)
-    q6 = isfinite(cal.c) ? P.qtier_timing(cal.c) : Dict{String, Float64}()
+    tns = isfinite(cal.c) ? P.qtier_timing(cal.c) : Dict{String, Float64}()
     for (label, ok) in checks
         logmsg(ok ? "PASS " : "FAIL ", label)
     end
@@ -204,29 +207,29 @@ if QTIER
         TOML.print(
             io, Dict(
                 "commit" => COMMIT, "dirty" => DIRTY, "pass" => pass,
-                "manifest_sha256" => MANIFEST_SHA, "c" => cal.c, "q1_disp_sites" => cal.q1_disp,
-                "q3_disp_sites" => ctl.q3_disp, "q4_disp_sites" => ctl.q4_disp, "scal" => scal,
-                "q6_ns_per_attempt" => q6, "checks" => Dict(first.(checks) .=> last.(checks)),
+                "manifest_sha256" => MANIFEST_SHA, "c" => cal.c, "first_set_disp_sites" => cal.first_set_disp,
+                "confined_disp_sites" => ctl.confined_disp, "no_drive_disp_sites" => ctl.no_drive_disp, "scal" => scal,
+                "ns_per_attempt" => tns, "checks" => Dict(first.(checks) .=> last.(checks)),
                 "threads" => Threads.nthreads(), "julia" => JULIA,
                 "cpu" => strip(Sys.cpu_info()[1].model), "finished" => string(now()),
             )
         )
     end
-    logmsg("Q tier ", pass ? "PASSED" : "FAILED", ": c = ", cal.c, ", Q6 ns per attempt ", q6, "; written to ", QTIER_FILE)
-    # info only, after the verdict: one run at the Q1 setting with the chosen c, seed 1,
+    logmsg("qtier ", pass ? "PASSED" : "FAILED", ": c = ", cal.c, ", ns per attempt ", tns, "; written to ", QTIER_FILE)
+    # info only, after the verdict: one run at the first set with the chosen c, seed 1,
     # 2 × 10⁴ MCS, with the seam and nucleus-shape series
     if pass
         try
-            q1 = P.problem(10, 0.05, 150; c = cal.c, seed = 1, T = 20_000)
+            firstset = P.problem(10, 0.05, 150; c = cal.c, seed = 1, T = 20_000)
             L, _, Lz = P.dims(10, 0.05)
-            rec, dg = record_run(q1; T = 20_000, every = 10, L, Lz, fast = false)
-            write_series(joinpath(OUT, "qtier_q1_track.tsv.gz"), rec, TRACK_COLS)
-            write_series(joinpath(OUT, "qtier_q1_diag.tsv.gz"), dg, DIAG_COLS)
+            rec, dg = record_run(firstset; T = 20_000, every = 10, L, Lz, fast = false)
+            write_series(joinpath(OUT, "qtier_first_set_track.tsv.gz"), rec, TRACK_COLS)
+            write_series(joinpath(OUT, "qtier_first_set_diag.tsv.gz"), dg, DIAG_COLS)
             d = diag_summary(dg, 20_000)
-            open(joinpath(OUT, "qtier_q1_diag.toml"), "w") do io
+            open(joinpath(OUT, "qtier_first_set_diag.toml"), "w") do io
                 TOML.print(
                     io, Dict(
-                        "info" => "one info-only run at the Q1 setting; not part of the Q-tier verdict",
+                        "info" => "one info-only run at the first set; not part of the qtier verdict",
                         "R" => 10, "phi" => 0.05, "lambda" => 150, "c" => cal.c, "seed" => 1,
                         "tmax" => 20_000, "commit" => COMMIT, "manifest_sha256" => MANIFEST_SHA,
                         "julia" => JULIA,
@@ -240,12 +243,12 @@ if QTIER
                 )
             end
             logmsg(
-                "Q1 info run: seam-flagged samples ", d.flagged, " of ", d.samples,
+                "first-set info run: seam-flagged samples ", d.flagged, " of ", d.samples,
                 ", nucleus eig ratio ", round(d.eig_ratio; digits = 3), ", surface ",
                 round(d.surface; digits = 3), " (second half)"
             )
         catch e
-            logmsg("Q1 info run failed (info only; the Q-tier verdict stands): ", sprint(showerror, e))
+            logmsg("first-set info run failed (info only; the qtier verdict stands): ", sprint(showerror, e))
         end
     end
     exit(pass ? 0 : 1)
@@ -266,16 +269,16 @@ function save(path, x)
     return mv(tmp, path; force = true)
 end
 
-# the Q-tier record of this commit (FULL only); a trial makes its own short S-cal below
+# the qtier record of this commit (FULL only); a trial makes its own short calibration below
 const QREC = if TRIAL
     nothing
 else
     isfile(QTIER_FILE) || error(
         "run_full.jl: no $QTIER_FILE. Run `--stage qtier` with the same --out first; FULL starts " *
-            "only after the Q tier passes at this commit"
+            "only after the qtier stage passes at this commit"
     )
     q = TOML.parsefile(QTIER_FILE)
-    get(q, "pass", false) === true || error("run_full.jl: the Q tier in $QTIER_FILE did not pass; FULL does not start")
+    get(q, "pass", false) === true || error("run_full.jl: the qtier stage in $QTIER_FILE did not pass; FULL does not start")
     get(q, "commit", "") == COMMIT && get(q, "dirty", true) === false ||
         error(
         "run_full.jl: $QTIER_FILE was made at commit $(get(q, "commit", "?")) (dirty = $(get(q, "dirty", "?"))), " *
@@ -289,16 +292,16 @@ else
     q
 end
 
-# cost: sites × MCS × ns per copy attempt (the Q tier's Q6 per R when there is one, else
-# 110 ns, an estimate; the record's B11 row reports real wall times)
+# cost: sites × MCS × ns per copy attempt (the qtier timing per R when there is one, else
+# 110 ns, an estimate; the record's wall_time row reports real wall times)
 ns_attempt(R) = QREC === nothing ? 110.0 :
-    Float64(get(QREC["q6_ns_per_attempt"], string(R), maximum(values(QREC["q6_ns_per_attempt"]))))
+    Float64(get(QREC["ns_per_attempt"], string(R), maximum(values(QREC["ns_per_attempt"]))))
 cost(i) = (s = P.SETS[i]; prod(P.dims(s[1], s[2])) * TMAX * ns_attempt(s[1]) * 1.0e-9)    # seconds
 let total = sum(cost(i) for (i, _) in RUNS)
     logmsg(
         length(RUNS), " runs of ", TMAX, " MCS in ", length(SET_IDS), " sets ≈ ", round(total / 3600; digits = 1),
         " core-hours ≈ ", round(total / 3600 / Threads.nthreads(); digits = 1), " h on ", Threads.nthreads(), " threads (",
-        QREC === nothing ? "110 ns per copy attempt, an estimate" : "the Q tier's Q6 ns per copy attempt", ")"
+        QREC === nothing ? "110 ns per copy attempt, an estimate" : "the qtier ns per copy attempt", ")"
     )
 end
 if OPT["dry"]
@@ -314,7 +317,8 @@ end
 mkpath(JOBS)
 mkpath(TRACKS)
 # ------------------------------------------------------------------------------------------
-# c: the Q tier's (FULL), or a short S-cal of the same procedure and seeds (trial)
+# c: the qtier stage's (FULL), or a short calibration with the same procedure and seeds
+# (trial)
 const SCAL_KEYS = ("cyto", "nucleus", "lam")
 scal_meta(j) = (;
     commit = COMMIT, dirty = DIRTY, manifest_sha256 = MANIFEST_SHA, julia = JULIA, c = P.C_GRID[j], scal_tmax = SCAL_T, trial = TRIAL,
@@ -331,11 +335,11 @@ function trial_scal()
             get(r, :meta, nothing) == scal_meta(j) ||
                 error(
                 "run_full.jl: $path was made with $(get(r, :meta, "no metadata")), this launch has $(scal_meta(j)); " *
-                    "remove it to rerun S-cal"
+                    "remove it to rerun the calibration"
             )
             r
         else
-            logmsg("S-cal (trial): c = ", c, ", 3 runs of ", SCAL_T, " MCS")
+            logmsg("c calibration (trial): c = ", c, ", 3 runs of ", SCAL_T, " MCS")
             rs = P.qruns(10, 0.05, 150, c, j; T = SCAL_T)
             dvs = [P.volume_errors(r, 10, 0.05) for r in rs]
             r = (;
@@ -365,11 +369,11 @@ const C = if QREC !== nothing
 elseif last(SCAL).pass
     last(SCAL).c
 else
-    logmsg("S-cal (trial): no c passed (short runs have no B2 window); the trial uses c = 0.1")
+    logmsg("c calibration (trial): no c passed (short runs have no volume window); c = 0.1")
     0.1
 end
 QREC === nothing || (isempty(SCAL) || last(SCAL).c != C || !last(SCAL).pass) &&
-    error("run_full.jl: $QTIER_FILE's S-cal rows do not end at its c = $C")
+    error("run_full.jl: $QTIER_FILE's calibration rows do not end at its c = $C")
 logmsg("c = ", C)
 # ------------------------------------------------------------------------------------------
 # The FULL runs
@@ -402,7 +406,7 @@ for (i, _) in RUNS
     SYS[(R, φ)] = (sys, fortuna_layout(R, φ, sys))
 end
 
-# the fast recorder records exactly what the observe-based one does (60 MCS at R = 10 and 15)
+# the fast recorder records exactly what the observe-based one does (60 MCS at R = 10, 15)
 for (R, φ) in ((10, 0.05), (15, 0.05))
     sys, lay = haskey(SYS, (R, φ)) ? SYS[(R, φ)] : (s = P.system(R, φ); (s, fortuna_layout(R, φ, s)))
     L, _, Lz = P.dims(R, φ)
@@ -474,8 +478,8 @@ function run_pool(todo)
     return failed
 end
 
-# priority order, so a cut-short batch keeps the priority sets: the persistence set, the Fig 6 grid
-# (R = 15), the rest of Table 2, the rest of Fig 5; longest first inside each group
+# priority order, so a cut-short batch keeps the priority sets: the persistence set, the Fig
+# 6 grid (R = 15), the rest of Table 2, the rest of Fig 5; longest first inside each group
 const T2_KEYS = Set(P.set_key(r) for r in P.read_tsv(joinpath(P.REFS, "table2.tsv")))
 function priority(i)
     s = P.SETS[i]
@@ -614,11 +618,11 @@ open(joinpath(REC, "provenance.toml"), "w") do io
             "cpu" => strip(Sys.cpu_info()[1].model),
             "started" => string(T_START), "finished" => string(now()),
             "wall_s_this_launch" => round((now() - T_START).value / 1000; digits = 1),
-            "c" => C, "c_status" => TRIAL ? "trial S-cal (not a calibration)" :
-                "calibrated (S-cal in the Q tier): the first c of $(collect(P.C_GRID)) that passes Q5",
+            "c" => C, "c_status" => TRIAL ? "trial calibration (not a record)" :
+                "calibrated (qtier stage): the first c of $(collect(P.C_GRID)) that passes volume_window",
             "qtier" => QREC === nothing ? Dict{String, Any}() :
                 Dict(
-                    "q6_ns_per_attempt" => QREC["q6_ns_per_attempt"], "q1_disp_sites" => QREC["q1_disp_sites"],
+                    "ns_per_attempt" => QREC["ns_per_attempt"], "first_set_disp_sites" => QREC["first_set_disp_sites"],
                     "finished" => QREC["finished"], "threads" => QREC["threads"]
                 ),
             "tmax" => TMAX, "runs" => length(RUNS), "sets" => length(SET_IDS),
@@ -645,19 +649,23 @@ open(joinpath(REC, "README.md"), "w") do io
         # Fortuna et al. (2020): the FULL record
 
         Made by `run_full.jl` and `record.jl` (copies are here) at the commit in
-        `provenance.toml`, with the protocol `lib/PottsModels/reproductions/data/14/protocol.jl`.
-        `evaluate.jl` recomputes every row from these files.
+        `provenance.toml`, with the protocol
+        `lib/PottsModels/reproductions/data/14/protocol.jl`. `evaluate.jl` recomputes every
+        row from these files.
 
-        - c = $(C), the calibrated value of the Q tier (`scal.tsv`). The Q tier passed at the
-          same commit before the FULL runs started; its Q6 timing is in `provenance.toml`.
-        - $(length(RUNS)) runs of $(TMAX) MCS in $(length(SET_IDS)) sets; $(NPASS) gating rows pass and
-          $(NFAIL) fail (`verdicts.tsv`). Every FAIL row needs a `deviations.tsv` entry;
-          `deviations_todo.tsv` lists them. Info rows are in `info.tsv`.
-        - The tracked point is the nucleus center of mass in x and y, periodic-unwrapped, in R
-          units. The MSD uses the whole track sampled every 50 MCS.
-        - At P ≫ 10⁴ MCS both fit methods underestimate P by about 20 % (the protocol's oracle;
-          P = 23265 and 26853 in Table 2). This is inside B5's ±50 % band.
-        - `qtier.toml` is the Q tier's record, copied verbatim.
+        - c = $(C), the calibrated value of the qtier stage (`scal.tsv`). The qtier stage
+          passed at the same commit before the FULL runs started; its timing is in
+          `provenance.toml`.
+        - $(length(RUNS)) runs of $(TMAX) MCS in $(length(SET_IDS)) sets; $(NPASS) gating
+          rows pass and $(NFAIL) fail (`verdicts.tsv`). Every FAIL row needs a
+          `deviations.tsv` entry; `deviations_todo.tsv` lists them. Info rows are in
+          `info.tsv`.
+        - The tracked point is the nucleus center of mass in x and y, periodic-unwrapped, in
+          R units. The MSD uses the whole track sampled every 50 MCS.
+        - At P ≫ 10⁴ MCS both fit methods underestimate P by about 20 % (the protocol's
+          oracle; P = 23265 and 26853 in Table 2). This is inside the ±50 % band of
+          `table2/`.
+        - `qtier.toml` is the qtier stage's record, copied verbatim.
         - The per-run tracks (`tracks/<set>_<rep>.tsv.gz`, gzip TSV, columns
           $(join(TRACK_COLS, ", "))) are in the batch's release, not in git: the centroids
           (x, y, z) of the nucleus (n), the lamellipodium (l) and the cytoplasm (c), Πx, Πy,
@@ -666,9 +674,9 @@ open(joinpath(REC, "README.md"), "w") do io
           every 10 MCS otherwise. Read one with
           `readdlm(GzipDecompressorStream(open(path)), '\\t'; header = true)`.
         - Info only, not gated (`record.jl` documents both):
-          `tracks/<set>_<rep>_diag.tsv.gz`, every $(DIAG_EVERY) MCS, holds the seam-contact counts
-          and the nucleus shape. `seam.tsv` and `nucleus_shape.tsv` give them per run (the shape
-          as the mean over the second half).
+          `tracks/<set>_<rep>_diag.tsv.gz`, every $(DIAG_EVERY) MCS, holds the seam-contact
+          counts and the nucleus shape. `seam.tsv` and `nucleus_shape.tsv` give them per run
+          (the shape as the mean over the second half).
 
         ## Diagnostics per set (info only)
 

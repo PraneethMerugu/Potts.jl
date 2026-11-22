@@ -211,7 +211,8 @@ end
     if FULL
         cal = P.qtier_calibration()
         @info "Fortuna: calibration of c" cal.scal cal.c
-        ctl = isfinite(cal.c) ? P.qtier_controls(cal.c, cal.q1_disp) : (; checks = [])
+        ctl = isfinite(cal.c) ? P.qtier_controls(cal.c, cal.first_set_disp) :
+            (; checks = [])
         for (label, ok) in [cal.checks; ctl.checks]
             ok || @error "Fortuna short tier: check failed" label
             @test ok

@@ -1,8 +1,9 @@
 # Reference transcriptions for reproduction 14 (Fortuna et al. 2020, Biophys J 118:2801)
 
-Inputs, not run outputs. Read by `reproductions/data/14/protocol.jl` (B4, B5) and
-`test/reproductions/14_fortuna_protocol_tests.jl`. Source: Fortuna et al.
-2020, Biophys J 118:2801, Table 2 (p.2810) and Fig 5 (p.2808). Transcribed 2026-10-15.
+Inputs, not run outputs. Read by `reproductions/data/14/protocol.jl` (the
+`fig5_displacement/` and `table2/` rows) and
+`test/reproductions/14_fortuna_protocol_tests.jl`. Source: Fortuna et al. 2020, Biophys J
+118:2801, Table 2 (p.2810) and Fig 5 (p.2808). Transcribed 2026-10-15.
 The TSV reader takes the first line as the header and every other non-empty line as a row,
 so the TSVs carry no comments. This file holds the notes.
 
@@ -40,8 +41,8 @@ so the TSVs carry no comments. This file holds the notes.
 - **59 points, not 60.** Panel φ_l = 0.05 has no R = 10 marker at λ_F = 200: the black line
   ends at λ = 175, and the 6× zoom shows no hidden marker, line or error bar. This matches
   Table 2, which lists R10 φ0.05 only up to λ = 175. The protocol's `FIG5_SETS` therefore
-  has 59 keys and B4 has 59 points: there is no R = 10, φ_l = 0.05, λ_F = 200 marker. No row
-  was invented.
+  has 59 keys and `fig5_displacement/` has 59 points: there is no R = 10, φ_l = 0.05,
+  λ_F = 200 marker. No row was invented.
 - Source image: the embedded raster (JPEG, 1330×1322 px, 300 ppi), extracted with
   `pdfimages`. That is the native resolution, so a higher-dpi page render adds no detail.
   Pixels were read in pure Python, and ambiguous points were checked on 4× zooms.

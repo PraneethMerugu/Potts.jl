@@ -3,39 +3,43 @@
 # `run_full.jl` makes the record with it, `evaluate.jl` and the test file
 # `test/reproductions/14_fortuna_protocol_tests.jl` check the record with it.
 #
-# Short qualitative tier (the `qtier` stage of run_full.jl; < 1 h on 3+ threads):
+# Short qualitative tier (the `qtier` stage of run_full.jl; < 1 h on 3+ threads). The
+# check names below are the labels in qtier.toml:
 #
-# | ID | Check | Rule |
+# | Check | Rule | Over |
 # |---|---|---|
-# | Q1 | R = 10, φ_l = 0.05, λ_F = 150, 3 replicates × 2 × 10⁴ MCS: the lamellipodium is alive at a sample ≤ MCS 50; |Π_CN−N| over MCS 5000–20000 has time mean > 1 site | per replicate |
-# | Q1′ | |Π_CN−N| at t = 0 is √0.5 (0.5 per axis: the 6³ box sits half a site off the ball center) | exact |
-# | Q2 | the mean nucleus displacement over the 3 replicates > 2R | mean of 3 |
-# | Q3 | R = 15, φ_l = 0.30, λ_F = 125 moves < 2R in 2 × 10⁴ MCS (Fig 6, confined) | mean of 3 |
-# | Q4 | λ_F = 0 at the Q1 set moves < 1/3 of Q1's mean displacement (mechanism control) | mean of 3 |
-# | Q5 | volumes in Q1: time mean of |V − V_target|/V_target over MCS 5000–20000 ≤ 2 % per compartment | mean of 3 |
-# | Q6 | ns per copy attempt at R = 10, 15, 20 over 1000 MCS | info |
-# | S-cal | c = 0.1; if Q5 fails, Q1/Q5 at c = 0.3, then 1.0; the first passing c is the calibrated c | first pass in order |
+# | `lamellipodium_by_50` | R = 10, φ_l = 0.05, λ_F = 150, 3 replicates × 2 × 10⁴ MCS: the lamellipodium is alive at a sample ≤ MCS 50 | per replicate |
+# | `polarization` | the same runs: |Π_CN−N| over MCS 5000–20000 has time mean > 1 site | per replicate |
+# | `polarization_start` | |Π_CN−N| at t = 0 is 0 (the nucleus ball is concentric with the cytoplasm ball) | exact |
+# | `mean_displacement` | the mean nucleus displacement over the 3 replicates > 2R | mean of 3 |
+# | `confined_set` | R = 15, φ_l = 0.30, λ_F = 125 moves < 2R in 2 × 10⁴ MCS (Fig 6, confined) | mean of 3 |
+# | `no_drive_control` | λ_F = 0 at the first set moves < 1/3 of its mean displacement (mechanism control) | mean of 3 |
+# | `volume_window` | volumes in the first set: time mean of |V − V_target|/V_target over MCS 5000–20000 ≤ 2 % per compartment | mean of 3 |
+# | `timing` | ns per copy attempt at R = 10, 15, 20 over 1000 MCS | info |
+# | `c_calibration` | c = 0.1; if `volume_window` fails, the first set again at c = 0.3, then 1.0; the first passing c is the calibrated c | first pass in order |
 #
-# The paper does not state c. S-cal calibrates it on the volume check only, never against
-# Figs 5–6 or Table 2. Q2 reads the mean of 3 replicates: on synthetic tracks at the Q1
-# set's Table 2 row, one replicate is ≤ 2R in 4.8 % of runs, the mean of 3 in 0.045 %.
+# The paper does not state c. The c calibration uses the volume check only, never Figs 5–6
+# or Table 2. `mean_displacement` reads the mean of 3 replicates: on synthetic tracks at the
+# first set's Table 2 row, one replicate is ≤ 2R in 4.8 % of runs, the mean of 3 in
+# 0.045 %.
 #
 # FULL tier: 68 sets (`SETS`), 10 replicates each and 30 for (15, 0.30, 160) (Fig 9): 700
 # runs of 10⁵ MCS. Seed of replicate k of set i: 1_400_000_000 + 1000i + k. Recorded every
-# MCS for the 36 sets of λ_F ∈ {150, 175, 200} and every 10 MCS otherwise.
+# MCS for the 36 sets of λ_F ∈ {150, 175, 200} and every 10 MCS otherwise. The row ids of
+# verdicts.tsv begin with the names below.
 #
-# | ID | Target | Source | Band | Gating |
+# | Row | Target | Source | Band | Gating |
 # |---|---|---|---|---|
-# | B2 | volumes at target in steady state | p.2806 | per set: replicate mean of the time mean of |ΔV|/V_t over MCS 5000–10⁵ ≤ 2 %, each compartment | 68 rows |
-# | B3 | Fig 6 regime map, R = 15 (`REGIME_MAP`) | Fig 6 | ≥ 16 of 20 panels match | 1 row (+ 20 info) |
-# | B4 | Fig 5 displacement after 10⁵ MCS (nucleus xy / R), 59 points | Fig 5 (fig5.tsv) | |ours − paper| ≤ 2 SE_paper, or ours/paper ∈ [1/2, 2] | per point |
-# | B5 | Table 2 S, P, D, 40 rows | Table 2 (table2.tsv) | S/S_p ∈ [1/2, 2]; |P/P_p − 1| ≤ 0.5; D/D_p ∈ [1/2, 2]; a set not migrating fails as a regime mismatch | `:lsq` per row; `:paper` only on ≥ 30-replicate sets |
-# | B5′ | four rows whose printed 2DP/(1 − S) disagrees with S, P, D (`LOOSE_ROWS`) | Table 2 | S as B5; P/P_p ∈ [1/4, 3]; D/D_p ∈ [1/4, 4] | as B5 |
-# | B5″ | R = 10, φ 0.20, λ 175: D printed 3.60E−4, likely ×10 too small | Table 2 | S, P as B5; D info | as B5 |
-# | B6 | S = 0.02 at (15, 0.30, 160), 30 replicates | p.2809; Table 2 | S ∈ [0.01, 0.04]; bootstrap SE(S) ≤ 0.005; collapse RMS ≤ 0.2 | both methods |
-# | B7 | collapse onto Eq 2 | Fig 7 | RMS of log m − log Eq 1(fit) ≤ 0.1 on the log lags, each migrating set | `:lsq`; `:paper` info on 10-replicate sets |
-# | B8 | D_fast = 0.127 R⁻² | Fig 11 | geometric mean of D_fast·R⁴ over migrating, resolved fits within ±30 % | `:lsq`; `:paper` info |
-# | B11 | wall time against CompuCell3D's 200 min per R = 15 run | p.2810 | — | info |
+# | `volumes/` | volumes at target in steady state | p.2806 | per set: replicate mean of the time mean of |ΔV|/V_t over MCS 5000–10⁵ ≤ 2 %, each compartment | 68 rows |
+# | `regime_map` | Fig 6 regime map, R = 15 (`REGIME_MAP`) | Fig 6 | ≥ 16 of 20 panels match | 1 row (+ 20 info) |
+# | `fig5_displacement/` | Fig 5 displacement after 10⁵ MCS (nucleus xy / R), 59 points | Fig 5 (fig5.tsv) | |ours − paper| ≤ 2 SE_paper, or ours/paper ∈ [1/2, 2] | per point |
+# | `table2/` | Table 2 S, P, D, 40 rows | Table 2 (table2.tsv) | S/S_p ∈ [1/2, 2]; |P/P_p − 1| ≤ 0.5; D/D_p ∈ [1/2, 2]; a set not migrating fails as a regime mismatch | `:lsq` per row; `:paper` only on ≥ 30-replicate sets |
+# | `table2/` (loose rows) | four rows whose printed 2DP/(1 − S) disagrees with S, P, D (`LOOSE_ROWS`) | Table 2 | S as `table2/`; P/P_p ∈ [1/4, 3]; D/D_p ∈ [1/4, 4] | as `table2/` |
+# | `table2/` (D info row) | R = 10, φ 0.20, λ 175: D printed 3.60E−4, likely ×10 too small (`D_INFO_ROWS`) | Table 2 | S, P as `table2/`; D info | as `table2/` |
+# | `persistence/` | S = 0.02 at (15, 0.30, 160), 30 replicates | p.2809; Table 2 | S ∈ [0.01, 0.04]; bootstrap SE(S) ≤ 0.005; collapse RMS ≤ 0.2 | both methods |
+# | `collapse/` | collapse onto Eq 2 | Fig 7 | RMS of log m − log Eq 1(fit) ≤ 0.1 on the log lags, each migrating set | `:lsq`; `:paper` info on 10-replicate sets |
+# | `dfast/` | D_fast = 0.127 R⁻² | Fig 11 | geometric mean of D_fast·R⁴ over migrating, resolved fits within ±30 % | `:lsq`; `:paper` info |
+# | `wall_time` | wall time against CompuCell3D's 200 min per R = 15 run | p.2810 | — | info |
 #
 # Shared rules:
 # - The tracked point is the nucleus center of mass in xy, periodic-unwrapped, over R. MSD
@@ -44,9 +48,10 @@
 # - Fits: `furth_fit(50 .* (1:200), m; method)` with the default `range`, `short` and
 #   `offset`, for both `:paper` and `:lsq`. The synthetic oracle below fixed the window
 #   (K = 200 samples: at K = 400 `:paper`'s SD of S is 0.028 at S = 0.0212).
-# - On 10-replicate sets `:lsq` gates B5, B7, B8 and `:paper` is info with the spread of its
-#   S over per-replicate fits; on ≥ 30-replicate sets (B6) both gate. At N = 10 `:paper` puts
-#   S inside B5's ×2 band on 8–12 of 16 oracle seeds, `:lsq` on 16 of 16.
+# - On 10-replicate sets `:lsq` gates `table2/`, `collapse/` and `dfast/`, and `:paper` is
+#   info with the spread of its S over per-replicate fits; on ≥ 30-replicate sets
+#   (`persistence/`) both gate. At N = 10 `:paper` puts S inside the ×2 band of `table2/`
+#   on 8–12 of 16 oracle seeds, `:lsq` on 16 of 16.
 # - A fit is resolved if S, P, D are finite, 0 ≤ S < 1, P > 0 and D > 0. An unresolved fit
 #   fails where its method gates and is info elsewhere; it never errors.
 # - Regime: a replicate is detached if `lam_cyto` = 0 at a 50-MCS sample after MCS 10 while
@@ -55,14 +60,17 @@
 #
 # Record schema (TSV, one header line, tab separated):
 #   sets.tsv     set R phi lambda n every L Lz regime detach disp_mean disp_se
-#   runs.tsv     set rep seed R phi lambda every disp detached lam_deaths lid_touch dv_cyto dv_nuc dv_lam wall_s
+#   runs.tsv     set rep seed R phi lambda every disp detached lam_deaths lid_touch dv_cyto
+#                dv_nuc dv_lam wall_s
 #   msd_runs.tsv set rep m_<lag>… (one column per lag of LAGS, R²)
 #   msd.tsv      set lag_mcs msd (the replicate mean)
-#   fits.tsv     set method S P D D_fast v_eff se_S excluded offset (migrating sets; `excluded`:
-#                fit lags with m − offset ≤ 0, left out of the collapse; −1 if unresolved)
+#   fits.tsv     set method S P D D_fast v_eff se_S excluded offset (migrating sets;
+#                `excluded`: fit lags with m − offset ≤ 0, left out of the collapse; −1 if
+#                unresolved)
 #   oracle.tsv   method P S_true seed S D P_fit
-#   scal.tsv     c cyto nucleus lam pass (S-cal, in the order tried)
-#   verdicts.tsv id kind value band result; deviations.tsv (optional) id ours paper cause question
+#   scal.tsv     c cyto nucleus lam pass (the c calibration, in the order tried)
+#   verdicts.tsv id kind value band result
+#   deviations.tsv (optional) id ours paper cause question
 #   provenance.toml (a 40-hex commit, dirty = false, julia, threads, machine, cpu, c)
 # Reference transcriptions (inputs; see test/reproductions/data/14/README.md): table2.tsv
 # (R phi lambda S P D, 40 rows) and fig5.tsv (R phi lambda disp se, 59 points).
@@ -89,8 +97,8 @@ const LAGS = sort(union(FIT_LAGS, LOG_LAGS))
 const FIT_DT = Float64.(DT .* FIT_LAGS)
 const METHODS = (:paper, :lsq)
 const BOOT = (n = 1000, seed = 14_000)              # bootstrap over replicates
-const VOLUME_FROM = 5000                            # B2 / Q5 window start (MCS)
-const C_GRID = (0.1, 0.3, 1.0)                      # S-cal order
+const VOLUME_FROM = 5000                            # volume window start (MCS)
+const C_GRID = (0.1, 0.3, 1.0)                      # c calibration order
 const KIND = (cytoplasm = 3, lamellipodium = 4, nucleus = 5)   # kind codes (@kinds order)
 const SETS = let s = NTuple{3, Any}[]
     for φ in (0.05, 0.1, 0.2, 0.3), λ in (100, 125, 150, 175, 200)
@@ -106,14 +114,14 @@ const SETS = let s = NTuple{3, Any}[]
     end
     [(Int(R), Float64(φ), Int(λ)) for (R, φ, λ) in s]
 end
-const PERSISTENCE_SET = (15, 0.3, 160)              # B6
+const PERSISTENCE_SET = (15, 0.3, 160)              # persistence/
 replicates(set) = set == PERSISTENCE_SET ? 30 : 10
 every(set) = set[3] in (150, 175, 200) ? 1 : 10
 seed(i, k) = 1_400_000_000 + 1000i + k
 qseed(block, k) = 1_490_000_000 + 1000block + k
 dims(R, φ) = fortuna_lattice(R, φ)
 set_id(s) = "R$(s[1])/φ$(s[2])/λ$(s[3])"
-# B3: Fig 6, R = 15
+# regime_map: Fig 6, R = 15
 const REGIME_MAP = Dict(
     (φ, λ) => (
         φ == 0.05 ? (λ <= 175 ? "migrating" : "detachment") :
@@ -140,8 +148,8 @@ const TABLE2_QUOTED = Dict(
     (20, 0.2, 175) => (S = nothing, P = 26853.0, D = nothing),
     (20, 0.2, 200) => (S = nothing, P = 12613.0, D = nothing),
 )
-const LOOSE_ROWS = ((15, 0.1, 150), (15, 0.2, 150), (15, 0.3, 160), (10, 0.2, 150))  # B5′
-const D_INFO_ROWS = ((10, 0.2, 175),)                                               # B5″
+const LOOSE_ROWS = ((15, 0.1, 150), (15, 0.2, 150), (15, 0.3, 160), (10, 0.2, 150))  # loose rows
+const D_INFO_ROWS = ((10, 0.2, 175),)                                               # D info
 gates(set, method) = method === :lsq || replicates(set) >= 30
 
 # ------------------------------------------------------------------------------------------
@@ -174,13 +182,13 @@ function fit(Δt, m, method)
 end
 eq2(τ, S) = τ - (1 - S) * (1 - exp(-τ))
 resolved(f) = all(isfinite, (f.S, f.P, f.D)) && 0 <= f.S < 1 && f.P > 0 && f.D > 0
-# B7: RMS of log m − log Eq 1(fit); NaN for an unresolved fit
+# collapse/: RMS of log m − log Eq 1(fit); NaN for an unresolved fit
 curve_rms(Δt, m, f) = resolved(f) ?
     sqrt(mean(abs2, log.(m) .- log.(A.furth_mean_squared_displacement(Δt, f.S, f.D, f.P)))) :
     NaN
-# B6 collapse: ρ² = natural units of m − offset against Eq2(τ, S_fit), the RMS of the log
-# ratio over the fit lags. Lags with m − offset ≤ 0 are left out (`:paper`'s offset is a
-# noisy intercept of about ±2 m(Δt = 50)); more than COLLAPSE_DROP of them is NaN.
+# persistence/ collapse: ρ² = natural units of m − offset against Eq2(τ, S_fit), the RMS of
+# the log ratio over the fit lags. Lags with m − offset ≤ 0 are left out (`:paper`'s offset
+# is a noisy intercept of about ±2 m(Δt = 50)); more than COLLAPSE_DROP of them is NaN.
 const COLLAPSE_BOUND = 0.2
 const COLLAPSE_DROP = 10
 function collapse(Δt, m, f)
@@ -197,15 +205,16 @@ excluded(Δt, m, f) = resolved(f) ? count(<=(0), A.natural_units(Δt, m .- f.off
 # The S-resolution oracle: OU + Brownian tracks at Fortuna's sampling
 #
 # Exact AR(1) velocity per axis plus Brownian increments, sample step 50 MCS, 2001 samples
-# (10⁵ MCS), N = 30 tracks, at the B6 row (S = 0.0212, P = 8327, D = 1.13e-4 R²/MCS) and at
-# P = 11987; controls S = 0 (both P) and S = 0.1. Seeds StableRNG(1:16), common to every
-# configuration. Measured at K = 200, N = 30, 16 seeds (median |ΔS|, SD):
+# (10⁵ MCS), N = 30 tracks, at the persistence row (S = 0.0212, P = 8327, D = 1.13e-4
+# R²/MCS) and at P = 11987; controls S = 0 (both P) and S = 0.1. Seeds StableRNG(1:16),
+# common to every configuration. Measured at K = 200, N = 30, 16 seeds (median |ΔS|, SD):
 #   S 0.0212, P 8327: paper 0.0015, 0.0032; lsq 0.0023, 0.0030
 #   S 0.0212, P 11987: paper 0.0027, 0.0039; lsq 0.0025, 0.0035
 #   S 0.1, P 8327: median S paper 0.1124, lsq 0.1018
 # Both methods pass (median |ΔS| ≤ 0.005, SD ≤ 0.005, S = 0 median |S| ≤ 0.01), so N = 30
-# gives SE(S) ≈ 0.003 ≪ 0.02 at the B6 set. The collapse bound 0.2 was calibrated on 40
-# ideal synthetics: `:paper` 1 of 40 false failures with the ρ² ≤ 0 lags left out, `:lsq` 0.
+# gives SE(S) ≈ 0.003 ≪ 0.02 at the persistence set. The collapse bound 0.2 was calibrated
+# on 40 ideal synthetics: `:paper` 1 of 40 false failures with the ρ² ≤ 0 lags left out,
+# `:lsq` 0.
 
 const ORACLE_D = 1.13e-4
 const ORACLE_CONFIGS = (
@@ -280,9 +289,9 @@ function bootstrap_se(reps::AbstractMatrix, method)
 end
 
 """
-The whole B6 verdict for one method from the replicate MSDs at the fit lags (`reps`,
+The whole persistence verdict for one method from the replicate MSDs at the fit lags (`reps`,
 replicates × fit lags): a resolved fit, S ∈ [0.01, 0.04], bootstrap SE(S) ≤ 0.005 and the
-collapse. B6 has no P or D band.
+collapse. It has no P or D band.
 """
 function persistence_verdict(reps::AbstractMatrix, method)
     m = vec(mean(reps; dims = 1))
@@ -378,7 +387,7 @@ end
 # ------------------------------------------------------------------------------------------
 # The short qualitative tier: each function returns its checks (label => pass) and numbers
 
-"""S-cal, Q1, Q1′, Q2 and Q5 at R = 10, φ_l = 0.05, λ_F = 150."""
+"""The c calibration and the first set's checks at R = 10, φ_l = 0.05, λ_F = 150."""
 function qtier_calibration(; T = 20_000)
     scal = NamedTuple[]
     chosen, runs = nothing, nothing
@@ -397,32 +406,32 @@ function qtier_calibration(; T = 20_000)
             break
         end
     end
-    checks = Pair{String, Bool}["S-cal: a c passes Q5" => chosen !== nothing]
-    chosen === nothing && return (; checks, scal, c = NaN, q1_disp = NaN)
+    checks = Pair{String, Bool}["c_calibration: a c passes volume_window" => chosen !== nothing]
+    chosen === nothing && return (; checks, scal, c = NaN, first_set_disp = NaN)
     L = dims(10, 0.05)[1]
     for (k, r) in enumerate(runs)
         i = findfirst(r.alive)
         Π = hypot.(r.Πx, r.Πy)
         w = findall(t -> VOLUME_FROM <= t <= T, r.t)
-        push!(checks, "Q1 alive by MCS 50, replicate $k" => (i !== nothing && r.t[i] <= 50))
-        push!(checks, "Q1′ |Π| = √0.5 at t = 0, replicate $k" => isapprox(Π[1], sqrt(0.5); atol = 1.0e-9))
-        push!(checks, "Q1 mean |Π| > 1 site, replicate $k" => mean(Π[w]) > 1)
+        push!(checks, "lamellipodium_by_50, replicate $k" => (i !== nothing && r.t[i] <= 50))
+        push!(checks, "polarization_start, replicate $k" => isapprox(Π[1], 0; atol = 1.0e-9))
+        push!(checks, "polarization, replicate $k" => mean(Π[w]) > 1)
     end
     d = [displacement(r, L) for r in runs]
-    push!(checks, "Q2 mean displacement > 2R" => mean(d) > 20)
-    return (; checks, scal, c = chosen, q1_disp = mean(d))
+    push!(checks, "mean_displacement" => mean(d) > 20)
+    return (; checks, scal, c = chosen, first_set_disp = mean(d))
 end
-"""Q3 (Fig 6 confined set) and Q4 (λ_F = 0 control) at the calibrated `c`."""
-function qtier_controls(c, q1_disp; T = 20_000)
+"""`confined_set` (Fig 6) and `no_drive_control` (λ_F = 0) at the calibrated `c`."""
+function qtier_controls(c, first_set_disp; T = 20_000)
     d3 = [displacement(r, dims(15, 0.3)[1]) for r in qruns(15, 0.3, 125, c, 11; T)]
     d4 = [displacement(r, dims(10, 0.05)[1]) for r in qruns(10, 0.05, 0, c, 12; T)]
     checks = [
-        "Q3 R = 15, φ_l = 0.30, λ_F = 125 moves < 2R" => mean(d3) < 30,
-        "Q4 λ_F = 0 moves < Q1/3" => (isfinite(q1_disp) && mean(d4) < q1_disp / 3),
+        "confined_set" => mean(d3) < 30,
+        "no_drive_control" => (isfinite(first_set_disp) && mean(d4) < first_set_disp / 3),
     ]
-    return (; checks, q3_disp = mean(d3), q4_disp = mean(d4))
+    return (; checks, confined_disp = mean(d3), no_drive_disp = mean(d4))
 end
-"""Q6: ns per copy attempt at R = 10, 15, 20 (info)."""
+"""`timing`: ns per copy attempt at R = 10, 15, 20 (info)."""
 function qtier_timing(c)
     out = Dict{String, Float64}()
     for R in (10, 15, 20)
@@ -494,7 +503,7 @@ function verdicts(D, refs = REFS)
         reg[i] = regime([r["detached"] == "1" for r in rs], d)
         disp[i] = mean(d)
         dv = [mean(pf(r[k]) for r in rs) for k in ("dv_cyto", "dv_nuc", "dv_lam")]
-        add!("B2/" * set_id(s), :row, dv, "≤ 0.02 each", all(<=(0.02), dv))
+        add!("volumes/" * set_id(s), :row, dv, "≤ 0.02 each", all(<=(0.02), dv))
     end
     add!("lid", :info, count(r -> r["lid_touch"] == "1", runs), "runs whose lamellipodium touches z = Lz − 1", true)
     add!("deaths", :info, sum(r -> pi_(r["lam_deaths"]), runs), "lamellipodium deaths, all runs", true)
@@ -502,9 +511,9 @@ function verdicts(D, refs = REFS)
     for ((φ, λ), want) in sort(collect(REGIME_MAP))
         got = reg[findfirst(==((15, φ, λ)), SETS)]
         hits += got == want
-        add!("B3/φ$(φ)/λ$(λ)", :info, got, want, got == want)
+        add!("regime_map/φ$(φ)/λ$(λ)", :info, got, want, got == want)
     end
-    add!("B3", :row, hits, "≥ 16 of 20", hits >= 16)
+    add!("regime_map", :row, hits, "≥ 16 of 20", hits >= 16)
     mr = msd_runs(D)
     ens = Dict(i => vec(mean(mr[i]; dims = 1)) for i in eachindex(SETS))
     fitix = [findfirst(==(l), LAGS) for l in FIT_LAGS]
@@ -518,7 +527,7 @@ function verdicts(D, refs = REFS)
         k = set_key(r)
         i = findfirst(==(k), SETS)
         add!(
-            "B4/" * set_id(k), :row, disp[i], "paper $(r["disp"]) ± 2·$(r["se"]) or ×2",
+            "fig5_displacement/" * set_id(k), :row, disp[i], "paper $(r["disp"]) ± 2·$(r["se"]) or ×2",
             displacement_ok(disp[i], pf(r["disp"]), pf(r["se"]))
         )
     end
@@ -527,7 +536,7 @@ function verdicts(D, refs = REFS)
         k = set_key(r)
         i = findfirst(==(k), SETS)
         ref = (S = pf(r["S"]), P = pf(r["P"]), D = pf(r["D"]))
-        id = "B5/" * set_id(k) * "/$method"
+        id = "table2/" * set_id(k) * "/$method"
         if reg[i] != "migrating"
             add!(id, kind_of(k, method), "regime mismatch: $(reg[i])", "migrating", false)
             continue
@@ -543,7 +552,7 @@ function verdicts(D, refs = REFS)
     end
     i6 = findfirst(==(PERSISTENCE_SET), SETS)
     for method in METHODS
-        id = "B6/$method"
+        id = "persistence/$method"
         if reg[i6] != "migrating"
             add!(id, :row, "regime mismatch: $(reg[i6])", "migrating", false)
             continue
@@ -562,16 +571,16 @@ function verdicts(D, refs = REFS)
             f = fits[(i, method)]
             rms = curve_rms(logdt, ens[i][logix], f)
             add!(
-                "B7/" * set_id(s) * "/$method", kind_of(s, method),
+                "collapse/" * set_id(s) * "/$method", kind_of(s, method),
                 isnan(rms) ? "not resolved" : rms, "≤ 0.1", rms <= 0.1
             )
             resolved(f) && f.D_fast > 0 && push!(pre, f.D_fast * s[1]^4)
         end
         a = isempty(pre) ? NaN : exp(mean(log.(pre)))
-        add!("B8/$method", method === :lsq ? :row : :info, a, "0.127 ± 30 %", dfast_ok(a))
+        add!("dfast/$method", method === :lsq ? :row : :info, a, "0.127 ± 30 %", dfast_ok(a))
     end
     w15 = [pf(r["wall_s"]) / 60 for r in runs if r["R"] == "15"]
-    add!("B11", :info, isempty(w15) ? NaN : mean(w15), "CompuCell3D 200 min", true)
+    add!("wall_time", :info, isempty(w15) ? NaN : mean(w15), "CompuCell3D 200 min", true)
     detach = Dict(i => count(r -> r["detached"] == "1", byset[i]) for i in eachindex(SETS))
     disp_se = Dict(
         i => (d = [pf(r["disp"]) for r in byset[i]]; std(d) / sqrt(length(d)))
@@ -606,7 +615,7 @@ end
 """
     check_record(D; refs = REFS)
 
-Every record check on the directory `D`: the files, provenance, the S-cal order, the run
+Every record check on the directory `D`: the files, provenance, the order of the c calibration, the run
 set, seeds and cadence, the oracle, the recomputed regimes, MSDs and fits, and every
 verdict. Runs `@test`s; call it inside a testset.
 """
@@ -676,7 +685,8 @@ function check_record(D; refs = REFS)
         @test pi_(r["excluded"]) == excluded(FIT_DT, R.ens[i][fitix], f)
     end
     nrows(prefix) = count(v -> startswith(v.id, prefix), V)
-    @test (nrows("B2/"), nrows("B4/"), nrows("B5/")) == (length(SETS), 59, 80)
+    @test (nrows("volumes/"), nrows("fig5_displacement/"), nrows("table2/")) ==
+        (length(SETS), 59, 80)
     dev_f = joinpath(D, "deviations.tsv")
     devs = isfile(dev_f) ? read_tsv(dev_f) : Dict{String, String}[]
     check_verdicts(V, devs)
