@@ -77,7 +77,7 @@ the value in both daughters, so the parent, which keeps its `birth`, then holds 
 record `birth => birth`. Read `sol[:birth][k][c] => sol[:mother][k][c]` for the living
 cells of every saved state, drop the self records, and map `mother = 0` to `nothing`.
 Save at least at every MCS where the rule can fire, so that each cell is saved before its
-first division. The [`lineage`](@ref) docstring has the full loop. For clone sizes alone,
+first division. The `lineage` docstring in the [API](@ref api) has the full loop. For clone sizes alone,
 a founder label in a cell variable is enough, because daughters copy it.
 
 ```@example observables
