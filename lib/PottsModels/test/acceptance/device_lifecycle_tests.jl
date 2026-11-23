@@ -430,12 +430,12 @@ function device_lifecycle_published(T)
         ),
         :FortunaMigration =>
             function ()
-                dims = fortuna_lattice(10, 0.05)
-                sys = FortunaMigration(; name = :fo, lattice = dims, R = 10.0)
-                return PottsProblem(
-                    sys, [fortuna_layout(10, sys); :R => 10.0; :φ_l => 0.05], (0, 8); T
-                )
-            end,
+            dims = fortuna_lattice(10, 0.05)
+            sys = FortunaMigration(; name = :fo, lattice = dims, R = 10.0)
+            return PottsProblem(
+                sys, [fortuna_layout(10, sys); :R => 10.0; :φ_l => 0.05], (0, 8); T
+            )
+        end,
         :ShearedFoam =>
             () -> PottsProblem(
             ShearedFoam(; name = :f, lattice = (32, 32)),                 # D-238 amendment

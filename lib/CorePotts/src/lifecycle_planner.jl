@@ -794,7 +794,7 @@ end
         ctx, key, mcs, ruled
     ) where {KF, DF, CF}
     _on(dv, par) || return nothing
-    _cell_rule_body!(
+    _cell_rule!(
         c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled
     )
     return nothing

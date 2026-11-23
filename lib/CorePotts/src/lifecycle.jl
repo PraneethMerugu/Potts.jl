@@ -508,7 +508,7 @@ end
 # divide"): the `kind` hook reads the cell before the state rules run (its columns are the
 # parent's, the daughter holds their copy), both halves take the new kind, and the daughter
 # state rule reads it.
-@inline function _cell_rule_body!(
+@inline function _cell_rule!(
         c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled
     )
     # bounds: launched over c ∈ 1:capacity; daughters are cell ids ≤ capacity

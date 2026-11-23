@@ -159,8 +159,10 @@ end
     function consistent(s, n)
         return all(1:n) do c
             p, x = CorePotts.chain_prev(s, c), CorePotts.chain_next(s, c)
-            (p == 0 ? CorePotts.chain_rank(s, c) == 1 :
-                CorePotts.chain_rank(s, c) == CorePotts.chain_rank(s, p) + 1) &&
+            (
+                p == 0 ? CorePotts.chain_rank(s, c) == 1 :
+                    CorePotts.chain_rank(s, c) == CorePotts.chain_rank(s, p) + 1
+            ) &&
                 (x == 0 || CorePotts.chain_prev(s, x) == c) &&
                 CorePotts.linked(s, c, x) == (x != 0)
         end
@@ -409,64 +411,100 @@ end
     using Potts: CorePotts, PottsCompileError
     @test_throws "capacity is 2" Potts.relationship(:chain; ordered = true, capacity = 3)
     nbad = Ref(0)
-    mk(body) = eval(:(@potts_model $(Symbol(:Bad, nbad[] += 1)) begin
-        @kinds medium seg
-        @relationship chain(cell, cell) ordered = true
-        @relationship web(cell, cell) capacity = 4
-        @lattice Lattice((40, 24); neighborhood = Moore(1))
-        $(body.args...)
-        @sweep Metropolis(; temperature = 2.0)
-    end))
+    mk(body) = eval(
+        :(
+            @potts_model $(Symbol(:Bad, nbad[] += 1)) begin
+                @kinds medium seg
+                @relationship chain(cell, cell) ordered = true
+                @relationship web(cell, cell) capacity = 4
+                @lattice Lattice((40, 24); neighborhood = Moore(1))
+                $(body.args...)
+                @sweep Metropolis(; temperature = 2.0)
+            end
+        )
+    )
     compile(body) = mtkcompile(Base.invokelatest(mk(body); name = :bad))
-    @test_throws PottsCompileError compile(quote
-        @energy angles(web) => curvature
-    end)
-    @test_throws PottsCompileError compile(quote
-        @drive copy => rank(web, new)
-    end)
-    @test_throws PottsCompileError compile(quote
-        @energy angles(chain) => volume[pivot] * curvature
-    end)
-    @test_throws PottsCompileError compile(quote
-        @energy angles(chain) => kind[prev(chain, pivot)] * curvature
-    end)
-    @test_throws PottsCompileError compile(quote
-        @variables w(chain) = 1.0
-        @energy angles(chain) => w * curvature
-    end)
+    @test_throws PottsCompileError compile(
+        quote
+            @energy angles(web) => curvature
+        end
+    )
+    @test_throws PottsCompileError compile(
+        quote
+            @drive copy => rank(web, new)
+        end
+    )
+    @test_throws PottsCompileError compile(
+        quote
+            @energy angles(chain) => volume[pivot] * curvature
+        end
+    )
+    @test_throws PottsCompileError compile(
+        quote
+            @energy angles(chain) => kind[prev(chain, pivot)] * curvature
+        end
+    )
+    @test_throws PottsCompileError compile(
+        quote
+            @variables w(chain) = 1.0
+            @energy angles(chain) => w * curvature
+        end
+    )
     # the arguments of `prev`, `next`, `rank` and `linked` are cells
-    @test_throws "is not a cell" compile(quote
-        @drive copy => 0.1 * rank(chain, volume[old])
-    end)
-    @test_throws "is not a cell" compile(quote
-        @drive copy => 0.1 * kind[prev(chain, 1000)]
-    end)
-    @test_throws "is not a cell" compile(quote
-        @drive copy => 0.1 * linked(web, old, 2.5)
-    end)
+    @test_throws "is not a cell" compile(
+        quote
+            @drive copy => 0.1 * rank(chain, volume[old])
+        end
+    )
+    @test_throws "is not a cell" compile(
+        quote
+            @drive copy => 0.1 * kind[prev(chain, 1000)]
+        end
+    )
+    @test_throws "is not a cell" compile(
+        quote
+            @drive copy => 0.1 * linked(web, old, 2.5)
+        end
+    )
     # `pivot`, `angle` and `curvature` exist only in angle terms
-    @test_throws "bound only in angle terms" compile(quote
-        @drive copy => angle
-    end)
-    @test_throws "bound only in angle terms" compile(quote
-        @energy cells => curvature
-    end)
-    @test_throws "bound only in angle terms" compile(quote
-        @variables o(cell) = 0.0
-        @after_mcs o ~ volume[pivot]
-    end)
-    @test mtkcompile(Base.invokelatest(mk(quote
-        @variables stiff(cell) = 1.0
-        @energy angles(chain) => stiff[pivot] * curvature + stiff[a] * (π - angle)
-        @drive copy => 0.1 * linked(web, old, new)
-    end); name = :ok)) isa Potts.CompiledPottsSystem
+    @test_throws "bound only in angle terms" compile(
+        quote
+            @drive copy => angle
+        end
+    )
+    @test_throws "bound only in angle terms" compile(
+        quote
+            @energy cells => curvature
+        end
+    )
+    @test_throws "bound only in angle terms" compile(
+        quote
+            @variables o(cell) = 0.0
+            @after_mcs o ~ volume[pivot]
+        end
+    )
+    @test mtkcompile(
+        Base.invokelatest(
+            mk(
+                quote
+                    @variables stiff(cell) = 1.0
+                    @energy angles(chain) => stiff[pivot] * curvature + stiff[a] * (π - angle)
+                    @drive copy => 0.1 * linked(web, old, new)
+                end
+            ); name = :ok
+        )
+    ) isa Potts.CompiledPottsSystem
     for n in (:prev, :next, :rank, :linked, :angles, :pivot, :angle, :curvature)
-        @test_throws r"reserved|built-in" eval(:(@potts_model $(Symbol(:Shadow, n)) begin
-            @kinds medium seg
-            @parameters $n = 1.0
-            @lattice Lattice((8, 8))
-            @sweep Metropolis(; temperature = 2.0)
-        end))
+        @test_throws r"reserved|built-in" eval(
+            :(
+                @potts_model $(Symbol(:Shadow, n)) begin
+                    @kinds medium seg
+                    @parameters $n = 1.0
+                    @lattice Lattice((8, 8))
+                    @sweep Metropolis(; temperature = 2.0)
+                end
+            )
+        )
     end
     # initial links: a branch or a cycle is an `ArgumentError`
     @potts_model Bent begin
