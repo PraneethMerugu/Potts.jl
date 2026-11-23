@@ -265,17 +265,15 @@ const J_PAIRS = :(
         (nucleus, nucleus) => 2.5
     )
 )
-const μ_PAIRS = :(
-    μ[kind, kind] = Pairs(
-        (cytoplasm, nucleus) => 4.0, (nucleus, cytoplasm) => 9.0; default = 1.0
-    ), [symmetric = false],
+# a line `x = v, [options]` (in `:(…)` the comma would make a tuple of two expressions)
+const μ_PAIRS = Meta.parse(
+    "μ[kind, kind] = Pairs((cytoplasm, nucleus) => 4.0, (nucleus, cytoplasm) => 9.0; \
+    default = 1.0), [symmetric = false]"
 )
 const J_MATRIX = :(J[kind, kind] = [0 20 16 0; 20 0 3.5 0; 16 3.5 0 Jcn; 0 0 Jcn 2.5])
-const μ_MATRIX = :(
-    μ[kind, kind] = [
-        1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 4.0;
-        1.0 1.0 9.0 1.0
-    ], [symmetric = false],
+const μ_MATRIX = Meta.parse(
+    "μ[kind, kind] = [1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 4.0; \
+    1.0 1.0 9.0 1.0], [symmetric = false]"
 )
 define(:HelperPairs, pairs_expr(:HelperPairs, J_PAIRS, μ_PAIRS))
 define(:PairsMatrix, pairs_expr(:PairsMatrix, J_MATRIX, μ_MATRIX))
@@ -706,11 +704,9 @@ end
         e5 = build_error(
             :PairsAsym, pairs_expr(
                 :PairsAsym, J_PAIRS,
-                :(
-                    μ[kind, kind] = Pairs(
-                        (medium, substrate) => 1.0, (substrate, medium) => 2.0;
-                        default = 0.0
-                    ), [symmetric = false],
+                Meta.parse(
+                    "μ[kind, kind] = Pairs((medium, substrate) => 1.0, \
+                    (substrate, medium) => 2.0; default = 0.0), [symmetric = false]"
                 )
             ),
             op
