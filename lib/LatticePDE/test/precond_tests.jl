@@ -22,7 +22,7 @@ using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
 # imports an earlier file made in the old single Main
 using SparseArrays: sparse
-include("shared/lp_runner.jl")
+include("shared/preamble.jl")
 include("shared/discretize.jl")
 include("shared/problems.jl")
 include("shared/bounds.jl")
@@ -145,7 +145,7 @@ end
 ] tags = [
     :latticepde, :precond,
 ] begin
-    if lowercase(get(ENV, "LATTICEPDE_GPU", "")) == "rocm"
+    if lowercase(get(ENV, "POTTS_GPU", "")) == "rocm"
         using AMDGPU: AMDGPU
         @testset "FBDF matrix-free on the device with LatticeMultigrid" begin
             dev = AMDGPU.ROCBackend()

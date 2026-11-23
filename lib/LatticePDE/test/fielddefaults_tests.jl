@@ -17,7 +17,7 @@ using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
 using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
-include("shared/lp_runner.jl")
+include("shared/preamble.jl")
 include("shared/discretize.jl")
 using OrdinaryDiffEqTsit5: Tsit5
 using ForwardDiff: ForwardDiff

@@ -12,7 +12,7 @@ using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
 using JET: JET, @test_opt
 using AllocCheck: check_allocs
-include("shared/lp_runner.jl")
+include("shared/preamble.jl")
 include("shared/discretize.jl")
 include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")

@@ -1,4 +1,4 @@
-# Definitions of the old runtests.jl (its preamble) that other test files use.
+# The definitions that the test files of this package include first (their preamble).
 # LatticePDE vocabulary: registered operators, metadata keys and scans.
 # Ported from design probes of the operators, maps and coupling on ModelingToolkitBase 1.77.
 using Test, LatticePDE

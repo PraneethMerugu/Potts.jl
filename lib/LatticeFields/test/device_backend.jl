@@ -1,4 +1,4 @@
-# The device of the GPU tests (LATTICEFIELDS_GPU = metal | rocm), loaded once by
+# The device of the GPU tests (POTTS_GPU = metal | rocm), loaded once by
 # runtests.jl.
 if gpu == "metal"
     using Metal: Metal

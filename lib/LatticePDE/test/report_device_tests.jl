@@ -1,4 +1,4 @@
-# The field report on a device (LATTICEPDE_GPU = rocm | metal), Float32: `field_report` of
+# The field report on a device (POTTS_GPU = rocm | metal), Float32: `field_report` of
 # an owned integrator (explicit and Backward Euler), of an owned solution and of an
 # OrdinaryDiffEq solve on device arrays prints the same group policy as the host, with the
 # device's counters, and the run after a report equals the run without one, bit for bit.
@@ -16,13 +16,13 @@ using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
 using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
-include("shared/lp_runner.jl")
+include("shared/preamble.jl")
 include("shared/discretize.jl")
 include("shared/maskswitch.jl")
 using KernelAbstractions: KernelAbstractions
 using OrdinaryDiffEqTsit5: Tsit5
 if !@isdefined(PDEV)
-    if lowercase(get(ENV, "LATTICEPDE_GPU", "")) == "metal"
+    if lowercase(get(ENV, "POTTS_GPU", "")) == "metal"
         using Metal: Metal
         const PDEV = Metal.MetalBackend()
     else

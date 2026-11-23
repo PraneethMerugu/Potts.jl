@@ -1,4 +1,4 @@
-# The §7.4 problem on a device (LATTICEPDE_GPU = metal | rocm), Float32: the owned solve on
+# The §7.4 problem on a device (POTTS_GPU = metal | rocm), Float32: the owned solve on
 # device arrays equals the host executor's bit for bit on normal-range values (128²; the
 # device flushes subnormals), and the verbatim 512² run completes with automatic substeps.
 
@@ -14,7 +14,7 @@ using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
 using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
-include("shared/lp_runner.jl")
+include("shared/preamble.jl")
 include("shared/discretize.jl")
 include("shared/problems.jl")
 include("shared/bounds.jl")
@@ -40,7 +40,7 @@ include("shared/report.jl")
 include("shared/unseen_loop.jl")
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: LatticeFields
-const pgpu = lowercase(get(ENV, "LATTICEPDE_GPU", ""))
+const pgpu = lowercase(get(ENV, "POTTS_GPU", ""))
 if pgpu == "metal"
     using Metal: Metal
     const PDEV = Metal.MetalBackend()

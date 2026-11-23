@@ -14,7 +14,7 @@ using SciMLBase: SciMLBase, solve, solve!, init, step!, reinit!, remake, ReturnC
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using LatticeFields: LatticeFields, Problems as LFP
 using OrdinaryDiffEqTsit5: Tsit5
-include("shared/lp_runner.jl")
+include("shared/preamble.jl")
 include("shared/discretize.jl")
 include("shared/problems.jl")
 include("shared/bounds.jl")

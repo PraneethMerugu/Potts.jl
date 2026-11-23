@@ -7,7 +7,7 @@
 
 @testsetup module LF_exec_device
 using Test, LatticeFields
-include("shared/lf_runner.jl")
+include("shared/preamble.jl")
 include("exec_helpers.jl")
 include("host_runner.jl")
 include("device_backend.jl")

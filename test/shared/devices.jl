@@ -1,7 +1,6 @@
 # Backend-neutral device selection for the test suites (D-157).
 #
-#   POTTS_GPU ∈ {"", "metal", "rocm"}   (else COREPOTTS_GPU; both set must agree; the rule
-#                                         is `PottsDeviceSelect.requested`,
+#   POTTS_GPU ∈ {"", "metal", "rocm"}   (the rule is `PottsDeviceSelect.requested`,
 #                                         device_select.jl)
 #
 # loads Metal.jl for "metal" and AMDGPU.jl for "rocm", and no GPU package at all when the
