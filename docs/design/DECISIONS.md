@@ -2616,6 +2616,8 @@ Amended by D-320: `@boundary`, `Dirichlet` and `NoFlux` are removed; field condi
 
 ## D-157 Device testing and benchmarks are backend-neutral: Metal (Mac) and ROCm (PC), with ROCm in CI (2026-10-06, maintainer; coordinator design)
 
+Amended by D-336: `POTTS_GPU` is the one device variable; `COREPOTTS_GPU` (and `LATTICEPDE_GPU`, `LATTICEFIELDS_GPU`) are gone, without aliases.
+
 - **Why.** The maintainer's PC (D-156) has a Radeon 8060S (gfx1151). A probe on 2026-10-06 with AMDGPU.jl, ROCm 7.2.1 and Julia 1.12.6 passed:
   - `AMDGPU.functional()`;
   - KernelAbstractions kernels in Float32 and Float64;
@@ -4345,6 +4347,8 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 
 ## D-232 CI: device-only GPU step, sharded PottsModels, parallel suites (2026-10-13; coordinator, targets agreed with the spec owner under the maintainer's "CI speed" focus; amends D-157's CI layout)
 
+Amended by D-336 (item a): `test/shared/device_only.jl` and `POTTS_DEVICE_ONLY` are gone. `GROUP=GPU` runs the device-tagged items (`:device`, `:gpu`, `:gpu_only`, `:device_scan`) of each package, chosen by the groups of `test_groups.toml`.
+
 - **Target.** At most 45 min per push, with no test removed from per-push CI. No scheduled tier: the per-file ranking showed the cost is flat (114 PottsModels files, 35 min, largest 1.6 min), so nothing moved.
 - **(a) Device-only GPU step.** `test/shared/device_only.jl` includes the CorePotts and Potts suites through `include(mapexpr, path)`.
   - It drops only top-level `@testset`s that name no device symbol (PottsDevices, AMDGPU, Metal, a backend, `on_device`, `device_backend`, …), all of which the CPU steps run in full.
@@ -5906,3 +5910,13 @@ Thomas et al. (2022, Physica A 587:126511) restate the Fortuna model. Each diffe
 - **Results.** `kind_names(x)` (model, compiled model, problem, integrator, solution) gives the kind names in number order; `kind_names(x, k)` names kind numbers, arrays and nested arrays. `sol[:kind]` still returns numbers. A categorical vector is documented through CategoricalArrays; no new dependency.
 - **Frozen test edits.** `lib/PottsModels/test/acceptance/cell_reference_helpers_tests.jl`: the E2 fixtures and refusal cases are written as entry lines instead of `Pairs` (μ declared `[symmetric = false]`), with the same values and assertions; the header and two item titles say "named pairs". `cell_references_tests.jl`: the asymmetric positional μ gains `[symmetric = false]`.
 - **Models.** GranerGlazier and AkeebInvasion (library and docs sources) write J by kind name; a test checks the problems equal those built from the old matrices.
+
+## D-336 One test runner for every package, chosen by environment variables (2026-11-23; agent design, user approvals of 2026-11-23 for the argument exception and Kaimon's `run_tests`; amends D-157 (device variable) and D-232 item a)
+
+- **One runner.** `test/runner/PottsTestRunner.jl` runs the items of every package: each `runtests.jl` calls `run_tests` with its test directory, and so do the warm session (`test/runner/session.jl`), CI and the gate scripts. It replaces `test/shared/rti.jl`, the root dispatcher, the five lib runners and `test/dev.jl`.
+- **Groups.** Each package's `test_groups.toml` holds its groups and its settings: the `All` list, workers, worker threads, the time limit per item, the memory threshold and the log mode. The per-package worker defaults stay there (Potts 4 of 1 thread, CorePotts, LatticeFields and LatticePDE 3, MakiePotts 2, PottsModels 0). The runner checks every key. A package runner takes plain group names; the root also takes `<Package>_<group>`.
+- **Variables.** `GROUP` and `POTTS_TEST_NAME`, `POTTS_TEST_TAGS`, `POTTS_TEST_QA`, `POTTS_TEST_WORKERS`, `POTTS_TEST_SHARD` (replaces `POTTSMODELS_SHARD`) and `POTTS_GPU` mean the same in every package; the keywords of `run_tests` override them. `POTTS_TEST_QA=false` drops the qa groups from `All`; a qa group named in `GROUP` always runs.
+- **The one argument.** `runtests.jl` reads no other command-line input: its one argument, when given, is the item-name pattern, the same as `POTTS_TEST_NAME` (the form of `Pkg.test(; test_args)` and Kaimon's `run_tests`). Both set at once is an `ArgumentError`.
+- **Device runs.** `POTTS_GPU` is the one device variable (amends D-157). `test/shared/device_only.jl` and `POTTS_DEVICE_ONLY` are removed (amends D-232 item a): device runs select items by tag. With `POTTS_GPU` set, the items that use the device run in the calling process after the others; the rest keep the package's workers.
+- **Kaimon.** Kaimon's `run_tests` tool is a supported route. On the PC it starts Julia through `~/potts-queue/kaimon-julia.sh`, which waits for an A/B, a CI job or a gate, then runs on the gate cores in the 24G scope. Its counts cover the calling process only (at the root, the Potts items).
+- **Check.** Dry listings of every group and shard before and after the change agree item for item; a full gate passed on the PC (lanes PottsModels, Potts, Libs, GPU). `test/test_runner_tests.jl` tests the runner's group tables, qa rule, shards and name pattern.
