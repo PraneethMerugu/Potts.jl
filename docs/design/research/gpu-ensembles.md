@@ -103,7 +103,7 @@ model content. D-046 holds: the wrapper type is generic.
 - **Phases.** `SitePhase`, `CellPhase`, `ModelPhase`, `FieldStep`, `CopyPhase` and
   `HistoryPush` all go through `_launch(body, backend, n, args)` (`phases.jl:42-50`,
   `fields.jl:172`). So one batched `_launch` method batches them all.
-- **Device lifecycle (D-089, D-096).** It is a fixed kernel sequence (`lifecycle_device.jl:1-25`):
+- **Device lifecycle (D-089, D-096).** It is a fixed kernel sequence (`lifecycle_planner.jl`):
   - the planner is a single workgroup with `@localmem` and `@synchronize` (`_plan_kernel!`,
     `:456`);
   - the "fused" form runs the whole lifecycle in one workgroup (`_fused_kernel!`, `:961`).
@@ -178,10 +178,11 @@ run if it also evaluates attempts in that order, against that state.
 
   Chunking is free: attempts are addressed by index.
 - **Required changes.**
-  - A device mobile-site list per replicate. A prefix-scan compaction runs when the frozen
-    mask changes: on the D-089 lifecycle path, `lattice.jl:392-421`. Today the device keeps
-    only the mask (`:373`), and `_device_planned` excludes `SequentialCPM` for this reason
-    (`problem.jl:495-508`).
+  - A device mobile-site list per replicate. The lifecycle planner already runs for
+    `SequentialCPM`: it counts the changed sites of each event round (the fourth mobility
+    word), and the fold rebuilds the host mobile-site list when that count changes. A device
+    `SequentialCPM` still needs the list on the device: a prefix-scan compaction per
+    replicate when the frozen mask changes.
   - The `Float64` track accumulator becomes a per-replicate `T` accumulator, folded into
     `stats.accepted_ΔH::Float64` at host read points, as checkerboard does (`_fold_track!`).
   - Accepted counts and status become per-replicate device words.
@@ -257,12 +258,12 @@ one. The cumulative hazard is about `p_acc · q · j² / 2`, so the run length i
 replicate's colours with `@synchronize` between colours and runs K MCS per launch:
 - claims go into LDS when capacity allows;
 - the per-MCS phases are called as `body(i, args…)` loops over lanes;
-- the fused lifecycle (`lifecycle_device.jl:961`) is already this shape.
+- the fused lifecycle (`lifecycle_planner.jl`) is already this shape.
 
 Launch overhead becomes O(1/K). The lattice must be small: ≤ ~10⁵ sites so the sweep per
 lane stays short, and tiny lattices could also tile σ into LDS. Bit-identical to C-c: same
 claims (atomic max is order-free), same colour order, same bodies. Risks: register pressure,
-because the fused kernel already hits Metal's 384-thread limit (`lifecycle_device.jl:27-31`),
+because the fused kernel already hits Metal's 384-thread limit (`lifecycle_planner.jl`),
 and KA's CPU backend restrictions on `@synchronize` in loops (§8).
 
 **C-a: one replicate per work-item.** This would be a serial checkerboard. It is pointless:
@@ -350,7 +351,7 @@ law.
 
 The D-089 device lifecycle maps one-to-one:
 - the trigger and per-cell stages launch `(capacity, R)`;
-- the planner launches R workgroups of `PLAN_WG` (`lifecycle_device.jl:34`) with group index
+- the planner launches R workgroups of `PLAN_WG` (`lifecycle_planner.jl`) with group index
   `= r`;
 - scratch (`_device_scratch`, `:72-79`) gains R;
 - the fold buffers `acc` and `mask` (Int64; Metal supports 64-bit integers, only 64-bit
@@ -392,7 +393,7 @@ before sizing batches: "62 GB visible" is the CPU view (risk R3).
   and the model has **no order-dependent float atomics**. Today these are:
   - cluster surfaces (`compartments.jl:150-151`);
   - spatial measures (`spatial.jl:179, 196`);
-  - the device-lifecycle surface update (`lifecycle_device.jl:602-603`).
+  - the device-lifecycle surface update (`lifecycle_planner.jl`).
 
   Those models get statistical agreement only, and so do repeated solo runs of them, which
   D-029 already accepts. Integer atomics (volumes, claims, counts) are order-free.
@@ -665,7 +666,7 @@ The go/no-go numbers for each item are in §9.
   - The GPU's allocatable memory (carve-out plus GTT) may be well under 62 GB.
   - The PC is also a CI runner (shared cores).
 - **R4, register pressure.** The fused lifecycle already hits Metal's per-pipeline thread
-  limit (`lifecycle_device.jl:27-31`). C-b and S-b put ΔH, commit, phases and lifecycle in
+  limit (`lifecycle_planner.jl`). C-b and S-b put ΔH, commit, phases and lifecycle in
   one kernel, and occupancy follows the worst part. The staged fallback pattern of D-096
   should be kept.
 - **R5, KernelAbstractions.**

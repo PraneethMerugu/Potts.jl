@@ -22,12 +22,12 @@ end
         @test CorePotts.site_index_type(Int64(typemax(Int32)) + 1) === Int64
         function forced(f, wide::Bool; device = false)
             CorePotts._FORCE_WIDE_SITES[] = wide
-            CorePotts._FORCE_DEVICE_LIFECYCLE[] = device
+            CorePotts._FORCE_FUSED_LIFECYCLE[] = device
             try
                 return f()
             finally
                 CorePotts._FORCE_WIDE_SITES[] = false
-                CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+                CorePotts._FORCE_FUSED_LIFECYCLE[] = false
             end
         end
         S = 10
@@ -37,8 +37,8 @@ end
             CPMFunction(gg_delta_H; temperature = gg_temperature), initial_state(σ, kinds),
             Lattice((30, 30)), (0, 15), gg_params()
         )
-        # (problem, algorithm, device lifecycle): a mask that a transition and a removal
-        # change (the host refresh's counters, the mobile-site list, the device planner's
+        # (problem, algorithm, fused lifecycle form): a mask that a transition and a removal
+        # change (the host refresh's counters, the mobile-site list, the planner's
         # counters), a static mask, and a lattice without one
         cases = [
             (fk_problem(fk_flip(S); kind = fk_swap), SequentialCPM(), false),
@@ -80,7 +80,9 @@ end
                 integ.mscratch === nothing || @test eltype(integ.mscratch.host) === T
                 dl = integ.lcache === nothing ? nothing : integ.lcache.device
                 dl === nothing || @test eltype(dl.dv.mcnt) === T
-                @test device == (dl !== nothing)
+                # every lifecycle runs the planner; the fused form only where forced
+                @test (dl !== nothing) == (integ.lcache !== nothing)
+                dl === nothing || @test device == (dl.fused! !== nothing)
             end
         end
     end

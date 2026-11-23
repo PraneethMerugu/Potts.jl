@@ -108,4 +108,15 @@ function CorePotts._pin!(b::ROCBackend, a::Array)
 end
 CorePotts._unpin!(::ROCBackend, a::Array) = (AMDGPU.Mem.unpin(pointer(a)); nothing)
 
+# A launch whose workgroup exceeds the kernel's limit: HIP refuses its configuration
+# (`hipErrorInvalidConfiguration` or `hipErrorInvalidValue`) or its resources
+# (`hipErrorLaunchOutOfResources`)
+function CorePotts._workgroup_limit_error(e::AMDGPU.HIP.HIPError)
+    H = AMDGPU.HIP
+    return e.code in (
+        H.hipErrorInvalidConfiguration, H.hipErrorInvalidValue,
+        H.hipErrorLaunchOutOfResources,
+    )
+end
+
 end # module CorePottsAMDGPUExt

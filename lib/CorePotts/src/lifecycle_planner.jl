@@ -1,9 +1,14 @@
-# The lifecycle on a device (D-089, D-096): every lifecycle MCS enqueues a fixed sequence of
-# kernels, with no host decision and no read-back. A quiet MCS costs the trigger kernel and
-# launches whose work items return at once (they read the round's event flag on the device).
+# The lifecycle planner (D-089, D-096, D-332): one KernelAbstractions planner for every
+# backend and every algorithm. Every lifecycle MCS enqueues a fixed sequence of kernels,
+# with no host decision and no read-back on a device. A quiet device MCS costs the trigger
+# kernel and launches whose work items return at once (they read the round's event flag on
+# the device). On the CPU the flag is host memory: a quiet MCS ends after the trigger
+# kernel. Host hooks (`Lifecycle.rebuild!`, a custom `remake_frozen`, cell-scope `pieces`)
+# run as a host stage after the planner, on event rounds only (`_host_stage!` in
+# `problem.jl`).
 #
 #   trigger    (cells)   events; the round's event flag; cluster ids that hold a dead root
-#   plan       (one workgroup of PLAN_WG items) the D-035 host plan, on the device: daughter
+#   plan       (one workgroup of up to PLAN_WG items) the id plan: daughter
 #              ids lowest-first among free ids (prefix scans, no atomics-order dependence),
 #              capacity deferral, cluster units and their planes, cell division normals
 #   partition  (sites)   removed cells' sites → medium; each dividing cell's sites on the
@@ -12,8 +17,8 @@
 #   copies     (cells)   daughter column copies, generation, cluster ids, links (removed
 #              cells' links dropped, daughters unlinked), for every cell before any rule
 #              runs
-#   rules      (cells)   the daughter state rules and transitions (they see the trackers as
-#              the CPU path's rules do: not yet updated)
+#   rules      (cells)   the daughter state rules and transitions (they see the trackers
+#              not yet updated)
 #   surface    (sites)   the surface change of each parent and daughter (only the moved
 #                        sites)
 #   counts     (cells, then sites) contact counts (`ctx.contact_counts`), zeroed and summed
@@ -27,40 +32,53 @@
 #              follows the state
 #
 # Lifecycle statistics and the mask counts accumulate on the device and are folded into
-# `integ.stats` only at host read points (saves, `current_state`, `checkpoint`, the end of
-# `solve!`), which synchronize anyway (`_fold_lifecycle!`).
+# `integ.stats` at host read points (saves, `current_state`, `checkpoint`, the end of
+# `solve!`), which synchronize anyway (`_fold_lifecycle!`); on the CPU also after every
+# event round.
 #
 # Index bounds of the `@inbounds` below: cell ids (`c`, `d`, `k`, `r`, `m`: live cells,
 # daughters, free slots and cluster ids) are ≤ cap, the length of every cell column and of
 # each per-cell scratch of `dv` (`_device_scratch`); a site index `i` is ≤ length(σ); a
-# planner item `t` is ≤ PLAN_WG, the rows of `cnt`; `par` ∈ (1, 2) = axes(dv.flag).
+# planner item `t` is ≤ the workgroup `wg` ≤ PLAN_WG, the rows of `dv.cnt`;
+# `par` ∈ (1, 2) = axes(dv.flag).
 
-# Items of the planner's (and the fused form's) single workgroup. Fewer cost time on a
-# quiet MCS (each item runs the trigger of capacity/PLAN_WG slots; 128 measured about 1.2×
-# slower on Akeeb Metal, `benchmark/ab.jl`). A kernel's pipeline may allow fewer threads
-# per group (Metal: register-bound, 384 measured for Akeeb's fused kernel); that launch then
-# fails on the host before anything is enqueued, and the next form takes over (`_FORM_*`,
-# `run_lifecycle_device!`).
+# The most items of the planner's (and the fused form's) single workgroup. Fewer cost time
+# on a quiet device MCS (each item runs the trigger of capacity/`wg` slots; 128 measured
+# about 1.2× slower on Akeeb Metal, `benchmark/ab.jl`). A kernel's pipeline may allow fewer
+# threads per group (Metal: register-bound, 384 measured for Akeeb's fused kernel). The
+# workgroup is a launch argument: the staged form fits it to the planner's limit before its
+# first launch (`_fit_plan_wg!`, halving from `PLAN_WG`), so it always launches. The scans
+# take any workgroup size, and the plan does not depend on it.
 const PLAN_WG = 256
+# tests (not public API): the largest planner workgroup tried (`_fit_plan_wg!`), and a
+# simulated pipeline limit (a planner launch with a larger workgroup fails; 0 is off)
+const _PLAN_WG_MAX = Ref(PLAN_WG)
+const _PLAN_WG_LIMIT = Ref(0)
 
-# The forms of the device lifecycle, tried in this order: one fused launch (small problems),
-# one kernel per stage, the host planner (D-035; `_step_lifecycle!`)
+"""The error of a launch whose workgroup exceeds the simulated limit `_PLAN_WG_LIMIT`."""
+struct _PlanWGLimitError <: Exception
+    wg::Int
+end
+Base.showerror(io::IO, e::_PlanWGLimitError) =
+    print(io, "workgroup of ", e.wg, " items exceeds the planner's simulated limit")
+
+"""
+    _workgroup_limit_error(e) -> Bool
+
+Whether the launch error `e` says that the workgroup exceeds the kernel's limit. Only such
+an error makes `_fit_plan_wg!` halve the workgroup; any other error (a compile error in a
+user function, for example) is thrown at once. The backend extensions add their launch
+errors.
+"""
+_workgroup_limit_error(e) = false
+_workgroup_limit_error(::_PlanWGLimitError) = true
+
+# The forms of the lifecycle: one fused launch (small device problems), then one kernel per
+# stage, which always launches (the CPU uses it always: a quiet MCS ends after its trigger)
 const _FORM_FUSED = 1
 const _FORM_STAGED = 2
-const _FORM_HOST = 3
-# tests: the first launch of this form fails (not public API)
+# tests: the first launch of the fused form fails (not public API)
 const _LAUNCH_FAULT = Ref(0)
-# Tests (not public API, D-108): with k = `_STAGED_FAULT_AFTER[]` > 0, the staged form's
-# first (not yet proven) launch enqueues its first k kernels (1: the trigger with
-# `Lifecycle.before`; 2: also the planner) and then throws as if the next kernel's launch
-# had failed; 0 is off. Like `_LAUNCH_FAULT` it acts only on an unproven form, so once per
-# integrator. A launch failure is expected only before the partition kernel
-# (`run_lifecycle_device!`); a failure after it (k ≥ 3 here) is not handed over but rethrown
-# (`_StagedFailedMidway`).
-const _STAGED_FAULT_AFTER = Ref(0)
-# The staged form's kernels are the trigger, the planner, then the partition, the first to
-# write σ: a failure once this many kernels were enqueued leaves no consistent state
-const _STAGED_PARTITION = 3
 
 # device accumulators (`dv.acc`, cumulative Int32; the host folds the differences)
 const _ACC_DIVISIONS = 1
@@ -69,16 +87,17 @@ const _ACC_TRANSITIONS = 3
 const _ACC_DEFERRED = 4
 const _ACC_EMPTY = 5
 const _ACC_NOCLUSTER = 6            # EVENT_DIVIDE_CLUSTER without cluster state (an error)
-# divisions deferred: the cell is too large for the Int32 moment scratch (`_scratch_ok`;
-# also counted as deferred)
+# divisions deferred: the cell is too large for the Int32 moment scratch of a backend
+# without 64-bit atomics (`_scratch_ok`; also counted as deferred)
 const _ACC_LARGE = 7
 # `transitioning` on an event other than a division (an error)
 const _ACC_BADTRANS = 8
 const _NACC = 8
 
-# The bound of `_scratch_ok` (`typemax(Int32)`); a `Ref` read when the scratch is built, so
-# that tests can lower it (not public API)
-const _SCRATCH_LIMIT = Ref{Int64}(typemax(Int32))
+# The bound of `_scratch_ok`: `nothing` is the scratch type's own (`typemax(Int64)` where
+# `_atomic64(backend)` holds, else `typemax(Int32)`; `@convert` keeps `typemax(Int32)`); a
+# `Ref` read when the scratch is built, so that tests can lower it (not public API)
+const _SCRATCH_LIMIT = Ref{Union{Nothing, Int64}}(nothing)
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
 const _LIFECYCLE_OWNED = (
@@ -90,39 +109,41 @@ const _LIFECYCLE_OWNED = (
 """Device scratch of the lifecycle (sized by capacity) and the host buffers of its fold."""
 function _device_scratch(backend, N::Int, cap::Int, nsite::Int)
     z(T, dims...) = KernelAbstractions.zeros(backend, T, dims...)
+    # moment scratch: Int64 where the backend has 64-bit atomics (no large cell is deferred)
+    M = _atomic64(backend) ? Int64 : Int32
+    lim = _SCRATCH_LIMIT[]
     return (;
         flag = z(Int32, 2), held = z(Int32, cap), newborn = z(Int32, cap),
         req = z(Int32, cap),
         nmem = z(Int32, cap), nlive = z(Int32, cap), coff = z(Int32, cap),
         freelist = z(Int32, cap),
-        dvol = z(Int32, cap), dm1 = z(Int32, N, cap), dm2 = z(Int32, npairs(N), cap),
+        dvol = z(Int32, cap), dm1 = z(M, N, cap), dm2 = z(M, npairs(N), cap),
         rootA = z(Int32, cap), rootB = z(Int32, cap), okc = z(Bool, cap),
         acc = z(Int32, _NACC),
         mcnt = z(_atomic64(backend) ? site_index_type(nsite) : Int32, 3),
-        mask = z(Int64, 3), taken = z(
-            Int32, 1
-        ),
+        mask = z(Int64, 4), taken = z(Int32, 1),
+        # the planner's scans (one workgroup; device memory is coherent across its barriers)
+        cnt = z(Int32, PLAN_WG, 3), tot = z(Int32, 3),
         wacc = z(Int64, cap), wlo = z(UInt32, cap), whi = z(Int32, cap),
-        limit = _SCRATCH_LIMIT[],
+        limit = lim === nothing ? Int64(typemax(M)) : lim,
     )
 end
 
-"""Host side of the device lifecycle: the round counter, the kernel objects and the fold
-buffers (`acc`/`mask` are read at host read points; `seen` are the values already
-folded)."""
-struct DeviceLifecycle{DV, CO, LI, K, KF}
+"""Host side of the lifecycle planner: the round counter, the kernel objects and the fold
+buffers (`acc`/`mask` are read at host read points, and on the CPU after every event round;
+`seen` are the values already folded)."""
+struct LifecyclePlanner{DV, CO, LI, K, KF}
     dv::DV
     cols::CO            # the cell columns a daughter copies from its parent
     links::LI           # the adjacency matrices of the relationships
     plan!::K
     fused!::KF          # the whole lifecycle in one workgroup (small problems), or nothing
     form::Base.RefValue{Int}        # `_FORM_*`
-    # this MCS's `Lifecycle.before` was enqueued (with the trigger)
-    before_ran::Base.RefValue{Bool}
     proven::Base.RefValue{Bool}     # the form has launched once (its workgroup fits)
-    # kernels the unproven staged launch enqueued (`_Counted`)
-    enqueued::Base.RefValue{Int}
+    wg::Base.RefValue{Int}          # the planner's workgroup (`_fit_plan_wg!`)
     round::Base.RefValue{Int}
+    par::Base.RefValue{Int32}       # the event-flag slot of the last checked round
+    flagh::Vector{Int32}            # host copy of that flag (`_events_on`, devices)
     acc::Vector{Int32}
     acc_seen::Vector{Int32}
     mask::Vector{Int64}
@@ -136,7 +157,7 @@ end
 const _FUSED_LIFECYCLE_MAX_SITES = 1 << 16
 const _FUSED_LIFECYCLE_MAX_CELLS = 1 << 13
 
-function DeviceLifecycle(
+function LifecyclePlanner(
         backend, N::Int, cap::Int, st; max_sites::Int = _FUSED_LIFECYCLE_MAX_SITES,
         max_cells::Int = _FUSED_LIFECYCLE_MAX_CELLS
     )
@@ -147,18 +168,21 @@ function DeviceLifecycle(
             if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k) && !_is_scratch_column(k)
     )
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
-    fused = if !_FORCE_STAGED_LIFECYCLE[] && length(st.ownership) <= max_sites &&
-            cap <= max_cells
-        _fused_kernel!(backend, PLAN_WG)
+    # the CPU runs the staged form (its quiet MCS ends after the trigger kernel), unless a
+    # test forces the fused one
+    fusable = !(backend isa CPU) || _FORCE_FUSED_LIFECYCLE[]
+    fused = if fusable && !_FORCE_STAGED_LIFECYCLE[] &&
+            length(st.ownership) <= max_sites && cap <= max_cells
+        _fused_kernel!(backend)
     else
         nothing
     end
-    return DeviceLifecycle(
+    return LifecyclePlanner(
         _device_scratch(backend, N, cap, length(st.ownership)), cols, links,
-        _plan_kernel!(backend, PLAN_WG), fused,
-        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(false), Ref(0),
-        Ref(0),
-        zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3)
+        _plan_kernel!(backend), fused,
+        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false),
+        Ref(min(PLAN_WG, _PLAN_WG_MAX[])), Ref(0), Ref(Int32(1)), zeros(Int32, 1),
+        zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 4), zeros(Int64, 4)
     )
 end
 
@@ -194,11 +218,13 @@ end
 @inline _on(dv, par) = @inbounds(dv.flag[par]) != Int32(0)
 
 # ---------------------------------------------------------------------------------------
-# Plan: one workgroup; item `t` owns the contiguous slots `_chunk(t, cap)`, so every scan is
-# in slot order. Values that live across barriers are in workgroup memory (`cnt`, `tot`).
+# Plan: one workgroup of `wg` items; item `t` owns the contiguous slots
+# `_chunk(t, cap, wg)`, so every scan is in slot order. Values that live across barriers are
+# in `dv.cnt` and `dv.tot` (device memory, coherent within the workgroup across a barrier,
+# as the fused form relies on), so the workgroup size is a launch argument.
 
-@inline function _chunk(t, cap)
-    K = cld(cap, PLAN_WG)
+@inline function _chunk(t, cap, wg)
+    K = cld(cap, wg)
     lo = (t - 1) * K + 1
     return lo, min(t * K, cap)
 end
@@ -209,11 +235,11 @@ end
         (!CL || @inbounds(dv.held[c]) != round)
 end
 
-# exclusive prefix sum of `cnt[1:PLAN_WG, j]` in place; returns the total (one item runs it)
-@inline function _scan!(cnt, j)
+# exclusive prefix sum of `cnt[1:wg, j]` in place; returns the total (one item runs it)
+@inline function _scan!(cnt, j, wg)
     s = Int32(0)
-    for t in 1:PLAN_WG
-        # bounds: t ≤ PLAN_WG rows and j ≤ 3 columns of cnt
+    for t in 1:wg
+        # bounds: t ≤ wg ≤ PLAN_WG rows and j ≤ 3 columns of cnt
         v = @inbounds cnt[t, j]
         @inbounds cnt[t, j] = s
         s += v
@@ -224,13 +250,13 @@ end
 # A: normalize events (only a cluster's root may divide it), reset the per-slot scratch,
 # count free slots per item
 @inline function _plan_a!(
-        t, cnt, events, daughter, removed, bias, dv,
+        t, wg, cnt, events, daughter, removed, bias, dv,
         par, round, ruled, st, cl::Val{CL}
     ) where {CL}
     t == 1 && (@inbounds dv.flag[3 - par] = Int32(0))       # the next round's flag
     nfree = Int32(0)
     if _on(dv, par)
-        lo, hi = _chunk(t, length(events))
+        lo, hi = _chunk(t, length(events), wg)
         for c in lo:hi
             raw = @inbounds events[c]
             e = _event(ruled, raw)
@@ -266,9 +292,9 @@ end
 end
 
 # B: live members per cluster, and the members (not being removed) of each dividing cluster
-@inline function _plan_b!(t, events, dv, par, ruled, st, ::Val{CL}) where {CL}
+@inline function _plan_b!(t, wg, events, dv, par, ruled, st, ::Val{CL}) where {CL}
     (CL && _on(dv, par)) || return nothing
-    lo, hi = _chunk(t, length(events))
+    lo, hi = _chunk(t, length(events), wg)
     for c in lo:hi
         # bounds: c ∈ _chunk(t, cap) ⊆ 1:cap; cluster ids r ≤ cap (file header)
         @inbounds(st.cell.volume[c]) > 0 || continue
@@ -283,12 +309,12 @@ end
 end
 
 # C: daughters requested by the dividing clusters rooted in each item's slots
-@inline function _plan_c!(t, cnt, events, dv, par, ruled, ::Val{CL}) where {CL}
+@inline function _plan_c!(t, wg, cnt, events, dv, par, ruled, ::Val{CL}) where {CL}
     dem = Int32(0)
     if CL && _on(dv, par)
-        lo, hi = _chunk(t, length(events))
+        lo, hi = _chunk(t, length(events), wg)
         for c in lo:hi
-            # bounds: c ∈ _chunk(t, cap) ⊆ 1:cap; t ≤ PLAN_WG rows of cnt
+            # bounds: c ∈ _chunk(t, cap, wg) ⊆ 1:cap; t ≤ wg rows of cnt
             _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER &&
                 (dem += @inbounds dv.nmem[c])
         end
@@ -300,10 +326,10 @@ end
 # D (one item): scans of the free slots and of the cluster demand. Clusters take daughters
 # first, in root order; when they do not all fit, the D-035 greedy pass defers those that do
 # not fit (a later, smaller cluster may still fit)
-@inline function _plan_d!(t, cnt, tot, events, dv, par, ruled)
+@inline function _plan_d!(t, wg, cnt, tot, events, dv, par, ruled)
     (t == 1 && _on(dv, par)) || return nothing
-    nfree = _scan!(cnt, 1)
-    demand = _scan!(cnt, 2)
+    nfree = _scan!(cnt, 1, wg)
+    demand = _scan!(cnt, 2, wg)
     @inbounds tot[1] = nfree
     if demand <= nfree
         @inbounds tot[2] = demand
@@ -332,11 +358,11 @@ end
 
 # E: the free list in slot order; cluster offsets (no deferral); cells dividing alone
 @inline function _plan_e!(
-        t, cnt, tot, events, dv, par, round, ruled, st, cl::Val{CL}
+        t, wg, cnt, tot, events, dv, par, round, ruled, st, cl::Val{CL}
     ) where {CL}
     nreq = Int32(0)
     if _on(dv, par)
-        lo, hi = _chunk(t, length(events))
+        lo, hi = _chunk(t, length(events), wg)
         k = @inbounds cnt[t, 1]
         off = @inbounds cnt[t, 2]
         greedy = @inbounds(tot[3]) != 0
@@ -367,16 +393,16 @@ end
 end
 
 # F (one item): the cells dividing alone take the free slots left, in slot order
-@inline function _plan_f!(t, cnt, tot, dv, par)
+@inline function _plan_f!(t, wg, cnt, tot, dv, par)
     (t == 1 && _on(dv, par)) || return nothing
-    nreq = _scan!(cnt, 3)
+    nreq = _scan!(cnt, 3, wg)
     avail = @inbounds(tot[1]) - @inbounds(tot[2])
     ndiv = min(nreq, avail)
     ndiv > 0 && Atomix.@atomic dv.acc[_ACC_DIVISIONS] += ndiv
     nreq > ndiv && Atomix.@atomic dv.acc[_ACC_DEFERRED] += nreq - ndiv
     # free-list entries taken this round (serials): scratch, committed to the counter after
     # the partition (`_advance_births!`), so a staged launch that fails in the planner
-    # leaves the state's counter as it was for the host planner
+    # leaves the state's counter as it was
     @inbounds dv.taken[1] = @inbounds(tot[2]) + ndiv          # taken has 1 entry, tot 3
     return nothing
 end
@@ -406,11 +432,11 @@ end
 # a dividing cluster's root assigns its members' daughters in slot order and evaluates the
 # cluster plane on the cluster's moments
 @inline function _plan_g!(
-        t, cnt, tot, events, daughter, normals, bias, dv, par, normal::NF, cnormal::CF,
+        t, wg, cnt, tot, events, daughter, normals, bias, dv, par, normal::NF, cnormal::CF,
         ruled, st, p, ctx, key, mcs, ::Val{CL}, births
     ) where {NF, CF, CL}
     _on(dv, par) || return nothing
-    lo, hi = _chunk(t, length(events))
+    lo, hi = _chunk(t, length(events), wg)
     rk = @inbounds(tot[2]) + @inbounds(cnt[t, 3])
     nfree = @inbounds tot[1]
     for c in lo:hi
@@ -441,14 +467,16 @@ end
     return nothing
 end
 
-# A daughter's volume and moment sums about the parent's anchor accumulate in Int32 scratch
-# (`_dpartition_body!`). With δ the integer offsets (site − parent anchor) of the daughter's
-# sites, a subset of the parent's, and P_k = Σ_parent δ_k² (the parent's `m2[k, k]`, exact):
+# A daughter's volume and moment sums about the parent's anchor accumulate in integer
+# scratch (`_dpartition_body!`): Int64 where the backend has 64-bit atomics (the bound below
+# then always holds, since `m2` is Int64), Int32 elsewhere (Metal). With δ the integer
+# offsets (site − parent anchor) of the daughter's sites, a subset of the parent's, and
+# P_k = Σ_parent δ_k² (the parent's `m2[k, k]`, exact):
 #   |Σ δ_k| ≤ Σ |δ_k| ≤ Σ δ_k² ≤ P_k                         (integers: |δ| ≤ δ²)
 #   |Σ δ_k δ_l| ≤ Σ (δ_k² + δ_l²)/2 ≤ max(P_k, P_l)
 #   0 ≤ Σ δ_k² ≤ P_k,   0 ≤ the daughter's volume ≤ the parent's (an Int32 site count)
-# so every final sum fits in Int32 when every P_k ≤ `typemax(Int32)` (atomic adds wrap, so
-# the order of the partial sums does not matter), and each site's own term
+# so every final sum fits in the scratch type when every P_k ≤ its `typemax` (atomic adds
+# wrap, so the order of the partial sums does not matter), and each site's own term
 # |δ_k δ_l| ≤ max(P_k, P_l).
 # A larger cell does not divide: its division is deferred and counted (`_ACC_LARGE`), the
 # state stays exact, and the host warns at the next read point.
@@ -557,9 +585,9 @@ end
 @inline _with_rule(::Val{true}, ev, raw) = ev | ((raw >> _RULE_SHIFT) << _RULE_SHIFT)
 
 # H: who is whose daughter; statistics; a daughter's surface starts from zero
-@inline function _plan_h!(t, events, daughter, dv, par, ruled, surf)
+@inline function _plan_h!(t, wg, events, daughter, dv, par, ruled, surf)
     _on(dv, par) || return nothing
-    lo, hi = _chunk(t, length(events))
+    lo, hi = _chunk(t, length(events), wg)
     ntrans = Int32(0)
     nrem = Int32(0)
     for c in lo:hi
@@ -578,53 +606,55 @@ end
     return nothing
 end
 
-# `live = false` is the compile launch (compile before enqueue): one workgroup in
-# which every stage is skipped, so nothing is read or written. The guard is an `if` around
+# `live = false` is the compile launch (compile before enqueue, and the fit of the workgroup
+# `wg`, `_fit_plan_wg!`): one workgroup in which every stage is skipped, so nothing is read
+# or written. The guard is an `if` around
 # each stage, not around the kernel: `@synchronize` stays at the top level, where every
 # work item reaches it. (KA's CPU backend splits the kernel at each `@synchronize` and needs
 # `@index` as its own statement in each part.)
 @kernel function _plan_kernel!(
-        live, events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
-        ruled, st, p, ctx, key, mcs, clusters, surf, births
+        live, wg, events, daughter, removed, normals, bias, dv, par, round, normal,
+        cnormal, ruled, st, p, ctx, key, mcs, clusters, surf, births
     )
-    cnt = @localmem Int32 (PLAN_WG, 3)
-    tot = @localmem Int32 (3,)
+    cnt = @uniform dv.cnt
+    tot = @uniform dv.tot
     ta = @index(Local, Linear)
     if live
         _plan_a!(
-            ta, cnt, events, daughter, removed, bias, dv, par, round, ruled, st, clusters
+            ta, wg, cnt, events, daughter, removed, bias, dv, par, round, ruled, st,
+            clusters
         )
     end
     @synchronize
     tb = @index(Local, Linear)
     if live
-        _plan_b!(tb, events, dv, par, ruled, st, clusters)
+        _plan_b!(tb, wg, events, dv, par, ruled, st, clusters)
     end
     @synchronize
     tc = @index(Local, Linear)
     if live
-        _plan_c!(tc, cnt, events, dv, par, ruled, clusters)
+        _plan_c!(tc, wg, cnt, events, dv, par, ruled, clusters)
     end
     @synchronize
     td = @index(Local, Linear)
     if live
-        _plan_d!(td, cnt, tot, events, dv, par, ruled)
+        _plan_d!(td, wg, cnt, tot, events, dv, par, ruled)
     end
     @synchronize
     te = @index(Local, Linear)
     if live
-        _plan_e!(te, cnt, tot, events, dv, par, round, ruled, st, clusters)
+        _plan_e!(te, wg, cnt, tot, events, dv, par, round, ruled, st, clusters)
     end
     @synchronize
     tf = @index(Local, Linear)
     if live
-        _plan_f!(tf, cnt, tot, dv, par)
+        _plan_f!(tf, wg, cnt, tot, dv, par)
     end
     @synchronize
     tg = @index(Local, Linear)
     if live
         _plan_g!(
-            tg, cnt, tot, events, daughter, normals, bias, dv,
+            tg, wg, cnt, tot, events, daughter, normals, bias, dv,
             par, normal, cnormal, ruled, st, p, ctx, key, mcs,
             clusters, births
         )
@@ -632,7 +662,7 @@ end
     @synchronize
     th = @index(Local, Linear)
     if live
-        _plan_h!(th, events, daughter, dv, par, ruled, surf)
+        _plan_h!(th, wg, events, daughter, dv, par, ruled, surf)
     end
 end
 
@@ -665,12 +695,13 @@ end
             @inbounds σ[i] = d
             _owner_changed!(hook, st, i)
             Atomix.@atomic dv.dvol[d] += Int32(1)
-            # `% Int32`: |δ_k|, |δ_k δ_l| ≤ the parent's m2[k, k] ≤ the scratch limit
+            # `% M`: |δ_k|, |δ_k δ_l| ≤ the parent's m2[k, k] ≤ the scratch limit
             # (`_scratch_ok`), and the sums wrap (exact once complete)
+            M = eltype(dv.dm1)
             for k in 1:N
-                Atomix.@atomic dv.dm1[k, d] += δ[k] % Int32
+                Atomix.@atomic dv.dm1[k, d] += δ[k] % M
                 for l in k:N
-                    Atomix.@atomic dv.dm2[_pair(N, k, l), d] += (δ[k] * δ[l]) % Int32
+                    Atomix.@atomic dv.dm2[_pair(N, k, l), d] += (δ[k] * δ[l]) % M
                 end
             end
         end
@@ -853,13 +884,13 @@ end
         m = eltype(cell.m1)(@inbounds dv.dm1[k, d])
         @inbounds cell.m1[k, d] = m
         @inbounds cell.m1[k, c] -= m
-        @inbounds dv.dm1[k, d] = Int32(0)
+        @inbounds dv.dm1[k, d] = zero(eltype(dv.dm1))
     end
     for q in 1:npairs(N)
         m = eltype(cell.m2)(@inbounds dv.dm2[q, d])
         @inbounds cell.m2[q, d] = m
         @inbounds cell.m2[q, c] -= m
-        @inbounds dv.dm2[q, d] = Int32(0)
+        @inbounds dv.dm2[q, d] = zero(eltype(dv.dm2))
     end
     @inbounds dv.dvol[d] = Int32(0)
     _recenter!(cell, lat, c, Vc)
@@ -939,9 +970,10 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# The frozen mask on a device: refreshed on event rounds; the change of the mobile count is
-# folded per round into `mask = [Σ d, Σ d·mcs, refreshes]` (Int64, one item), so the host
-# corrects `stats.attempts` exactly at its next read point
+# The frozen mask: refreshed on event rounds; the change of the mobile count is folded per
+# round into `mask = [Σ d, Σ d·mcs, refreshes, changed sites]` (Int64, one item), so the
+# host corrects `stats.attempts` exactly at its next read point and rebuilds the host
+# mobile-site list (`SequentialCPM`) when a site changed
 
 @inline function _dfrozen_body!(i, dv, par, frozen, σ, kind, kinds, lat)
     _on(dv, par) || return nothing
@@ -955,6 +987,7 @@ end
     @inbounds dv.mask[1] += d
     @inbounds dv.mask[2] += d * Int64(mcs)
     @inbounds dv.mask[3] += Int64(1)
+    @inbounds dv.mask[4] += Int64(@inbounds dv.mcnt[3])
     @inbounds dv.mcnt[2] = zero(eltype(dv.mcnt))     # `site_index_type` (D-253)
     @inbounds dv.mcnt[3] = zero(eltype(dv.mcnt))
     return nothing
@@ -972,22 +1005,17 @@ _plane(::RandomPlane, ::Type{T}) where {T} = RandomPlane{T}()
 _plane(normal, ::Type) = normal
 
 """
-Enqueue the lifecycle of MCS `mcs` on a device: no synchronization, no transfer.
-`refresh` is `nothing` or `(frozen, kinds)` of a standard-rule frozen mask. Returns
-the number of kernel launches, or -1 when no device form can launch (the host planner then
-runs this MCS and every later one; `cache.device.before_ran[]` tells whether `lc.before`
-already ran this MCS).
+Enqueue the lifecycle of MCS `mcs`. `refresh` is `nothing` or `(frozen, kinds)` of a
+standard-rule frozen mask. Returns the number of kernel launches. On a device nothing is
+synchronized or transferred; on the CPU a quiet round ends after the trigger kernel.
+`cache.device.par[]` is the round's event-flag slot (`_events_on`).
 """
-function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backend, refresh)
+function run_lifecycle!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backend, refresh)
     D = cache.device
-    D.before_ran[] = false
-    if mcs % lc.every != 0
-        n = _run_before(lc.before, st, p, ctx, key, mcs, backend)
-        D.before_ran[] = true
-        return n
-    end
+    mcs % lc.every != 0 && return _run_before(lc.before, st, p, ctx, key, mcs, backend)
     r = (D.round[] += 1)
     par = Int32(isodd(r) ? 1 : 2)
+    D.par[] = par
     round = Int32(r % typemax(Int32))
     T = eltype(cache.normals)
     buf = (; cache.events, cache.daughter, cache.removed, cache.normals, cache.bias)
@@ -1036,100 +1064,83 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
         end
         n > 0 && (D.proven[] = true; return n)
     end
-    if D.form[] == _FORM_STAGED
-        D.proven[] &&
-            return _run_staged!(
+    if !D.proven[]
+        # The first launch of the staged form: every kernel is compiled (with this launch's
+        # argument types) before any is enqueued, and the planner's workgroup is fitted to
+        # its pipeline's limit (`_fit_plan_wg!`). Every other kernel's group is sized by the
+        # backend from its own limit (`Exec.launch!`), so the form always launches.
+        compile = _CompileOnly()
+        _run_staged!(
             D, buf, fns, opt, par, round, lc.rules, CL,
-            st, p, ctx, key, mcs, backend, _Enqueue()
+            st, p, ctx, key, mcs, backend, compile
         )
-        D.enqueued[] = 0
-        k = _STAGED_FAULT_AFTER[]
-        mode = _Counted(k > 0 ? k : -1, D.enqueued)
-        n = try
-            _LAUNCH_FAULT[] == _FORM_STAGED && throw(ArgumentError("launch refused (test)"))
-            # Every kernel of the form is compiled (with this launch's argument types)
-            # before any is enqueued, so a compilation failure hands over an untouched MCS.
-            # What can still fail is a launch whose workgroup exceeds its compiled
-            # pipeline's limit: only the planner has a fixed workgroup (`PLAN_WG`); every
-            # other kernel's group is sized by the backend from that limit (`Exec.launch!`).
-            # So a real failure happens at the trigger (nothing enqueued) or at the planner
-            # (the trigger and `before` ran): before the partition writes σ or any cell
-            # column, and the host planner takes the MCS without `before` (`before_ran[]`)
-            # and without this MCS's device counts (`_drop_device_counts!`). Should a launch
-            # fail after the partition all the same (an environmental error), the state is
-            # partly divided with stale trackers: that failure is rethrown, not handed over.
-            compile = _CompileOnly()
-            _run_staged!(
-                D, buf, fns, opt, par, round, lc.rules, CL,
-                st, p, ctx, key, mcs, backend, compile
-            )
-            _compile!(compile, backend)
-            _run_staged!(
-                D, buf, fns, opt, par, round, lc.rules,
-                CL, st, p, ctx, key, mcs, backend, mode
-            )
-        catch e
-            isfatal(e) && rethrow()
-            D.enqueued[] >= _STAGED_PARTITION && throw(_StagedFailedMidway(D.enqueued[], e))
-            _form_failed!(D, e)
-        end
-        n > 0 && (D.proven[] = true; return n)
+        _compile!(compile, backend)
+        D.proven[] = true
     end
-    return -1
+    return _run_staged!(
+        D, buf, fns, opt, par, round, lc.rules, CL,
+        st, p, ctx, key, mcs, backend, _Enqueue()
+    )
 end
 
-# The first launch of a form failed (e.g. its workgroup exceeds the kernel's limit): the
-# next form takes over. The staged form's trigger (with `before`) and planner may have run:
-# neither writes σ or a cell column (the planner only writes its scratch, the event buffers,
-# the device counts and the `surface` and `birth` of the free slots it picks as daughters,
-# which the host planner recomputes from σ with the other trackers at an event, or assigns
-# again from the serial counter that only the copies stage advances), so the host planner
-# takes the MCS from scratch, rerunning the trigger but not `before` (`before_ran[]`), and
-# drops this MCS's device counts (`_drop_device_counts!`)
+# The first launch of the fused form failed (e.g. its workgroup exceeds the kernel's
+# limit): nothing was enqueued, and the staged form takes the MCS
 function _form_failed!(D, e)
     isfatal(e) && throw(e)
-    next = D.form[] == _FORM_FUSED ? "one kernel per stage" : "the host planner"
-    @warn "device lifecycle: the $(D.form[] == _FORM_FUSED ? "fused" : "staged") form " *
-        "cannot launch ($(sprint(showerror, e))); using $next"
-    D.form[] += 1
+    @warn "lifecycle: the fused form cannot launch ($(sprint(showerror, e))); using one " *
+        "kernel per stage"
+    D.form[] = _FORM_STAGED
     D.proven[] = false
     return -1
 end
 
 function _run_fused!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs)
+    w = D.wg[]
     D.fused!(
-        buf, D.dv, D.cols, D.links, fns, opt, par, round,
-        ruled, CL, st, p, ctx, key, mcs; ndrange = PLAN_WG
+        w, buf, D.dv, D.cols, D.links, fns, opt, par, round,
+        ruled, CL, st, p, ctx, key, mcs; ndrange = w, workgroupsize = w
     )
-    D.before_ran[] = true
     return 1
 end
 
-# How `_run_staged!` issues its kernels: enqueue each (`_Enqueue`); only collect each
+"""
+Fit the planner's workgroup to its pipeline's limit: launch the planner with `live = false`
+(no stage runs) over one workgroup of `D.wg[]` items, halving while the launch fails with a
+workgroup-limit error (`_workgroup_limit_error`). A launch that exceeds the limit fails on
+the host before anything is enqueued. Any other error is thrown at once. The plan does not
+depend on the workgroup size.
+"""
+function _fit_plan_wg!(D, args::A) where {A}
+    w = D.wg[]
+    while true
+        ok = try
+            lim = _PLAN_WG_LIMIT[]
+            lim > 0 && w > lim && throw(_PlanWGLimitError(w))
+            D.plan!(false, w, args...; ndrange = w, workgroupsize = w)
+            true
+        catch e
+            (w == 1 || isfatal(e) || !_workgroup_limit_error(e)) && rethrow()
+            false
+        end
+        ok && break
+        w ÷= 2
+    end
+    D.wg[] = w
+    return nothing
+end
+
+# How `_run_staged!` issues its kernels: enqueue each (`_Enqueue`); or only collect each
 # kernel's compile, with the argument types of the launch, enqueueing none (`_CompileOnly`,
-# the first launch of the form; `_compile!` then compiles the set on host tasks); enqueue
-# each and count it in `n` (`_Counted`, the first launch of the form; tests: fail after `k`
-# kernels, `_STAGED_FAULT_AFTER`; `k < 0`: never)
+# the first launch of the form; `_compile!` then compiles the set on host tasks)
 struct _Enqueue end
 struct _CompileOnly
     jobs::Vector{Any}                   # one compile per kernel (`Exec.compile_all!`)
 end
 _CompileOnly() = _CompileOnly(Any[])
 _compile!(m::_CompileOnly, backend) = Exec.compile_all!(backend, m.jobs)
-struct _Counted
-    k::Int
-    # kernels enqueued so far (`DeviceLifecycle.enqueued`)
-    n::Base.RefValue{Int}
-end
 
 function _stage!(::_Enqueue, body::B, backend, n, args::A) where {B, A}
     return Exec.launch!(backend, body, n, args)
-end
-function _stage!(m::_Counted, body::B, backend, n, args::A) where {B, A}
-    _fault_point(m)
-    Exec.launch!(backend, body, n, args)
-    m.n[] += 1
-    return nothing
 end
 # Compile without enqueueing work: `Exec.compile!`, a launch of the kernel `Exec.launch!`
 # runs, with `n = 0`, so no work item passes its guard (the kernel type does not depend on
@@ -1142,43 +1153,32 @@ function _stage!(m::_CompileOnly, body::B, backend, n, args::A) where {B, A}
 end
 
 function _stage_plan!(::_Enqueue, D, backend, args::A) where {A}
-    (D.plan!(true, args...; ndrange = PLAN_WG); nothing)
-end
-function _stage_plan!(m::_Counted, D, backend, args::A) where {A}
-    _fault_point(m)
-    D.plan!(true, args...; ndrange = PLAN_WG)
-    m.n[] += 1
+    w = D.wg[]
+    D.plan!(true, w, args...; ndrange = w, workgroupsize = w)
     return nothing
 end
-# the planner's compile: one workgroup with `live = false` (no stage runs)
-function _stage_plan!(m::_CompileOnly, D, backend, args::A) where {A}
-    push!(m.jobs, () -> D.plan!(false, args...; ndrange = PLAN_WG))
-    return nothing
+# the planner's compile and workgroup fit, at once (one workgroup with `live = false`)
+_stage_plan!(m::_CompileOnly, D, backend, args::A) where {A} = _fit_plan_wg!(D, args)
+
+# A quiet round on the CPU ends after the trigger kernel: the event flag is host memory, so
+# its read is free; the next round's flag (reset by the planner otherwise) is reset here. On
+# a device the round goes on, every later work item returning at once.
+_quiet_exit(::_CompileOnly, backend, dv, par) = false
+_quiet_exit(::_Enqueue, backend, dv, par) = false
+function _quiet_exit(::_Enqueue, ::CPU, dv, par)
+    _on(dv, par) && return false
+    @inbounds dv.flag[3 - par] = Int32(0)          # par ∈ (1, 2) = axes(dv.flag)
+    return true
 end
 
-function _fault_point(m::_Counted)
-    m.n[] == m.k && throw(ArgumentError("launch refused (test: `_STAGED_FAULT_AFTER`)"))
-    return nothing
+"""Whether the last checked round had an event (the CPU: a read of host memory; a device:
+one synchronizing read of the 4-byte flag, counted in `stats`)."""
+_events_on(stats, ::CPU, D) = _on(D.dv, D.par[])
+function _events_on(stats, backend, D)
+    sync!(stats, backend)
+    counted_copy!(stats, D.flagh, 1, D.dv.flag, Int(D.par[]), 1)
+    return D.flagh[1] != 0
 end
-
-"""The staged form's first launch failed after its partition kernel was enqueued: σ may be
-partly divided and the trackers stale, so no form can take the MCS over."""
-struct _StagedFailedMidway <: Exception
-    enqueued::Int
-    cause::Any
-end
-function Base.showerror(io::IO, e::_StagedFailedMidway)
-    return print(
-        io, "device lifecycle: the staged form failed after $(e.enqueued) of its kernels \
-            were enqueued, ",
-        "the partition (which writes σ) among them; the state is no longer consistent and \
-            cannot be ",
-        "handed to the host planner. Cause: ", sprint(showerror, e.cause)
-    )
-end
-
-_enqueues(mode) = true
-_enqueues(::_CompileOnly) = false
 
 # one kernel per stage (large problems)
 function _run_staged!(
@@ -1194,7 +1194,7 @@ function _run_staged!(
         mode, _dtrigger_body!, backend, cap,
         (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL)
     )
-    _enqueues(mode) && (D.before_ran[] = true)
+    _quiet_exit(mode, backend, dv, par) && return 1
     _stage_plan!(
         mode, D,
         backend,
@@ -1300,13 +1300,15 @@ end
 # ---------------------------------------------------------------------------------------
 # The fused form: every stage above as a section of one workgroup, the barriers between
 # sections in place of the kernel boundaries (device memory is coherent within the
-# workgroup across a barrier). Item `t` takes the slots or sites `t, t + PLAN_WG, …`.
+# workgroup across a barrier). Item `t` of the `wg` takes the slots or sites
+# `t, t + wg, …` (`tw = (t, wg)`).
 
-@inline function _each!(body::B, t, n, args::A) where {B, A}
-    i = Int(t)                          # a local index may be 32-bit on a device
+@inline function _each!(body::B, tw, n, args::A) where {B, A}
+    i = Int(tw[1])                      # a local index may be 32-bit on a device
+    w = Int(tw[2])
     while i <= n
         body(i, args...)
-        i += PLAN_WG
+        i += w
     end
     return nothing
 end
@@ -1339,13 +1341,14 @@ end
 end
 
 @kernel function _fused_kernel!(
-        buf, dv, cols, links, fns, opt, par, round, ruled, clusters, st, p, ctx, key, mcs
+        wg, buf, dv, cols, links, fns, opt, par, round, ruled, clusters, st, p, ctx, key,
+        mcs
     )
-    cnt = @localmem Int32 (PLAN_WG, 3)
-    tot = @localmem Int32 (3,)
+    cnt = @uniform dv.cnt
+    tot = @uniform dv.tot
     t0 = @index(Local, Linear)
     _each!(
-        _dtrigger_body!, t0, length(buf.events),
+        _dtrigger_body!, (t0, wg), length(buf.events),
         (
             buf.events, dv, par, round, fns.before,
             fns.trigger, st, p, ctx, key, mcs, clusters,
@@ -1354,38 +1357,38 @@ end
     @synchronize
     ta = @index(Local, Linear)
     _plan_a!(
-        ta, cnt, buf.events, buf.daughter, buf.removed,
+        ta, wg, cnt, buf.events, buf.daughter, buf.removed,
         buf.bias, dv, par, round, ruled, st, clusters
     )
     @synchronize
     tb = @index(Local, Linear)
-    _plan_b!(tb, buf.events, dv, par, ruled, st, clusters)
+    _plan_b!(tb, wg, buf.events, dv, par, ruled, st, clusters)
     @synchronize
     tc = @index(Local, Linear)
-    _plan_c!(tc, cnt, buf.events, dv, par, ruled, clusters)
+    _plan_c!(tc, wg, cnt, buf.events, dv, par, ruled, clusters)
     @synchronize
     td = @index(Local, Linear)
-    _plan_d!(td, cnt, tot, buf.events, dv, par, ruled)
+    _plan_d!(td, wg, cnt, tot, buf.events, dv, par, ruled)
     @synchronize
     te = @index(Local, Linear)
-    _plan_e!(te, cnt, tot, buf.events, dv, par, round, ruled, st, clusters)
+    _plan_e!(te, wg, cnt, tot, buf.events, dv, par, round, ruled, st, clusters)
     @synchronize
     tf = @index(Local, Linear)
-    _plan_f!(tf, cnt, tot, dv, par)
+    _plan_f!(tf, wg, cnt, tot, dv, par)
     @synchronize
     tg = @index(Local, Linear)
     _plan_g!(
-        tg, cnt, tot, buf.events, buf.daughter, buf.normals,
+        tg, wg, cnt, tot, buf.events, buf.daughter, buf.normals,
         buf.bias, dv, par, fns.normal, fns.cnormal, ruled,
         st, p, ctx, key, mcs, clusters, opt.births
     )
     @synchronize
     th = @index(Local, Linear)
-    _plan_h!(th, buf.events, buf.daughter, dv, par, ruled, opt.surf)
+    _plan_h!(th, wg, buf.events, buf.daughter, dv, par, ruled, opt.surf)
     @synchronize
     tp = @index(Local, Linear)
     _each_on!(
-        _dpartition_body!, tp, length(st.ownership),
+        _dpartition_body!, (tp, wg), length(st.ownership),
         (
             dv, par, st.ownership, buf.daughter, buf.normals, buf.bias,
             buf.removed, st.cell, ctx.lattice, fns.owner_changed, st,
@@ -1394,7 +1397,7 @@ end
     @synchronize
     tq = @index(Local, Linear)
     _each_on!(
-        _dcopies_body!, tq,
+        _dcopies_body!, (tq, wg),
         length(buf.events),
         (
             dv, par, buf.events, buf.daughter, buf.removed, cols, links,
@@ -1404,7 +1407,7 @@ end
     @synchronize
     tu = @index(Local, Linear)
     _each_on!(
-        _drules_body!, tu,
+        _drules_body!, (tu, wg),
         length(buf.events),
         (
             dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
@@ -1414,91 +1417,77 @@ end
     @synchronize
     ts = @index(Local, Linear)
     _each_if!(
-        _dsurface_body!, ts, length(st.ownership), opt.surf,
+        _dsurface_body!, (ts, wg), length(st.ownership), opt.surf,
         (dv, par, st.ownership, opt.surf, opt.rel, ctx.lattice, opt.su)
     )
-    _each_if!(_dcount_zero_body!, ts, length(buf.events), opt.cc, (dv, par, opt.ccols))
-    _each_if!(_deuler_zero_body!, ts, length(buf.events), opt.eul, (dv, par, opt.eul))
+    _each_if!(
+        _dcount_zero_body!, (ts, wg), length(buf.events), opt.cc, (dv, par, opt.ccols)
+    )
+    _each_if!(_deuler_zero_body!, (ts, wg), length(buf.events), opt.eul, (dv, par, opt.eul))
     @synchronize
     tz = @index(Local, Linear)
     _each_on!(
-        _dfinalize_body!, tz, length(buf.events),
+        _dfinalize_body!, (tz, wg), length(buf.events),
         (
             dv, par, buf.daughter, buf.removed, st.cell, opt.surf,
             ctx.lattice, opt.surf === nothing ? nothing : opt.su,
         )
     )
     _each_if!(
-        _dcount_body!, tz, length(st.ownership), opt.cc,
+        _dcount_body!, (tz, wg), length(st.ownership), opt.cc,
         (dv, par, st.ownership, st.cell.kind, opt.cc, opt.ccols, ctx.lattice)
     )
     _each_if!(
-        _deuler_body!, tz, _euler_anchors(ctx.lattice),
+        _deuler_body!, (tz, wg), _euler_anchors(ctx.lattice),
         opt.eul, (dv, par, st.ownership, opt.eul, ctx.lattice)
     )
     @synchronize
     tk = @index(Local, Linear)
     _clusters_each!(
-        clusters, _dcluster_mark_body!, tk, length(buf.events), (dv, par, st.cell)
+        clusters, _dcluster_mark_body!, (tk, wg), length(buf.events), (dv, par, st.cell)
     )
     @synchronize
     tl = @index(Local, Linear)
     _clusters_each!(
-        clusters, _dcluster_root_body!, tl, length(buf.events),
+        clusters, _dcluster_root_body!, (tl, wg), length(buf.events),
         (dv, par, st.cell, opt.cvol, opt.csurf)
     )
     @synchronize
     tm = @index(Local, Linear)
     _each_if!(
-        _dcluster_volume_body!, tm, length(buf.events),
+        _dcluster_volume_body!, (tm, wg), length(buf.events),
         opt.cvol, (dv, par, st.cell, opt.cvol)
     )
     _each_if!(
-        _dcluster_surface_body!, tm, length(st.ownership), opt.csurf,
+        _dcluster_surface_body!, (tm, wg), length(st.ownership), opt.csurf,
         (dv, par, st.ownership, st.cell, opt.csurf, opt.rel, ctx.lattice, opt.cu)
     )
     _refresh_each!(
-        _dfrozen_body!, tm, length(st.ownership), opt.refresh, dv, par, st, ctx.lattice
+        _dfrozen_body!, (tm, wg), length(st.ownership), opt.refresh, dv, par, st,
+        ctx.lattice
     )
     @synchronize
     tr = @index(Local, Linear)
     _refresh_fold!(tr, opt.refresh, dv, par, mcs)
     _each_if!(
-        _dcluster_surface_fold_body!, tr, length(buf.events),
+        _dcluster_surface_fold_body!, (tr, wg), length(buf.events),
         opt.cu, (dv, par, opt.csurf, opt.cu)
     )
 end
 
 """
-Drop the device lifecycle's counts of the current MCS: the staged form failed after it
-enqueued kernels of this MCS (`before_ran[]`), and the host planner, which takes the MCS
-from scratch, counts its divisions, removals, transitions and deferrals itself (the planner
-kernel had already added them to `dv.acc`). The device holds no counts of earlier MCS that
-are not folded yet: a form fails only at its first launch, and no device form completed an
-MCS before it (a proven form never fails over). One synchronizing read, once per integrator.
+Fold the lifecycle planner's statistics and frozen-mask counts into `integ.stats` (and
+`integ.nmobile`, and the host mobile-site list): one transfer each on a device, at a host
+read point that synchronizes anyway; on the CPU also after every event round (`now`: the
+MCS the next sweep runs, `integ.t + 1` there). Warns on the first deferred division of the
+run and on divisions deferred for the moment scratch; throws on a cluster event without
+cluster state. Every count, the errors included, is reported once (`acc_seen`).
+`report = false` (`reinit!`) folds without warning or throwing: the old run's counts are
+dropped.
 """
-function _drop_device_counts!(integ, D::DeviceLifecycle)
-    stats = _stats(integ)
-    counted_copy!(stats, D.acc, D.dv.acc)
-    D.acc_seen .= D.acc
-    if integ.mscratch !== nothing
-        counted_copy!(stats, D.mask, D.dv.mask)
-        D.mask_seen .= D.mask
-    end
-    return nothing
-end
-
-"""
-Fold the device lifecycle's statistics and frozen-mask counts into `integ.stats` (and
-`integ.nmobile`): one transfer each, at a host read point that synchronizes anyway. Warns
-on the first deferred division of the run, as the CPU path does at the event, and on
-divisions deferred for the moment scratch; throws on a cluster event without cluster
-state. Every count, the errors included, is reported once (`acc_seen`). `report = false`
-(`reinit!`) folds without warning or throwing: the old run's counts are dropped.
-"""
-function _fold_lifecycle!(integ; report::Bool = true)
+function _fold_lifecycle!(integ; report::Bool = true, now::Int = integ.t)
     lc = integ.lcache
-    (lc === nothing || lc.device === nothing) && return nothing
+    lc === nothing && return nothing
     D = lc.device
     stats = _stats(integ)
     counted_copy!(stats, D.acc, D.dv.acc)
@@ -1521,17 +1510,22 @@ function _fold_lifecycle!(integ; report::Bool = true)
         counted_copy!(stats, D.mask, D.dv.mask)
         dD = D.mask[1] - D.mask_seen[1]
         dM = D.mask[2] - D.mask_seen[2]
-        # the MCS after a refresh at MCS m (m + 1 … t − 1) ran with the old mobile count
+        # the MCS after a refresh at MCS m (m + 1 … now − 1) ran with the old mobile count
         integ.nmobile += Int(dD)
-        stats.attempts += Int(dD * (integ.t - 1) - dM)
+        stats.attempts += Int(dD * (now - 1) - dM)
         stats.refreshes += Int(D.mask[3] - D.mask_seen[3])
+        # a site changed: the host mobile-site list (`SequentialCPM`, CPU) follows the mask
+        m = integ.ctx.mobility
+        D.mask[4] != D.mask_seen[4] && m isa MaskMobility && m.sites !== nothing &&
+            _mobile_sites!(m.sites, m.frozen)
         D.mask_seen .= D.mask
     end
     report || return nothing
     large > 0 &&
         @warn "lifecycle: $large division(s) deferred: the dividing cell's second " *
-        "moments exceed the device planner's Int32 scratch (a cell far larger than any " *
-        "in use); such a cell divides only on the CPU"
+        "moments exceed the planner's moment scratch (Int32 on a backend without 64-bit " *
+        "atomics: a cell far larger than any in use); such a cell divides only on a " *
+        "backend with 64-bit atomics (CPU, ROCm, CUDA)"
     nocluster > 0 &&
         throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state \
             (`init_clusters`)"))

@@ -221,7 +221,8 @@ end
         end
         frozen(st, p, prop, ctx) = false
         f = CPMFunction(
-            gg_delta_H; temperature = gg_temperature, constraint = frozen,
+            gg_delta_H; commit! = gg_commit!,
+            temperature = gg_temperature, constraint = frozen,
             lifecycle = Lifecycle(tr; divide! = rule!, rules = true)
         )
         sol = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
@@ -233,7 +234,8 @@ end
         plain(st, p, ctx, key, mcs, c) = mcs == 0 && c == 1 ? EVENT_DIVIDE : EVENT_NONE
         n = Ref(0)
         f7 = CPMFunction(
-            gg_delta_H; temperature = gg_temperature, constraint = frozen,
+            gg_delta_H; commit! = gg_commit!,
+            temperature = gg_temperature, constraint = frozen,
             lifecycle = Lifecycle(
                 plain;
                 divide! = (st, p, ctx, key, mcs, parent, daughter) -> (n[] += 1; nothing)
@@ -305,7 +307,8 @@ end
             σ[:, 6:10] .= 2
             st = lc_state(σ, Int32[1, 2], lat)
             f = CPMFunction(
-                gg_delta_H; temperature = gg_temperature, sys = FrozenKind(2),
+                gg_delta_H; commit! = gg_commit!,
+                temperature = gg_temperature, sys = FrozenKind(2),
                 lifecycle = Lifecycle(
                     (st, p, ctx, key, mcs, c) -> if mcs == 3 && c == 1
                         EVENT_TRANSITION
@@ -560,13 +563,13 @@ end
 end
 
 # `transitioning` is kernel-safe (no throw, it runs in the trigger); a transition bit on an
-# event other than a division is refused on the host, by both planners
-@testitem "transitioning: checked on the host, by both planners" setup = [
+# event other than a division is refused on the host, by both algorithms
+@testitem "transitioning: checked on the host, by both algorithms" setup = [
     CP_lifecycle,
 ] tags = [
     :corepotts, :lifecycle,
 ] begin
-    @testset "transitioning: checked on the host, by both planners" begin
+    @testset "transitioning: checked on the host, by both algorithms" begin
         @test CorePotts.transitioning(EVENT_DIVIDE) == EVENT_DIVIDE | Int32(0x10)
         # no throw in a kernel
         @test CorePotts.transitioning(EVENT_REMOVE) isa Int32
@@ -587,24 +590,14 @@ end
             end
         end
         kind = (st, p, ctx, key, mcs, c) -> Int32(3 - st.cell.kind[c])
-        # this file also runs under the forced planner
-        prev = CorePotts._FORCE_DEVICE_LIFECYCLE[]
-        for force in (false, true)
-            CorePotts._FORCE_DEVICE_LIFECYCLE[] = force
-            try
-                @test_throws ArgumentError run_lifecycle(
-                    σ, kinds, lat, Lifecycle(bad; kind);
-                    tspan = (0, 2), alg = CheckerboardCPM()
-                )
-                u = run_lifecycle(
-                    σ, kinds, lat, Lifecycle(good; kind);
-                    tspan = (0, 2), alg = CheckerboardCPM()
-                ).u[end]
-                @test count(>(0), u.cell.volume) == length(kinds) + 1 &&
-                    u.cell.kind[1] == 3 - kinds[1]
-            finally
-                CorePotts._FORCE_DEVICE_LIFECYCLE[] = prev
-            end
+        for alg in (SequentialCPM(), CheckerboardCPM())
+            @test_throws ArgumentError run_lifecycle(
+                σ, kinds, lat, Lifecycle(bad; kind); tspan = (0, 2), alg
+            )
+            lc = Lifecycle(good; kind)
+            u = run_lifecycle(σ, kinds, lat, lc; tspan = (0, 2), alg).u[end]
+            @test count(>(0), u.cell.volume) == length(kinds) + 1 &&
+                u.cell.kind[1] == 3 - kinds[1]
         end
     end
 end

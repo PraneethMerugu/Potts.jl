@@ -155,9 +155,6 @@ function _normalize_clusters!(cl, live; kind = nothing, prefer = (), keep = true
     return cl
 end
 
-# Ids that name a cluster with live members (not free for reuse, even if that cell died).
-_referenced_clusters(cl, volume) = Set(cl[c] for c in eachindex(cl) if volume[c] > 0)
-
 """
     recompute_cluster_volume(σ, cluster) -> Vector{Int32}
 
@@ -387,21 +384,9 @@ See also [`recompute_cluster_surface`](@ref).
 end
 
 # ---------------------------------------------------------------------------------------
-# Lifecycle support (host)
+# Cluster helpers (host)
 
 _has_clusters(st) = haskey(st.cell, :cluster)
-
-# Re-root clusters after lifecycle events (a root may have been removed or emptied) and
-# make free slots their own cluster. Host arrays.
-function _fix_clusters!(stats, st)
-    cl = to_host(stats, st.cell.cluster)
-    _normalize_clusters!(
-        cl, _live(to_host(stats, st.ownership), length(cl));
-        kind = to_host(stats, st.cell.kind)
-    )
-    counted_copy!(stats, st.cell.cluster, cl)
-    return nothing
-end
 
 function _rebuild_cluster_trackers!(stats, st, σ, ctx)
     haskey(st.cell, :cluster_volume) || haskey(st.cell, :cluster_surface) || return nothing
@@ -420,52 +405,5 @@ function _rebuild_cluster_trackers!(stats, st, σ, ctx)
             )
         )
     end
-    return nothing
-end
-
-# Cluster-mode division plan: the host evaluates `normal` for each dividing root on the
-# cluster's own moments, and every member splits along that plane through the cluster
-# centroid (`bias[m]` = (member centroid − cluster centroid) · normal).
-function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots, members)
-    lat = host_lattice(stats, ctx.lattice)
-    ctx = merge(ctx, (; lattice = lat))
-    N = ndims(lat)
-    T = eltype(normals)
-    σ = to_host(stats, st.ownership)
-    cl = to_host(stats, st.cell.cluster)
-    cap = length(cl)
-    σK = map(s -> s == 0 ? Int32(0) : cl[s], σ)
-    mK = init_moments(σK, lat, cap)
-    cellK = merge(
-        mK, (;
-            volume = recompute_cluster_volume(σ, cl),
-            generation = to_host(stats, st.cell.generation),
-            kind = to_host(stats, st.cell.kind), cluster = cl,
-        )
-    )
-    stK = (; ownership = σK, cell = cellK)
-    cell = (;
-        volume = to_host(stats, st.cell.volume), anchor = to_host(stats, st.cell.anchor),
-        m1 = to_host(stats, st.cell.m1),
-    )
-    nh = zeros(T, N, cap)
-    bh = zeros(T, cap)
-    for r in roots
-        n = _plane(lc.cluster_normal, T)(stK, p, ctx, key, mcs, Int32(r))
-        cK = centroid(T, cellK, lat, r)
-        for m in members[r]
-            cm = centroid(T, cell, lat, m)
-            # member − cluster centroid
-            δ = _min_image(T, lat, ntuple(d -> cm[d] - cK[d], Val(N)))
-            s = zero(T)
-            for d in 1:N
-                s += T(δ[d]) * T(n[d])
-                nh[d, m] = T(n[d])
-            end
-            bh[m] = s
-        end
-    end
-    counted_copy!(stats, normals, nh)
-    counted_copy!(stats, bias, bh)
     return nothing
 end

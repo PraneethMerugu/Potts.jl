@@ -222,7 +222,8 @@ end
 function ConvertPass(
         entity, decide; init!, transfer! = nothing, writes! = nothing,
         owner_changed = nothing, release = nothing,
-        fresh::Integer = 0, links::Tuple = (), limit::Integer = _SCRATCH_LIMIT[],
+        fresh::Integer = 0, links::Tuple = (),
+        limit::Integer = something(_SCRATCH_LIMIT[], typemax(Int32)),
         wcols::Tuple = ()
     )
     return ConvertPass(
@@ -854,7 +855,7 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
     Exec.launch!(backend, _cv_finalize_body!, cap, (st.cell, sc, lat, surf, su))
     launches += 3
     # the trackers rebuilt from σ, as the device lifecycle rebuilds them
-    # (`lifecycle_device.jl`)
+    # (`lifecycle_planner.jl`)
     dv = (;
         flag = sc.flag, okc = sc.okc, rootA = sc.rootA,
         rootB = sc.rootB, sc.wacc, sc.wlo, sc.whi,

@@ -268,13 +268,10 @@ end
                 # the pass ran on the oracle arm
                 @test bs_serial_rule(b)
             end
-            # the device planner on the CPU backend (its fused, staged and host forms)
-            CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
+            # both forms of the lifecycle planner on the CPU backend (fused forced)
+            CorePotts._FORCE_FUSED_LIFECYCLE[] = true
             try
-                for form in (
-                        CorePotts._FORM_FUSED, CorePotts._FORM_STAGED,
-                        CorePotts._FORM_HOST,
-                    )
+                for form in (CorePotts._FORM_FUSED, CorePotts._FORM_STAGED)
                     function go(p)
                         integ = init(p, CheckerboardCPM(); saveat = 1)
                         integ.lcache.device.form[] = form
@@ -286,7 +283,7 @@ end
                     @test bs_serial_rule(b)
                 end
             finally
-                CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+                CorePotts._FORCE_FUSED_LIFECYCLE[] = false
             end
         end
     end
@@ -374,22 +371,19 @@ end
     end
 end
 
-@testitem "the skip on the device (PottsDevices; device planner forms)" setup = [
+@testitem "the skip on the device (PottsDevices; lifecycle planner forms)" setup = [
     BirthSkipSetup,
 ] tags = [
     :potts, :birth_skip, :device,
 ] begin
-    @testset "the skip on the device (PottsDevices; device planner forms)" begin
+    @testset "the skip on the device (PottsDevices; lifecycle planner forms)" begin
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
             for mk in (bs_akeeb, bs_openvt)
                 prob = mk(; T = Float32)
                 with = bs_with_serials(prob)
-                for form in (
-                        CorePotts._FORM_FUSED, CorePotts._FORM_STAGED,
-                        CorePotts._FORM_HOST,
-                    )
+                for form in (CorePotts._FORM_FUSED, CorePotts._FORM_STAGED)
                     function go(p)
                         integ = init(p, alg; backend, saveat = 1)
                         integ.lcache.device.form[] = form

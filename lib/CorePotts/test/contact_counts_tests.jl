@@ -59,26 +59,26 @@ end
             )
             @test cc_bad(solve(bare, alg; saveat = 1), lat) > 0
         end
-        @testset "device planner on the CPU backend ($form)" for (form, sites) in (
+        @testset "the lifecycle planner forms ($form)" for (form, sites) in (
                 (
                     "fused", CheckerboardCPM().fused_lifecycle_max_sites,
                 ), ("staged", 0),
             )
-            CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
+            CorePotts._FORCE_FUSED_LIFECYCLE[] = true
             try
                 integ = init(
                     cc_problem(), CheckerboardCPM(;
                         fused_lifecycle_max_sites = sites
                     ); saveat = 1
                 )
-                @test integ.lcache.device isa CorePotts.DeviceLifecycle
+                @test integ.lcache.device isa CorePotts.LifecyclePlanner
                 @test (integ.lcache.device.fused! === nothing) == (form == "staged")
                 sol = solve!(integ)
                 @test sol.stats.lifecycle.divisions >= 3 &&
                     sol.stats.lifecycle.transitions >= 1
                 @test cc_bad(sol, lat) == 0
             finally
-                CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+                CorePotts._FORCE_FUSED_LIFECYCLE[] = false
             end
         end
         @testset "rebuild_trackers! after a host edit" begin

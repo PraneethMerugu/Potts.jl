@@ -485,7 +485,8 @@ With a kernel copy it runs at 60 ns/site (F2).
 
 ## 11. Status after P6.0v1 (D-089, D-096)
 
-The lifecycle runs on the device on every GPU backend (`lib/CorePotts/src/lifecycle_device.jl`);
+The lifecycle runs on the device on every GPU backend
+(`lib/CorePotts/src/lifecycle_planner.jl`);
 the CPU keeps the host plan of §6–7 unchanged.
 
 - **Quiet lifecycle MCS:** 0 syncs / 0 transfers / 0 B and no Metal wait (was 1 / 1 / 4 B

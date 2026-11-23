@@ -8,4 +8,8 @@ using Metal: MetalBackend
 
 CorePotts._atomic64(::MetalBackend) = false
 
+# A launch whose threadgroup exceeds the pipeline's limit (Metal.jl's launch check)
+CorePotts._workgroup_limit_error(e::ArgumentError) =
+    startswith(e.msg, "Number of threads in group")
+
 end

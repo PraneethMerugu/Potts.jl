@@ -328,7 +328,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-10-07; D-157) **P6.0bg** (D-157) A backend-neutral device harness for Metal and ROCm.
   - One shared helper, `test/shared/devices.jl`: `POTTS_GPU ∈ {metal, rocm}`, `device_backend()`, `device_sync()`, `device_name()` and a uniform skip.
   - Every test project includes it. The frozen acceptance files are re-frozen to use it (23 `Main.Metal.MetalBackend()` sites); the change is mechanical and no assertion changes. `GROUP=GPU` reads the backend from the environment.
-  - Check the Metal.jl workaround in `lifecycle_device.jl` (~853) on ROCm.
+  - Check the Metal.jl workaround in `lifecycle_planner.jl` (~853) on ROCm.
   - Add a ROCm check that no device kernel's LLVM IR contains `double` (extends D-047), so Metal-breaking code is caught without a Mac.
   - Accept: the full GPU group passes under `POTTS_GPU=rocm` on the PC, and the double-IR check fails on a deliberate Float64 literal (negative control).
 - [x] (2026-10-07; first green run 37582486493 at fd9a519c, after D-158) **P6.0bh** (D-157; approved by the maintainer) The repository's first workflow: on pushes to `monorepo`, run the CPU suites and the GPU group under `POTTS_GPU=rocm` on the self-hosted runner ("rocm,amd").

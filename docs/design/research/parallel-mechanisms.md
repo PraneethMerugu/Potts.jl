@@ -28,8 +28,7 @@ section 5 lands.
 
 | Mechanism | Where | What it gives |
 |---|---|---|
-| Device lifecycle | `lib/CorePotts/src/lifecycle_device.jl`, D-089 | trigger, plan, partition and update kernels; division, removal and kind change planned on the device; a quiet MCS has 0 syncs and 0 transfers. It already runs on the CPU backend under `_FORCE_DEVICE_LIFECYCLE` (9 test files) |
-| Host lifecycle | `_step_lifecycle!` in `lib/CorePotts/src/problem.jl`, D-035 | the planner of every CPU run and of `SequentialCPM` |
+| Lifecycle planner | `lib/CorePotts/src/lifecycle_planner.jl`, D-089, D-332 | one KernelAbstractions planner for every backend and algorithm. CPU: staged form; a quiet MCS runs only the trigger kernel; statistics fold at each event round. Device: fused or staged form; a quiet MCS has 0 syncs and 0 transfers. `PLAN_WG` is fitted to the backend by halving. Host hooks run as a stage after the planner |
 | Footprint spacing | `lib/CorePotts/src/checkerboard.jl`, `docs/src/manual/algorithms.md` | the spacing between active sub-regions covers every copy-time read; a wider read widens `region` |
 | Cell stamps (CPU) | `_phase_conflict!` in `checkerboard.jl` | one stamp per cell over a lattice box of radius `need` around each work item's sub-region; a phase whose work items share a cell runs inline in block order, which is exact; other phases run threaded. It is a serial host loop. On a device it returns false |
 | Serial list | `_push_serial!`, `serial_kernel!` in `checkerboard.jl` | a copy that needs a whole-cell connectivity decision is deferred and decided after the phase, on the CPU and on a device (one work item). It is allocated only for models with whole-cell connectivity |
@@ -103,6 +102,10 @@ api-synthesis §5.2, and no hidden rule changes a target.
   may use atomic adds, because integer addition does not depend on order.
 
 **Acceptance.** The host planner is deleted only after all of the following hold.
+
+**Status (2026-11-22).** Items 1 to 3 hold; the host planner is deleted (commit
+5f3b82b2). Item 4, the CPU A/B, is pending.
+
 1. **Five host behaviors.**
    - Host hooks (`Lifecycle.rebuild!`, a custom `remake_frozen`, cell-scope `pieces` with a
      lifecycle) run as an explicit host stage after the planner, not as a second planner.
