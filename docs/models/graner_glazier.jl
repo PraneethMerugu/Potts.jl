@@ -75,10 +75,12 @@ using Potts.Layouts
 #
 # <<fragment parameters>>
 #
-# `λ`, `V₀` (the target area ``A``) and the temperature `T` are numbers. `J[kind, kind]`
-# is a table indexed by two kinds, in the order of `@kinds`: row and column 1 are the
-# medium, 2 dark and 3 light. These are the PRL's values (p. 2015):
-# ``J(d,d) = 2``, ``J(d,l) = 11``, ``J(l,l) = 14`` and ``J(d,M) = J(l,M) = 16``.
+# `λ`, `V₀` (the target area ``A``) and the temperature `T` are numbers. `J` is a table
+# indexed by two kinds, written entry by entry with the kind names: `J[dark, light] = 11`
+# is ``J(d,l)``. The table is symmetric, so this entry also sets `J[light, dark]`. These
+# are the PRL's values (p. 2015): ``J(d,d) = 2``, ``J(d,l) = 11``, ``J(l,l) = 14`` and
+# ``J(d,M) = J(l,M) = 16``. As a matrix in kind order (medium, dark, light), the table is
+# `[0 16 16; 16 2 11; 16 11 14]`.
 #
 # They obey the PRL's sorting hierarchy, Eq. (3): dark–dark contacts are the strongest
 # (cheapest), the heterotypic energy is above the mean of the two homotypic ones, and

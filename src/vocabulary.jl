@@ -286,18 +286,31 @@ end
 _bnum(x) = isinteger(x) && isfinite(x) ? string(Int(x)) : string(x)
 
 """
-`kind_parameter(name, values)`: a parameter indexed by kind (medium included), the array
-parameter `name[1:n]` or `name[1:n, 1:m]` of `values`' shape. It is read through
-LatticePDE's `value_at` (`J[kind, neighbor_kind]` in a model), never MTK's `getindex`, which
-a compiled template cannot take with an input index.
+`kind_parameter(name, values; symmetric = nothing, …)`: a parameter indexed by kind (medium
+included), the array parameter `name[1:n]` or `name[1:n, 1:m]` of `values`' shape. It is
+read through LatticePDE's `value_at` (`J[kind, neighbor_kind]` in a model), never MTK's
+`getindex`, which a compiled template cannot take with an input index. A two-kind table is
+symmetric unless `symmetric = false`; the value is checked against the model's kinds when
+the model is built (`_check_kind_table`).
 """
 function kind_parameter(
         name::Symbol, values; unit = nothing, tunable = true,
-        bounds = nothing, description = nothing
+        bounds = nothing, description = nothing, symmetric = nothing
     )
     (values isa AbstractArray && ndims(values) in (1, 2)) ||
         throw(ArgumentError("kind table `$name` takes a vector (one value per kind) or a \
             matrix; got $(repr(values))"))
+    symmetric === nothing || symmetric isa Bool || throw(
+        ArgumentError(
+            "kind table `$name`: `symmetric` is `true` or `false`; got $(repr(symmetric))"
+        )
+    )
+    symmetric === nothing || ndims(values) == 2 || throw(
+        ArgumentError(
+            "kind table `$name[kind]` has one kind axis; `symmetric` applies to a \
+                two-kind table `$name[kind, kind]`"
+        )
+    )
     n = size(values)
     x = if _tunable(name, tunable)
         if length(n) == 1
@@ -316,7 +329,9 @@ function kind_parameter(
         _tag(
             x, Entity(
                 :kindtable, name, values,
-                _meta_options(name, tunable, bounds, description)
+                _table_options(
+                    _meta_options(name, tunable, bounds, description), symmetric
+                )
             )
         ),
         unit, bounds, description
@@ -324,32 +339,60 @@ function kind_parameter(
 end
 
 """
-    Pairs((k₁, k₂) => v, …; default, symmetric = true)
+    Pairs((k₁, k₂) => v, …; default)
 
-A kind×kind table written by its named entries (E2), the value of a kind-indexed parameter
-`J[kind, kind] = Pairs(default = 0.0, (medium, cell) => 16, (cell, cell) => Jcc)`. `k₁`,
-`k₂` are kind names of `@kinds`, `v` a number or an expression of scalar parameters. With
-`symmetric = true` entry (k₁, k₂) also sets (k₂, k₁); every unlisted entry is `default`. It
-lowers to the written-out matrix when the model is built: the parameter object, the
-generated code and `remake` are those of the matrix form. A pair given twice (with symmetric
-fill, also as (k₂, k₁)) is an error.
+A two-kind table written by its named entries: the value of a kind table declared
+`J[kind, kind]` in `@parameters`.
+
+`Pairs` and the entry lines `J[k₁, k₂] = v` are two spellings of one form. Both lower to
+the matrix form when the model is built, so the parameter object, the generated code and
+`remake` are those of the written-out matrix.
+
+# Arguments
+- `(k₁, k₂) => v`: one entry. `k₁` and `k₂` are kind names of `@kinds`, and `v` is a number
+  or an expression of parameters. If the table is symmetric (the default), the entry also
+  sets (k₂, k₁).
+
+# Keywords
+- `default`: the value of every entry that is not listed. Without it, every entry must be
+  listed.
+
+# Returns
+- `Pairs`: the entries, made into the matrix when the model is built.
+
+# Examples
+```julia
+@parameters begin
+    Jcc = 2.0
+    J[kind, kind] = Pairs((medium, cell) => 16, (cell, cell) => Jcc; default = 0.0)
+end
+```
+
+A pair given twice, a kind name not in `@kinds`, and (for a symmetric table) both (k₁, k₂)
+and (k₂, k₁) are an `ArgumentError` when the model is built. The table's symmetry is
+declared with the table, `J[kind, kind] = Pairs(…), [symmetric = false]`.
+
+See also [`kind_names`](@ref).
 """
 struct Pairs
     entries::Vector{Pair{Any, Any}}
     default::Any
-    symmetric::Bool
 end
-function Pairs(entries::Pair...; default = nothing, symmetric::Bool = true)
-    default === nothing &&
-        throw(ArgumentError("`Pairs(…)`: give the value of the unlisted entries, `default \
-            = …`"))
-    return Pairs(Pair{Any, Any}[e for e in entries], default, symmetric)
+function Pairs(entries::Pair...; default = nothing, kws...)
+    isempty(kws) || _pairs_refusal(entries, kws)
+    return Pairs(Pair{Any, Any}[e for e in entries], default)
 end
-function Pairs(args...; kws...)
+Pairs(args...; kws...) = _pairs_refusal(args, kws)
+function _pairs_refusal(args, kws)
+    got = join(map(repr, args), ", ")
+    isempty(kws) || (got *= " and the keywords " * join(("`$k`" for k in keys(kws)), ", "))
+    note = haskey(kws, :symmetric) ?
+        " (an asymmetric table is declared with the table: `J[kind, kind] = Pairs(…), \
+        [symmetric = false]`)" : ""
     throw(
         ArgumentError(
-            "`Pairs` takes kind pairs `(k₁, k₂) => v` and the keywords `default`, " *
-                "`symmetric`; got $(join(map(repr, args), ", "))"
+            "`Pairs` takes kind pairs `(k₁, k₂) => v` and the keyword `default`; got " *
+                got * note
         )
     )
 end
@@ -361,52 +404,237 @@ function _pairs_kind_name(k)
     )
 end
 
-# The matrix a `Pairs` value of kind table `name` stands for, in a model of `nk` kinds (the
-# medium included): the value the matrix form would be (its element type promoted as `hvcat`
-# promotes the written entries).
-function _pairs_matrix(t::Pairs, nk::Integer, name::Symbol)
-    nk >= 1 ||
-        throw(ArgumentError("kind table `$name = Pairs(…)`: declare the kinds (@kinds) \
-            before the parameters"))
-    A = Matrix{Any}(fill(t.default, nk, nk))
-    given = falses(nk, nk)
-    for (key, v) in t.entries
-        (key isa Tuple && length(key) == 2) ||
-            throw(ArgumentError("kind table `$name = Pairs(…)`: an entry is `(k₁, k₂) => \
-                v` with two kind names; got `$(repr(key))`"))
-        for k in key
-            (k isa Integer && !(k isa Bool) && 0 <= k < nk) || throw(
-                ArgumentError(
-                    "kind table `$name = Pairs(…)`: `$(_pairs_kind_name(k))` is not a \
-                        kind of @kinds"
-                )
+# --- Kind tables: every written form becomes one array here ------------------------------
+#
+# A kind table (`J[kind, kind]`, `V₀[kind]`) is written as a vector or matrix (medium
+# first), as one value for every entry, as `Pairs(…)`, or as entry lines `J[k₁, k₂] = v`.
+# `_kind_table` turns each into the array; everything after it (the parameter's symbol,
+# checks, compilation, `remake`) sees only the array. Entries are keyed by kind number (a
+# kind name is its number inside a model) or, in `remake` and setters, by kind name.
+
+# `J[dark, light]` for an entry key `ks` of table `name`
+function _entry_text(name, kinds, ks)
+    word(k) = k isa Integer && 0 <= k < length(kinds) ? string(kinds[k + 1]) :
+        k isa Symbol ? string(k) : _pairs_kind_name(k)
+    return string(name, "[", join(map(word, ks), ", "), "]")
+end
+_entry_value_text(v) = v isa AbstractString ? repr(v) : string(v)
+
+# the 0-based kind number of `k` in an entry of table `name`
+function _entry_kind(name, kinds, ks, k)
+    if k isa Integer && !(k isa Bool)
+        0 <= k < length(kinds) && return Int(k)
+    elseif k isa Symbol
+        i = findfirst(==(k), kinds)
+        i === nothing || return i - 1
+    end
+    what = k isa Integer && !(k isa Bool) ? "kind number $k" :
+        k isa Symbol ? "`$k`" : "`$(_pairs_kind_name(k))`"
+    throw(
+        ArgumentError(
+            "kind table `$name`: $what in `$(_entry_text(name, kinds, ks))` is not a \
+                kind; " *
+                "the kinds are $(join(kinds, ", ")) (the medium first)"
+        )
+    )
+end
+
+"""
+    _kind_table(name, nd, kinds, value, entries = (); symmetric = true, base = nothing)
+
+The array of kind table `name` with `nd` kind axes, in a model whose kinds (the medium
+first) are `kinds`. `value` is the declared value: an array (returned as given, with no
+`entries`), `Pairs(…)`, `nothing` (no value: every entry listed) or one value for every
+entry. `entries` are `ks => v` with `ks` a kind or a tuple of kinds. With `symmetric` (two
+kind axes), (k₁, k₂) also sets (k₂, k₁). `base`, an array, gives the unlisted entries (in
+`remake` and setters, the current table).
+"""
+function _kind_table(
+        name::Symbol, nd::Integer, kinds, value, entries = ();
+        symmetric::Bool = true, base = nothing
+    )
+    nk = length(kinds)
+    if value isa Pairs
+        nd == 2 || throw(
+            ArgumentError(
+                "kind table `$name[kind]` has one kind axis: `Pairs` writes a two-kind \
+                    table; write the entries as `$name[k] = v`"
             )
-        end
-        a, b = key[1] + 1, key[2] + 1
-        cells = t.symmetric ? unique([(a, b), (b, a)]) : [(a, b)]
-        if any(((i, j),) -> given[i, j], cells)
-            twice_note = if t.symmetric && a != b
-                " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); pass `symmetric " *
-                    "= false` for an asymmetric table)"
-            else
-                ""
-            end
+        )
+        isempty(entries) || throw(
+            ArgumentError(
+                "kind table `$name` is written both as `Pairs(…)` and as entry lines \
+                    `$name[k₁, k₂] = v`; keep one form"
+            )
+        )
+        entries, value = value.entries, value.default
+    elseif value isa AbstractArray
+        ndims(value) == nd || throw(
+            ArgumentError(
+                "kind table `$name` has $nd kind $(nd == 1 ? "axis" : "axes") but its \
+                    value is a $(join(size(value), "×")) array; give " *
+                    (nd == 1 ? "a vector (one value per kind)" : "a matrix")
+            )
+        )
+        isempty(entries) && return value
+        throw(
+            ArgumentError(
+                "kind table `$name` is written both as an array and as entry lines \
+                    `$(_entry_text(name, kinds, first(entries)[1]))` = …; give its other \
+                    entries one value (`$name[$(join(fill("kind", nd), ", "))] = 0.0`) \
+                    instead of the array, or keep only the array"
+            )
+        )
+    end
+    value === nothing && isempty(entries) && base === nothing && throw(
+        ArgumentError(
+            "kind table `$name` has no value: give a $(nd == 1 ? "vector" : "matrix") " *
+                "(medium first), one value for every entry, or its entries by kind \
+                name (`$name[$(join(fill("k", nd), ", "))] = v`)"
+        )
+    )
+    nk >= 1 || throw(
+        ArgumentError(
+            "kind table `$name`: declare the kinds (@kinds) before the parameters"
+        )
+    )
+    shape = ntuple(_ -> nk, nd)
+    A = Any[nothing for _ in CartesianIndices(shape)]
+    given = Dict{NTuple{nd, Int}, Any}()     # entry → its key as written
+    for (key, v) in entries
+        ks = key isa Tuple ? key : (key,)
+        length(ks) == nd || throw(
+            ArgumentError(
+                "kind table `$name`: the entry `$(_entry_text(name, kinds, ks))` has \
+                    $(length(ks)) $(length(ks) == 1 ? "kind" : "kinds"); the table has \
+                    $nd kind $(nd == 1 ? "axis" : "axes")"
+            )
+        )
+        ix = NTuple{nd, Int}(map(k -> _entry_kind(name, kinds, ks, k) + 1, ks))
+        cells = symmetric && nd == 2 ? unique([ix, reverse(ix)]) : [ix]
+        for c in cells
+            haskey(given, c) || continue
+            prev, pv = given[c]
+            this = _entry_text(name, kinds, ks)
+            was = _entry_text(name, kinds, prev)
+            same = prev == ks
+            sym = " (the table is symmetric: one entry sets both; declare it \
+                `[symmetric = false]` for an asymmetric table)"
             throw(
                 ArgumentError(
-                    "kind table `$name = Pairs(…)`: the pair $(repr(key)) is given twice" *
-                        twice_note
+                    if same
+                        "kind table `$name`: the entry `$this` is given twice; keep one"
+                    elseif isequal(pv, v)
+                        "kind table `$name`: `$this` repeats `$was`; keep one" * sym
+                    else
+                        "kind table `$name`: `$this = $(_entry_value_text(v))` conflicts \
+                            with `$was = $(_entry_value_text(pv))`; keep one" * sym
+                    end
                 )
             )
         end
-        for (i, j) in cells
-            A[i, j] = v
-            given[i, j] = true
+        for c in cells
+            A[c...] = v
+            given[c] = (ks, v)
+        end
+    end
+    for c in CartesianIndices(A)
+        t = Tuple(c)
+        haskey(given, t) && continue
+        if base !== nothing
+            A[c] = base[c]
+        elseif value !== nothing
+            A[c] = value
+        end
+    end
+    if base === nothing && value === nothing
+        missing_ = [
+            Tuple(c) for c in CartesianIndices(A)
+                if !haskey(given, Tuple(c)) && (!symmetric || nd == 1 || issorted(Tuple(c)))
+        ]
+        if !isempty(missing_)
+            shown = join(
+                (
+                    "`$(_entry_text(name, kinds, map(i -> i - 1, m)))`" for m in
+                        first(missing_, 4)
+                ),
+                ", "
+            )
+            more = length(missing_) > 4 ? " and $(length(missing_) - 4) more" : ""
+            medium = any(m -> 1 in m, missing_) ?
+                " (the medium, $(kinds[1]), is a kind of every table too)" : ""
+            throw(
+                ArgumentError(
+                    "kind table `$name`: no value for $shown$more$medium; give " *
+                        (length(missing_) == 1 ? "it" : "them") * ", or one value for \
+                        every entry not listed, `$name[$(join(fill("kind", nd), ", "))] = \
+                        0.0`"
+                )
+            )
         end
     end
     E = mapreduce(typeof, promote_type, A)
-    return convert(Matrix{E}, A)
+    return E[a for a in A]
 end
-_pairs_matrix(v, nk::Integer, name::Symbol) = v
+
+# an asymmetric table keeps `symmetric = false` among its options (a symmetric one, the
+# default, keeps none)
+_table_options(opts, symmetric) = symmetric === false ? (; opts..., symmetric) : opts
+_is_symmetric_table(i::Entity) = get(i.options, :symmetric, true) === true
+
+# an entry of a table as a number, or `nothing` for an expression of parameters
+function _table_number(a)
+    u = _unwrap(a)
+    if u isa SymbolicUtils.BasicSymbolic
+        return SymbolicUtils.isconst(u) ? SymbolicUtils.unwrap_const(u) : nothing
+    end
+    return u isa Number ? u : nothing
+end
+
+# The value `A` of kind table `name` against the model's kinds (the medium first): one
+# entry per kind along every axis and, for a symmetric two-kind table, `A[i, j] == A[j, i]`
+# wherever both are numbers (entries that are expressions are checked on their values when
+# the problem is built). Run when the model is built and after every change of the value.
+function _check_kind_table(name, A, kinds, symmetric::Bool)
+    nk = length(kinds)
+    nk >= 1 || throw(
+        ArgumentError(
+            "kind table `$name`: the model has no kinds; declare them with @kinds, the \
+                medium first (`@kinds medium cell`)"
+        )
+    )
+    if !all(==(nk), size(A))
+        nd = ndims(A)
+        hint = if nk >= 2 && all(==(nk - 1), size(A))
+            " It has one entry too few per axis: the first " *
+                (nd == 1 ? "entry" : "row and column") * " is the medium's " *
+                "($(kinds[1]), kind 0). Add " * (nd == 1 ? "it" : "them") * "."
+        else
+            ""
+        end
+        throw(
+            ArgumentError(
+                "kind table `$name` is $(join(size(A), "×")); the model has $nk kinds \
+                    with the medium ($(join(kinds, ", "))), so it needs " *
+                    join(fill(nk, nd), "×") * "." * hint * " Or write it by kind name, " *
+                    "`$name[$(join((kinds[min(i + 1, nk)] for i in 1:nd), ", "))] = v`."
+            )
+        )
+    end
+    (symmetric && ndims(A) == 2) || return nothing
+    for j in 1:nk, i in 1:(j - 1)
+        a, b = _table_number(A[i, j]), _table_number(A[j, i])
+        (a === nothing || b === nothing || a == b) && continue
+        throw(
+            ArgumentError(
+                "kind table `$name` is symmetric, but `$name[$(kinds[i]), $(kinds[j])]` = \
+                    $a and `$name[$(kinds[j]), $(kinds[i])]` = $b: make them equal, or \
+                    declare the table `$name[kind, kind] = …, [symmetric = false]`"
+            )
+        )
+    end
+    return nothing
+end
 
 const SCOPES = (:site, :cell, :model, :field, :edge)
 # A declared quantity written `x(t)`, a scoped variable or a built-in input: one leaf of an

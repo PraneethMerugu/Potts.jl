@@ -20,13 +20,13 @@
 #
 # A. Named pairs (E2). Inside `@parameters`, a kind-indexed parameter may be written
 #        J[kind, kind] = Pairs(default = d, (k₁, k₂) => v, …)
-#        μ[kind, kind] = Pairs((k₁, k₂) => v, …; default = d, symmetric = false)
+#        μ[kind, kind] = Pairs((k₁, k₂) => v, …; default = d), [symmetric = false]
 #    - `Pairs` is bound inside model bodies (a new `Potts.DSL` name). `k₁`, `k₂` are kind
 #      names of the model's `@kinds`; `v` is a number or an expression of scalar parameters
 #      (as the matrix form allows, `api_defects_tests.jl`).
-#    - Symmetric fill (the default, `symmetric = true`): entry (k₁, k₂) and (k₂, k₁) both
-#      get v; every unlisted entry gets `default`. With `symmetric = false` only (k₁, k₂) is
-#      set.
+#    - Symmetric fill (the default): entry (k₁, k₂) and (k₂, k₁) both get v; every
+#      unlisted entry gets `default`. With the table declared `[symmetric = false]` only
+#      (k₁, k₂) is set.
 #    - It lowers to the same matrix: the parameter object equals the hand-written matrix
 #      form's (`prob.p == prob_matrix.p`, same type), so there is zero runtime cost, and a
 #      parameter entry follows `remake` on both sides of the diagonal.
@@ -267,16 +267,15 @@ const J_PAIRS = :(
 )
 const μ_PAIRS = :(
     μ[kind, kind] = Pairs(
-        (cytoplasm, nucleus) => 4.0, (nucleus, cytoplasm) => 9.0; default = 1.0,
-        symmetric = false
-    )
+        (cytoplasm, nucleus) => 4.0, (nucleus, cytoplasm) => 9.0; default = 1.0
+    ), [symmetric = false],
 )
 const J_MATRIX = :(J[kind, kind] = [0 20 16 0; 20 0 3.5 0; 16 3.5 0 Jcn; 0 0 Jcn 2.5])
 const μ_MATRIX = :(
     μ[kind, kind] = [
         1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 4.0;
         1.0 1.0 9.0 1.0
-    ]
+    ], [symmetric = false],
 )
 define(:HelperPairs, pairs_expr(:HelperPairs, J_PAIRS, μ_PAIRS))
 define(:PairsMatrix, pairs_expr(:PairsMatrix, J_MATRIX, μ_MATRIX))
@@ -710,9 +709,8 @@ end
                 :(
                     μ[kind, kind] = Pairs(
                         (medium, substrate) => 1.0, (substrate, medium) => 2.0;
-                        default = 0.0,
-                        symmetric = false
-                    )
+                        default = 0.0
+                    ), [symmetric = false],
                 )
             ),
             op

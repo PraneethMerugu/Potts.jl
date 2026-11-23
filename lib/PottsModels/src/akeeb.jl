@@ -79,7 +79,12 @@ See also [`akeeb_state`](@ref), [`akeeb_observables`](@ref), [`akeeb_phenotype`]
         V_max = 20.0
         clock_min = 75.0
         clock_spread = 50.0
-        J[kind, kind] = [0.0 2.0 10.0; 2.0 16.0 2.0; 10.0 2.0 5.0]
+        J[medium, medium] = 0.0
+        J[medium, leader] = 2.0
+        J[medium, follower] = 10.0
+        J[leader, leader] = 16.0
+        J[leader, follower] = 2.0
+        J[follower, follower] = 5.0
     end
     @variables begin
         V_target(cell) = 10.0

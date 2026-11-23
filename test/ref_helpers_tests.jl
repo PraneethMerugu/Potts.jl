@@ -519,24 +519,25 @@ end
             err isa LoadError ? err.error : err
         end
         @test e isa ArgumentError
-        @test_throws ArgumentError Potts.DSL.Pairs((0, 1) => 1.0)
         @test_throws ArgumentError Potts.DSL.Pairs(1.0; default = 0.0)
+        @test_throws ArgumentError Potts.DSL.Pairs((0, 1) => 1.0; symmetric = false)
         # the matrix the macro lowers to: symmetric fill, the default, a repeated pair by
         # number
+        ks = [:medium, :a]
+        table(t; symmetric = true) = Potts._kind_table(:J, 2, ks, t; symmetric)
         t = Potts.DSL.Pairs((0, 1) => 2, (1, 1) => 3.5; default = 0.0)
-        @test Potts._pairs_matrix(t, 2, :J) == [0.0 2.0; 2.0 3.5]
-        @test Potts._pairs_matrix(t, 2, :J) isa Matrix{Float64}
-        @test_throws ArgumentError Potts._pairs_matrix(
-            Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 1; default = 0), 2, :J
+        @test table(t) == [0.0 2.0; 2.0 3.5]
+        @test table(t) isa Matrix{Float64}
+        @test_throws ArgumentError table(
+            Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 1; default = 0)
         )
-        @test Potts._pairs_matrix(
-            Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 2; default = 0, symmetric = false),
-            2, :J
+        @test table(
+            Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 2; default = 0); symmetric = false
         ) == [0 1; 2 0]
+        # without a default, every entry is listed
+        @test_throws ArgumentError table(Potts.DSL.Pairs((0, 1) => 1.0))
         # not a kind
-        @test_throws ArgumentError Potts._pairs_matrix(
-            Potts.DSL.Pairs((0, 5) => 1; default = 0), 2, :J
-        )
+        @test_throws ArgumentError table(Potts.DSL.Pairs((0, 5) => 1; default = 0))
     end
 end
 

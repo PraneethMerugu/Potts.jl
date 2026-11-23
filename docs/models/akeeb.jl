@@ -68,6 +68,8 @@ using Potts.Layouts
 #
 # The values of the paper's Table 1: ``\lambda_V = 2``, ``T = 10`` and the contact
 # energies medium–leader 2, medium–follower 10, leader–leader 16 and follower–follower 5.
+# The contact table `J` is written entry by entry with the kind names. It is symmetric, so
+# `J[leader, follower]` also sets `J[follower, leader]`.
 # The leader–follower energy ``J_{LF}`` (here 2) is the paper's main scanned parameter,
 # over ``[-5, 5]``; `akeeb_contacts(J_LF)` builds the table for any value. `μ` is the
 # chemotaxis strength (the paper's ``\lambda``); its default is the paper's reference value

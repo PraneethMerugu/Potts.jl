@@ -46,7 +46,11 @@ is `docs/design/AUTHORING.md` and the manual.
         λ = 1.0
         V₀ = 40.0
         T = 10.0
-        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+        J[kind, kind] = 16      # every entry not listed below
+        J[medium, medium] = 0
+        J[dark, dark] = 2
+        J[dark, light] = 11     # also J[light, dark]: the table is symmetric
+        J[light, light] = 14
     end
     @lattice Lattice(dims; boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
@@ -449,6 +453,9 @@ function _potts_model(name::Symbol, body::Expr, mod)
             )
         )
         __kinds = Symbol[]
+        # a model without `@kinds` takes its base's kinds at `@extend` (its kind tables
+        # read them)
+        __own_kinds = $(_has_section(body, Symbol("@kinds")))
         __frozen = Int[]
         __classes = $P.KindClass[]
         __params = Any[]
@@ -1009,48 +1016,15 @@ function _section!(parts, sec, args, ln = nothing)
             )
         end
     elseif sec === Symbol("@parameters")
-        for l in _lines(args)
-            lhs, val = if l isa Expr && l.head === :(=)
-                (l.args[1], _strip(l.args[2]))
-            else
-                (l, nothing)
-            end
-            # `λ = 1.0, [unit = u"…", tunable = false, bounds = (0, 2), description = "…"]`
-            # (MTK metadata)
-            val, opts = if val isa Expr && val.head === :tuple && length(val.args) == 2 &&
-                    val.args[2] isa Expr &&
-                    val.args[2].head === :vect
-                (val.args[1], val.args[2])
-            else
-                (val, nothing)
-            end
-            all(
-                o -> o isa Expr && o.head === :(=) && o.args[1] isa Symbol,
-                opts === nothing ? () : opts.args
-            ) || throw(
-                ArgumentError(
-                    "@parameters $(lhs isa Expr ? lhs.args[1] : lhs): options are `[key " *
-                        "= value, …]` with the keys `unit`, `tunable`, `bounds`, \
-                            `description`"
-                )
-            )
-            kw = if opts === nothing
-                Any[]
-            else
-                [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
-            end
-            for k in kw
-                k.args[1] in (:unit, :tunable, :bounds, :description) || throw(
-                    ArgumentError(
-                        "@parameters $(lhs isa Expr ? lhs.args[1] : lhs): option " *
-                            "`$(k.args[1])`; a parameter takes MTK's `unit`, `tunable`, \
-                                `bounds` and `description`"
-                    )
-                )
-            end
+        lines = map(_parameter_line, _lines(args))
+        # kind tables: a declaration `J[kind, kind] = …` and entry lines `J[k₁, k₂] = v`,
+        # gathered by table and built at the table's last line (one `_kind_table` call)
+        tables = _kind_table_lines(parts, lines)
+        for (n, (lhs, val, kw)) in enumerate(lines)
             # `d[1:n]`: a vector
             if lhs isa Expr && lhs.head === :ref && _is_range(lhs.args[2])
                 k = lhs.args[1]
+                _no_symmetric_option(k, kw)
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
                 push!(
@@ -1065,31 +1039,14 @@ function _section!(parts, sec, args, ln = nothing)
                 continue
             elseif lhs isa Expr && lhs.head === :ref
                 k = lhs.args[1]
+                t = tables[k]
+                n == t.last[] || continue
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
-                # `J[kind, kind] = Pairs(…)` (E2): kind names checked here, lowered to the
-                # matrix
-                v = if _is_pairs_table(val)
-                    :(
-                        $P._pairs_matrix(
-                            $(rewrite(_check_pairs(parts, k, val))),
-                            length(__kinds), $(QuoteNode(k))
-                        )
-                    )
-                else
-                    rewrite(val)
-                end
-                push!(
-                    code,
-                    :(
-                        $k = $P.kind_parameter(
-                            $(QuoteNode(k)),
-                            $(_kw_local(k)) === nothing ? $v : $(_kw_local(k)); $(kw...)
-                        )
-                    )
-                )
+                push!(code, _kind_table_code(parts, k, t))
             else
                 k = lhs::Symbol
+                _no_symmetric_option(k, kw)
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
                 push!(
@@ -1226,6 +1183,7 @@ function _section!(parts, sec, args, ln = nothing)
         )
         push!(
             code, :($bname = $nested), :(push!(__bases, $bname)),
+            :(__own_kinds || isempty(__kinds) && append!(__kinds, $P._p($bname, :kinds))),
             :($P._build().dim == 0 && $P._set_dim!(length($P._p($bname, :lattice).dims)))
         )
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
@@ -1717,31 +1675,207 @@ function _options(args)
     return opts, rules
 end
 
-"""
-    rewrite(ex)
+# One line of `@parameters` as `(lhs, value, options)`: `λ = 1.0`, `λ = 1.0, [unit = u"…",
+# tunable = false, bounds = (0, 2), description = "…"]` (MTK metadata), `J[kind, kind]`
+# with `symmetric = false` among its options, and `x, [options]` without a value
+function _parameter_line(l)
+    lhs, val = if l isa Expr && l.head === :(=)
+        (l.args[1], _strip(l.args[2]))
+    elseif l isa Expr && l.head === :tuple && length(l.args) == 2 &&
+            l.args[2] isa Expr && l.args[2].head === :vect
+        (l.args[1], Expr(:tuple, nothing, l.args[2]))
+    else
+        (l, nothing)
+    end
+    val, opts = if val isa Expr && val.head === :tuple && length(val.args) == 2 &&
+            val.args[2] isa Expr &&
+            val.args[2].head === :vect
+        (val.args[1], val.args[2])
+    else
+        (val, nothing)
+    end
+    name = lhs isa Expr && lhs.head === :ref ? lhs.args[1] : lhs
+    all(
+        o -> o isa Expr && o.head === :(=) && o.args[1] isa Symbol,
+        opts === nothing ? () : opts.args
+    ) || throw(
+        ArgumentError(
+            "@parameters $name: options are `[key = value, …]` with the keys `unit`, " *
+                "`tunable`, `bounds`, `description` (and `symmetric` for a kind table)"
+        )
+    )
+    kw = opts === nothing ? Any[] : Any[Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
+    for k in kw
+        k.args[1] in (:unit, :tunable, :bounds, :description, :symmetric) || throw(
+            ArgumentError(
+                "@parameters $name: option `$(k.args[1])`; a parameter takes MTK's \
+                    `unit`, `tunable`, `bounds` and `description`, and a kind table also \
+                    `symmetric`"
+            )
+        )
+    end
+    return (lhs, val, kw)
+end
 
-Make user syntax symbolic: `x[i…]` → `_index`, `&&`/`||`/`!` → symbolic logic, `c ? a : b`
-→ `ifelse`, `div(a, b)`/`a ÷ b` → `_intdiv`, `euler(…)` → `_euler(…)`, and
-`fold(body for n in R(s) if cond)` → a relation gather.
-"""
-_is_pairs_table(val) = val isa Expr && val.head === :call && val.args[1] === :Pairs
+function _no_symmetric_option(k, kw)
+    any(o -> o.args[1] === :symmetric, kw) && throw(
+        ArgumentError(
+            "@parameters $k: `symmetric` is an option of a two-kind table, \
+                `J[kind, kind] = …, [symmetric = false]`"
+        )
+    )
+    return nothing
+end
 
-# `Pairs((k₁, k₂) => v, …; default, symmetric)` of kind table `k` (E2, D-243): every key
-# names a kind of `@kinds` (or one an `@extend` base binds); a misspelling, a parameter or
-# another declared name is refused here, naming it, and a pair written twice (by name) too
-function _check_pairs(parts, k, val)
-    seen = Tuple{Symbol, Symbol}[]
-    symmetric = true
-    for a in val.args[2:end]
-        if a isa Expr && a.head === :parameters
-            for q in a.args
-                q isa Expr && q.head === :kw && q.args[1] === :symmetric &&
-                    q.args[2] isa Bool && (symmetric = q.args[2])
+# A line `J[kind, kind] = …` declares a kind table; a line `J[dark, light] = v` (kind
+# names) is one of its entries. The declaration is optional when every entry is listed.
+# Each table: its kind axes, the declared value and options, its entries `(names, value)`
+# and the index of its last line (where it is built).
+function _kind_table_lines(parts, lines)
+    tables = Dict{Symbol, Any}()
+    for (n, (lhs, val, kw)) in enumerate(lines)
+        lhs isa Expr && lhs.head === :ref && !_is_range(lhs.args[2]) || continue
+        k = lhs.args[1]
+        k isa Symbol || throw(ArgumentError("@parameters: `$lhs` is not a parameter name"))
+        idx = lhs.args[2:end]
+        decl = all(==(:kind), idx)
+        text = string(lhs)
+        length(idx) in (1, 2) || throw(
+            ArgumentError(
+                "@parameters `$text`: a kind table has one kind axis (`$k[kind]`) or two \
+                    (`$k[kind, kind]`)"
+            )
+        )
+        t = get!(
+            () -> (;
+                nd = length(idx), decl = Ref{Any}(nothing), declared = Ref(false),
+                kw = Any[], entries = Any[], last = Ref(n),
+            ), tables, k
+        )
+        length(idx) == t.nd || throw(
+            ArgumentError(
+                "@parameters `$text`: kind table `$k` has $(t.nd) kind \
+                    $(t.nd == 1 ? "axis" : "axes"); write \
+                    `$k[$(join(fill("…", t.nd), ", "))]`"
+            )
+        )
+        t.last[] = n
+        if decl
+            t.declared[] && throw(
+                ArgumentError(
+                    "@parameters `$text`: kind table `$k` is declared twice; keep one \
+                        declaration and give single entries as `$k[k₁, k₂] = v`"
+                )
+            )
+            t.declared[] = true
+            t.decl[] = val
+            append!(t.kw, kw)
+        else
+            any(==(:kind), idx) && throw(
+                ArgumentError(
+                    "@parameters `$text`: write an entry with a kind name on every axis \
+                        (`$k[dark, light] = v`), or declare the whole table with `kind` on \
+                        every axis"
+                )
+            )
+            val === nothing && throw(
+                ArgumentError(
+                    "@parameters `$text`: an entry needs a value, `$text = v`"
+                )
+            )
+            isempty(kw) || throw(
+                ArgumentError(
+                    "@parameters `$text`: options go on the table's declaration, \
+                        `$k[$(join(fill("kind", t.nd), ", "))] = …, [option = …]`"
+                )
+            )
+            for m in idx
+                _check_kind_name(parts, k, m, "`$text`")
             end
-        elseif a isa Expr && a.head === :kw
-            a.args[1] === :symmetric && a.args[2] isa Bool && (symmetric = a.args[2])
+            push!(t.entries, (idx, val))
         end
     end
+    for (k, t) in tables
+        if any(o -> o.args[1] === :symmetric, t.kw)
+            o = only(filter(o -> o.args[1] === :symmetric, t.kw))
+            t.nd == 2 || throw(
+                ArgumentError(
+                    "@parameters $k[kind]: `symmetric` applies to a two-kind table \
+                        `$k[kind, kind]`"
+                )
+            )
+            o.args[2] isa Bool || throw(
+                ArgumentError(
+                    "@parameters $k[kind, kind]: `symmetric` is `true` or `false`; got \
+                        `$(o.args[2])`"
+                )
+            )
+        end
+        _is_pairs_table(t.decl[]) && _check_pairs(parts, k, t.decl[])
+    end
+    return tables
+end
+
+# the code that builds kind table `k`: `_kind_table` makes the array of every written form
+# (a constructor keyword `Model(; J = …)` replaces the declared value and the entries),
+# then `kind_parameter` the parameter
+function _kind_table_code(parts, k, t)
+    P = :(Potts)
+    sym = findfirst(o -> o.args[1] === :symmetric, t.kw)
+    symmetric = sym === nothing ? true : t.kw[sym].args[2]
+    meta = [o for o in t.kw if o.args[1] !== :symmetric]
+    sym === nothing || push!(meta, Expr(:kw, :symmetric, symmetric))
+    value = t.decl[] === nothing ? :nothing : rewrite(t.decl[])
+    entries = :(
+        Pair{Any, Any}[
+            $(
+                [
+                    :(($(names...),) => $(rewrite(v)))
+                        for (names, v) in t.entries
+                ]...
+            ),
+        ]
+    )
+    q, nd, s = QuoteNode(k), t.nd, symmetric
+    return :(
+        $k = $P.kind_parameter(
+            $q,
+            if $(_kw_local(k)) === nothing
+                $P._kind_table($q, $nd, __kinds, $value, $entries; symmetric = $s)
+            else
+                $P._kind_table($q, $nd, __kinds, $(_kw_local(k)); symmetric = $s)
+            end; $(meta...)
+        )
+    )
+end
+
+_is_pairs_table(val) = val isa Expr && val.head === :call && val.args[1] === :Pairs
+
+# A kind name `m` in an entry of kind table `k` (`where`, as written): a kind of `@kinds`
+# (or one an `@extend` base binds, checked when built); a misspelling, a parameter, a kind
+# class or another declared name is refused here, naming it
+function _check_kind_name(parts, k, m, where)
+    m isa Symbol || throw(
+        ArgumentError(
+            "kind table `$k`: `$m` in $where is not a kind name; name the kinds of \
+                @kinds (the medium first), or declare the whole table with `kind` on \
+                every axis, `$k[kind, kind] = …`"
+        )
+    )
+    what = get(parts.declared, m, nothing)
+    what == "kind" && return nothing
+    what === nothing && m in parts.bound && return nothing
+    not_kind = if what === nothing
+        "not a kind of @kinds (a misspelling?)"
+    else
+        "$(_with_article(what)), not a kind; an entry is indexed by kind names of @kinds"
+    end
+    throw(ArgumentError("kind table `$k`: `$m` in $where is " * not_kind))
+end
+
+# `Pairs((k₁, k₂) => v, …; default)` of kind table `k`: every key names a kind (pairs given
+# twice are found when the table is built, by `_kind_table`)
+function _check_pairs(parts, k, val)
     for a in val.args[2:end]
         a isa Expr && a.head in (:parameters, :kw) && continue
         (
@@ -1751,39 +1885,9 @@ function _check_pairs(parts, k, val)
         ) ||
             throw(ArgumentError("kind table `$k = Pairs(…)`: an entry is `(k₁, k₂) => v` \
                 with two kind names; got `$a`"))
-        names = a.args[2].args
-        for n in names
-            n isa Symbol ||
-                throw(ArgumentError("kind table `$k = Pairs(…)`: `$n` is not a kind name \
-                    of @kinds"))
-            what = get(parts.declared, n, nothing)
-            what == "kind" && continue
-            # bound by `@extend`, checked when built
-            what === nothing && n in parts.bound && continue
-            not_kind = if what === nothing
-                "not a kind of @kinds (a misspelling?)"
-            else
-                "$(_with_article(what)), not a kind; the keys are kind names of @kinds"
-            end
-            throw(ArgumentError("kind table `$k = Pairs(…)`: `$n` is " * not_kind))
+        for m in a.args[2].args
+            _check_kind_name(parts, k, m, "`$a`")
         end
-        p = (names[1], names[2])
-        if p in seen || (symmetric && reverse(p) in seen)
-            twice_note = if symmetric && p[1] !== p[2]
-                " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); " *
-                    "pass `symmetric = false` for an asymmetric table)"
-            else
-                ""
-            end
-            throw(
-                ArgumentError(
-                    "kind table `$k = Pairs(…)`: the pair ($(p[1]), $(p[2])) is given \
-                        twice" *
-                        twice_note
-                )
-            )
-        end
-        push!(seen, p)
     end
     return val
 end
@@ -1812,6 +1916,13 @@ function _check_integral_over(ex)
     return nothing
 end
 
+"""
+    rewrite(ex)
+
+Make user syntax symbolic: `x[i…]` → `_index`, `&&`/`||`/`!` → symbolic logic, `c ? a : b`
+→ `ifelse`, `div(a, b)`/`a ÷ b` → `_intdiv`, `euler(…)` → `_euler(…)`, and
+`fold(body for n in R(s) if cond)` → a relation gather.
+"""
 function rewrite(ex)
     ex isa Expr || return ex
     P = :(Potts)
