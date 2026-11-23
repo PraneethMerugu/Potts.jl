@@ -678,3 +678,28 @@ end
             rline(rm, "window") == "  window     dt = 1.0, one map step per window"
     end
 end
+
+@testitem "fuse = false: one launch per kernel, the same state as the fused launch" \
+    setup = [LP_report] tags = [
+    :latticepde, :report,
+] begin
+    using .LP_report: fd
+    @testset "fuse = false: one launch per kernel, the same state as the fused launch" begin
+        go(fuse) = begin
+            d = LatticeDiscretization(Grid((8, 8)); fuse)
+            ig = init(discretize(rsys2(), d), ExplicitEuler(; substeps = 4); dt = 0.01)
+            step!(ig)
+            ig, sprint(field_report, ig)
+        end
+        (igf, repf), (igs, reps) = @test_logs(
+            (:warn, r"does not cover the coupled rows"), match_mode = :any,
+            (go(true), go(false))
+        )
+        @test rline(repf, "launches") == "  launches   1 per substep"
+        @test occursin("fuse  rate:rc | rate:ro  legal", rline(repf, "fusion"))
+        @test rline(reps, "launches") == "  launches   2 per substep"
+        @test occursin("split rate:rc | rate:ro  off: fusion off", rline(reps, "fusion"))
+        # (the two kernels read the state before the substep: fusion changes no value)
+        @test igs.u == igf.u
+    end
+end

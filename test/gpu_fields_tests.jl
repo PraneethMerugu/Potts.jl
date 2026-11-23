@@ -59,8 +59,8 @@ end
 # A coupled model on ROCm runs the step plan made for the device: its field group binds the
 # plan at the device's kernel-argument budget, made for the argument types it binds, and
 # every launch fits that budget. The host run binds the plan with no budget.
-@testitem "a coupled model on ROCm runs the plan made at the device's argument budget" setup =
-    [GpuSetup, FieldsSetup] tags = [:potts, :gpu, :device] begin
+@testitem "a coupled model on ROCm runs the plan made at the device's argument budget" \
+    setup = [GpuSetup, FieldsSetup] tags = [:potts, :gpu, :device] begin
     if PottsDevices.device_name() == "rocm"
         @testset "a coupled model on ROCm runs the plan made at the device's argument \
             budget" begin
@@ -261,8 +261,8 @@ end
 end
 
 # Cell averages are exact fixed-point sums, so two device runs
-# with the same seed are bitwise equal (σ and the averages), and a device average equals the
-# host's bitwise when both read the same site values. Models: test/cell_sums_models.jl.
+# with the same seed are bitwise equal (σ and the averages), and a device average equals
+# the host's bitwise when both read the same site values. Models: test/cell_sums_models.jl.
 # Negative control: `CorePotts._FLOAT_ATOMICS` (the float atomics of the code before the
 # fixed-point sums); the host and
 # the device then differ, and two device runs may differ (logged: an order race is not
@@ -401,7 +401,8 @@ end
             conv = [cs_conv_digests(backend) for _ in 1:5]
             same_conv_σ = all(c -> c[1] == conv[1][1], conv)
             same_conv_σ ||
-                @info "the five ROCm @convert runs left σ (lockless order)" σ = first.(conv)
+                @info "the five ROCm @convert runs left σ (lockless order)" σ =
+                first.(conv)
             same_conv_σ && @test allequal(conv)
             # the compartments in the staged device lifecycle too (its cluster-surface fold
             # launch), against a recount from `σ`; the bits are the fused form's where the

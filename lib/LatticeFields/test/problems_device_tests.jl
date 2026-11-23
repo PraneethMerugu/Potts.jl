@@ -208,7 +208,8 @@ end
         # enough smoothers (5 arrays and 3 parameters each, one shared mask) to pass the
         # budget
         s1 = smoother((8, 8, 8), 1)
-        K = 2 * cld(budget, only(bytes(s1, plan(s1; options = devopts())))) + 2
+        b1 = only(bytes(s1, plan(s1; options = devopts())))
+        K = 2 * cld(budget, b1) + 2
         s = smoother((8, 8, 8), K)
         fused = plan(s; options = devopts())
         split = plan(s; options = devopts(), fuse = false)
@@ -216,6 +217,8 @@ end
         bound = bytes(s, fused)
         @test 1 < length(bound) < K
         @test all(<=(budget), bound)
+        # (the edge: the largest launch had no room for one more kernel)
+        @test maximum(bound) > budget - b1
         # Dual parameters: larger launches, still each within the budget
         dual = bytes(s, fused; c = Dual(0.0f0, 1.0f0))
         @test length(dual) >= length(bound) && all(<=(budget), dual)

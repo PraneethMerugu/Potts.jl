@@ -4,8 +4,8 @@
 #       [gate…]
 #
 # gates (all by default):
-#   bandwidth generated single-field FV step (2D 4096², 3D 256³) vs a hand KA stencil and a
-#   KA copy
+#   bandwidth generated single-field FV step (2D 4096², 3D 256³) vs a hand KA stencil and
+#              a KA copy
 #   fusion     two species with shared reads: one fused kernel vs two separate launches
 #              (4096²)
 #   species    K coupled species: generated (IR, fused) vs a hand-written generator body
@@ -13,7 +13,8 @@
 #              planner's fused plan vs one launch per species at 42³, 128³, 256³ (K = 4)
 #   compile    compile time per body (first, further mean over same-arity bodies; the cost
 #              of a new arity reported apart) and no recompile on a parameter change
-#   build      build(4096²) / build(64²): discretize + init of a reaction-diffusion problem
+#   build      build(4096²) / build(64²): discretize + init of a reaction-diffusion
+#              problem
 # SMOKE=1 shrinks every size (a quick run that checks the script).
 using LatticePDE, LatticeFields, KernelAbstractions, Printf, Random
 using ModelingToolkitBase: @parameters, @variables, Differential, PDESystem
@@ -308,8 +309,8 @@ function species_gate()
         (tf, spf), (ts, _) = bound(p, 4; fuse = true), bound(p, 4; fuse = false)
         a, b = timeit(tf), timeit(ts)
         @printf(
-            "species fused vs split %d³ K=4: fused %d launch(es) %.1f µs, split %.1f µs; \
-                split/fused = %.3f\n",
+            "species fused vs split %d³ K=4: fused %d launch(es) %.1f µs, \
+                split %.1f µs; split/fused = %.3f\n",
             m, length(spf.launches), a * 1.0e6, b * 1.0e6, b / a
         )
     end
@@ -418,8 +419,8 @@ function build_gate()
     t64, tbig = (minimum(@elapsed(build(n)) for _ in 1:3) for n in (64, big))
     s64, sbig = (minimum(@elapsed(state(n)) for _ in 1:3) for n in (64, big))
     @printf(
-        "build (lower, passes, plan, bind, compile; arrays preallocated): 64² %.4f s, %d² \
-            %.4f s; ratio %.2f (gate < 1.5)\n",
+        "build (lower, passes, plan, bind, compile; arrays preallocated): \
+            64² %.4f s, %d² %.4f s; ratio %.2f (gate < 1.5)\n",
         t64, big, tbig, tbig / t64
     )
     return @printf(
