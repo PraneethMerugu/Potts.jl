@@ -679,12 +679,13 @@ end
     end
 end
 
-@testitem "fuse = false: one launch per kernel, the same state as the fused launch" \
-    setup = [LP_report] tags = [
+@testitem "fuse = false: one launch per kernel, the state of the fused launch" setup = [
+    LP_report,
+] tags = [
     :latticepde, :report,
 ] begin
     using .LP_report: fd
-    @testset "fuse = false: one launch per kernel, the same state as the fused launch" begin
+    @testset "fuse = false: one launch per kernel, the state of the fused launch" begin
         go(fuse) = begin
             d = LatticeDiscretization(Grid((8, 8)); fuse)
             ig = init(discretize(rsys2(), d), ExplicitEuler(; substeps = 4); dt = 0.01)
