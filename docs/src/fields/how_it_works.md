@@ -176,7 +176,9 @@ Recorded on an AMD Ryzen AI Max+ 395 (Radeon 8060S, ROCm), Julia 1.13.4, 2026-11
 same problem with `T = Float32` on the host gives the same values to the last bit.
 
 - The state type on a GPU is `Float32` by default.
-- ROCm is tested. Other KernelAbstractions backends are not tested here.
+- ROCm is tested; Metal is supported but not tested here. Another KernelAbstractions backend
+  needs a method of `LatticeFields.Exec.kernel_argument_bytes` (its kernel-argument budget
+  in bytes) before a field program can be planned for it.
 - A GPU with `Float64` (ROCm, CUDA) takes `compute_type = Float64` on a `Float32` problem.
 - Apple GPUs (Metal) have no `Float64`: give `T = Float32` or `Float16`, and leave
   `compute_type`, `solver_type` and `lattice_storage` at 32 bits or less.

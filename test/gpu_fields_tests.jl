@@ -56,6 +56,51 @@
     end
 end
 
+# A coupled model on ROCm runs the step plan made for the device: the field group planned
+# it at the device's kernel-argument budget (the plans made when the model is built are
+# host plans, for inspection only), and every fused launch fits that budget. The host run
+# runs the plan with no budget.
+@testitem "a coupled model on ROCm runs the plan made at the device's argument budget" setup =
+    [GpuSetup, FieldsSetup] tags = [:potts, :gpu, :device] begin
+    if PottsDevices.device_name() == "rocm"
+        @testset "a coupled model on ROCm runs the plan made at the device's argument \
+            budget" begin
+            Exec = Potts.LatticeFields.Exec
+            Schedule = Potts.LatticeFields.Schedule
+            backend = PottsDevices.device_backend()
+            budget = Exec.kernel_argument_bytes(backend)
+            per = Exec.array_argument_bytes(backend)
+            @test budget == 4096
+            @test per > 0
+            σ = zeros(Int32, 12, 12)
+            σ[5:7, 5:7] .= 1
+            prob = PottsProblem(
+                FdMovingMask(; name = :m), [ownership => σ, kind => [:A]], (0, 4); backend,
+                seed = 5, field_solver = ExplicitEuler(substeps = 3)
+            )
+            ck = checkpoint(init(prob, CheckerboardCPM()))
+            dev = init(prob, CheckerboardCPM(); backend, checkpoint = ck)
+            host = init(prob, CheckerboardCPM(); checkpoint = ck)
+            rd = CorePotts._runtime(dev.ctx.__fields1)
+            rh = CorePotts._runtime(host.ctx.__fields1)
+            wait(rd.pending)
+            # the field step's phase, among the MCS entries (a phase or a tuple of them)
+            fields(x) = x isa CorePotts.FieldPhase ? [x] :
+                x isa Union{Tuple, AbstractVector} ? reduce(vcat, map(fields, x); init = []) :
+                []
+            group = only(unique(x.group for x in fields(prob.f.phases.mcs) if !x.init))
+            planned(rt, b) = any(((k, v),) -> k[end] === b && v[2] === rt.step, group.plans)
+            @test planned(rd, budget)
+            @test !planned(rd, nothing)
+            @test planned(rh, nothing)
+            for l in rd.step.launches
+                n = Schedule.array_arguments(rd.program, l.kernel.kernel)
+                @test n * per <= budget
+            end
+        end
+    end
+end
+
 # A Float32 problem with a Float64 field computed in
 # Float64 on ROCm equals the host run to 1e-12; its kernels hold `double` and are registered
 # in LatticeFields' Exec registry, which the full scan below skips (and, with the registry
