@@ -3,7 +3,9 @@
 
 The one test runner of the monorepo. Every package's `test/runtests.jl` calls
 [`run_tests`](@ref) with its own test directory, and so do people at a REPL
-(`test/runner/session.jl`) and agents. What runs is chosen by environment variables only:
+(`test/runner/session.jl`) and agents. What runs is chosen by environment variables, with
+one exception: `runtests.jl` reads its one command-line argument, when given, as the
+item-name pattern (see [`name_pattern`](@ref)).
 
 | Variable | Meaning | Default |
 |---|---|---|
@@ -36,6 +38,35 @@ envstr(key) = String(strip(get(ENV, key, "")))
 
 env_group() = (g = envstr("GROUP"); isempty(g) ? "All" : g)
 env_name() = (n = envstr("POTTS_TEST_NAME"); isempty(n) ? nothing : Regex(n))
+
+"""
+    name_pattern(args) -> Union{Regex, Nothing}
+
+The item-name pattern of a `runtests.jl` run: `POTTS_TEST_NAME`, or the one command-line
+argument (the form in which `Pkg.test(; test_args)` and Kaimon's `run_tests` pass a
+pattern). An argument selects names only: `GROUP` and the other selections stay environment
+variables. Setting both the argument and `POTTS_TEST_NAME` throws an `ArgumentError`, so
+that neither silently wins.
+"""
+function name_pattern(args)
+    length(args) <= 1 || throw(
+        ArgumentError(
+            "runtests.jl takes at most one argument, an item-name pattern; got \
+            $(length(args)): $(join(args, ' ')). GROUP and the other selections are \
+            environment variables (test/README.md)"
+        )
+    )
+    arg = isempty(args) ? "" : String(strip(only(args)))
+    env = envstr("POTTS_TEST_NAME")
+    (isempty(arg) || isempty(env)) || throw(
+        ArgumentError(
+            "both POTTS_TEST_NAME (\"$env\") and the argument (\"$arg\") set the \
+            item-name pattern; set one of them"
+        )
+    )
+    pattern = isempty(arg) ? env : arg
+    return isempty(pattern) ? nothing : Regex(pattern)
+end
 env_tags() = Symbol.(filter!(!isempty, strip.(split(envstr("POTTS_TEST_TAGS"), ','))))
 env_qa() = parse_bool("POTTS_TEST_QA", true)
 env_workers() = (w = envstr("POTTS_TEST_WORKERS"); isempty(w) ? nothing : parse(Int, w))
@@ -436,13 +467,18 @@ function run_passes(t::GroupTable, keep, workers, paths, sel::Selection)
         (ti -> keep(ti) && scan(ti), 0),
     )
     errs = Tuple{Any, Any}[]                     # (exception, backtrace), in pass order
+    empty_passes = 0
     for (pred, n) in passes
         try
             retestitems(t, pred, ordered_paths(paths), n, sel)
         catch e
-            e isa ReTestItems.NoTestException && continue
+            e isa ReTestItems.NoTestException && (empty_passes += 1; continue)
             push!(errs, (e, catch_backtrace()))
         end
+    end
+    # a selection that matches nothing is a result (0 items), not a failure
+    if empty_passes == length(passes)
+        @info "0 test items match the selection in $(t.testdir)"
     end
     # report every pass that failed, and fail the run with the first one (its stack is the
     # cause; a later pass's error is usually the same failure seen again)

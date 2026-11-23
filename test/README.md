@@ -60,8 +60,18 @@ These variables are for tools and logs:
 | `POTTS_TEST_END_EXPR_FILE` | a file with one Julia expression that runs after every item |
 | `POTTS_DEVICE_IR_DIR` | the directory of the device code that GROUP=GPU scans (a temporary directory when not set) |
 
-An unknown `GROUP` throws an `ArgumentError` that lists the valid groups. The runner reads no
-command-line arguments.
+An unknown `GROUP` throws an `ArgumentError` that lists the valid groups.
+
+A `runtests.jl` takes at most one command-line argument: an item-name pattern, the same as
+`POTTS_TEST_NAME`. This is the form in which `Pkg.test(; test_args)` and the Kaimon
+`run_tests` tool pass a pattern. `GROUP` and the other selections are environment variables
+only. When both the argument and `POTTS_TEST_NAME` are set, the run throws an
+`ArgumentError`. A selection that matches no item logs `0 test items match the selection`
+and passes.
+
+```sh
+julia --project=lib/CorePotts/test lib/CorePotts/test/runtests.jl geometry
+```
 
 A group of another package runs in a subprocess, in that package's test environment, with
 the same variables. The subprocess gets `--check-bounds=auto` unless the caller set
