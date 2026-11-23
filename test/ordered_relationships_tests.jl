@@ -488,7 +488,8 @@ end
             mk(
                 quote
                     @variables stiff(cell) = 1.0
-                    @energy angles(chain) => stiff[pivot] * curvature + stiff[a] * (π - angle)
+                    @energy angles(chain) =>
+                        stiff[pivot] * curvature + stiff[a] * (π - angle)
                     @drive copy => 0.1 * linked(web, old, new)
                 end
             ); name = :ok
