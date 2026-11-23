@@ -10,8 +10,7 @@
 #              (4096²)
 #   species    K coupled species: generated (IR, fused) vs a hand-written generator body
 #              (`fbody`) at equal streams (2D 4096² K = 8, 16; 3D 256³ K = 8), and the
-#              planner's fused/split choice vs measured fused/split at 42³, 128³, 256³ (K =
-#              4)
+#              planner's fused plan vs one launch per species at 42³, 128³, 256³ (K = 4)
 #   compile    compile time per body (first, further mean over same-arity bodies; the cost
 #              of a new arity reported apart) and no recompile on a parameter change
 #   build      build(4096²) / build(64²): discretize + init of a reaction-diffusion problem
@@ -308,13 +307,10 @@ function species_gate()
         p = species(dims, 4, 3; kernels = :each)
         (tf, spf), (ts, _) = bound(p, 4; fuse = true), bound(p, 4; fuse = false)
         a, b = timeit(tf), timeit(ts)
-        planner = length(spf.launches) < 4 ? "fused" : "split"
-        measured = a < b ? "fused" : "split"
         @printf(
-            "species choice %d³ K=4: planner %s (%d launches); measured fused %.1f µs, \
-                split %.1f µs → %s; %s\n",
-            m, planner, length(spf.launches), a * 1.0e6, b * 1.0e6,
-            measured, planner == measured ? "MATCH" : "MISMATCH"
+            "species fused vs split %d³ K=4: fused %d launch(es) %.1f µs, split %.1f µs; \
+                split/fused = %.3f\n",
+            m, length(spf.launches), a * 1.0e6, b * 1.0e6, b / a
         )
     end
     return
