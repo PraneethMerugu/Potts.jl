@@ -16,7 +16,7 @@ include("device_backend.jl")
 include("shared/problems_owned.jl")
 include("shared/problems_bit_exact.jl")
 using LatticeFields.Problems: FieldStore, FieldProblem, ExplicitEuler, ode_problem,
-    LatticeIndex, FieldSlot
+    LatticeIndex, FieldSlot, BoundStep
 using CommonSolve: solve, init, step!
 
 devopts() = CompileOptions(; T = Float32, float64_ok = Exec.default_float(DEV) === Float64)
@@ -197,19 +197,28 @@ end
     src = read(joinpath(@__DIR__, "shared", "schedule_fusion.jl"), String)
     @isdefined(smoother) || include_string(@__MODULE__, split(src, "nlaunch(s) =")[1])
     @testset "fusion at the device's kernel-argument budget runs ($gpu)" begin
-        budget, per = Exec.kernel_argument_bytes(DEV), Exec.array_argument_bytes(DEV)
-        @test budget == 4096 && per > 0
-        # enough smoothers (5 arrays each, one shared mask) to pass the budget
-        K = cld(budget ÷ per, 5) + 1
+        budget = Exec.kernel_argument_bytes(DEV)
+        @test budget == 4096
+        P = (0.3, 0.2, 0.1)
+        # the argument bytes of each launch as the device binds it
+        bytes(s, sp; c = nothing) = [
+            Exec.launch_argument_bytes(x.launch)
+                for x in BoundStep(DEV, s, sp, FieldStore(DEV, s), P; c).launches
+        ]
+        # enough smoothers (5 arrays and 3 parameters each, one shared mask) to pass the
+        # budget
+        s1 = smoother((8, 8, 8), 1)
+        K = 2 * cld(budget, only(bytes(s1, plan(s1; options = devopts())))) + 2
         s = smoother((8, 8, 8), K)
-        fused = plan(s; backend = DEV, options = devopts())
-        split = plan(s; backend = DEV, options = devopts(), fuse = false)
-        @test 1 < length(fused.launches) < K
-        @test any(d -> d.reason == :limit, fused.decisions)
-        @test all(
-            l -> Schedule.array_arguments(s, l.kernel.kernel) * per <= budget,
-            fused.launches
-        )
+        fused = plan(s; options = devopts())
+        split = plan(s; options = devopts(), fuse = false)
+        @test length(fused.launches) == 1
+        bound = bytes(s, fused)
+        @test 1 < length(bound) < K
+        @test all(<=(budget), bound)
+        # Dual parameters: larger launches, still each within the budget
+        dual = bytes(s, fused; c = Dual(0.0f0, 1.0f0))
+        @test length(dual) >= length(bound) && all(<=(budget), dual)
         # the largest fused launches run and match one launch per kernel
         function run(sp)
             st = FieldStore(DEV, s)

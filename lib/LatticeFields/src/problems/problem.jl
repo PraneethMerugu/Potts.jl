@@ -256,8 +256,8 @@ function _plans!(
         initids = [i for (i, k) in enumerate(keys) if k in initkeys]
         opts = _options(o, V, backend)
         (
-            plan(s, initids; backend, options = opts),
-            plan(s, setdiff(eachindex(keys), initids); backend, options = opts),
+            plan(s, initids; options = opts),
+            plan(s, setdiff(eachindex(keys), initids); options = opts),
         )
     end
 end

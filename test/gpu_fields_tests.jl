@@ -56,22 +56,18 @@
     end
 end
 
-# A coupled model on ROCm runs the step plan made for the device: the field group planned
-# it at the device's kernel-argument budget (the plans made when the model is built are
-# host plans, for inspection only), and every fused launch fits that budget. The host run
-# runs the plan with no budget.
+# A coupled model on ROCm runs the step plan made for the device: its field group binds the
+# plan at the device's kernel-argument budget, made for the argument types it binds, and
+# every launch fits that budget. The host run binds the plan with no budget.
 @testitem "a coupled model on ROCm runs the plan made at the device's argument budget" setup =
     [GpuSetup, FieldsSetup] tags = [:potts, :gpu, :device] begin
     if PottsDevices.device_name() == "rocm"
         @testset "a coupled model on ROCm runs the plan made at the device's argument \
             budget" begin
             Exec = Potts.LatticeFields.Exec
-            Schedule = Potts.LatticeFields.Schedule
             backend = PottsDevices.device_backend()
             budget = Exec.kernel_argument_bytes(backend)
-            per = Exec.array_argument_bytes(backend)
             @test budget == 4096
-            @test per > 0
             σ = zeros(Int32, 12, 12)
             σ[5:7, 5:7] .= 1
             prob = PottsProblem(
@@ -84,18 +80,15 @@ end
             rd = CorePotts._runtime(dev.ctx.__fields1)
             rh = CorePotts._runtime(host.ctx.__fields1)
             wait(rd.pending)
-            # the field step's phase, among the MCS entries (a phase or a tuple of them)
-            fields(x) = x isa CorePotts.FieldPhase ? [x] :
-                x isa Union{Tuple, AbstractVector} ? reduce(vcat, map(fields, x); init = []) :
-                []
-            group = only(unique(x.group for x in fields(prob.f.phases.mcs) if !x.init))
-            planned(rt, b) = any(((k, v),) -> k[end] === b && v[2] === rt.step, group.plans)
-            @test planned(rd, budget)
-            @test !planned(rd, nothing)
-            @test planned(rh, nothing)
-            for l in rd.step.launches
-                n = Schedule.array_arguments(rd.program, l.kernel.kernel)
-                @test n * per <= budget
+            # the device binding planned at the budget; the host binds the plan as made
+            @test !isempty(rd.step.bound)
+            @test all(k -> k[1] == budget, keys(rd.step.bound))
+            @test all(bs -> length(bs.launches) == length(rh.step.launches), rh.steps)
+            # the bound launches are those of a plan at the budget, each within it
+            n = Set(length(sp.launches) for sp in values(rd.step.bound))
+            for bs in rd.steps
+                @test length(bs.launches) in n
+                @test all(x -> Exec.launch_argument_bytes(x.launch) <= budget, bs.launches)
             end
         end
     end

@@ -24,9 +24,10 @@ const LF_NONPUBLIC = (
     :Compile,
     # KernelAbstractions' Float64 capability query (Metal: false); KA declares no `public`
     :supports_float64,
-    # KernelAbstractions' conversion of a kernel argument to its device form (the measured
-    # size of one array argument); KA declares no `public`
-    :argconvert,
+    # KernelAbstractions' launch configuration, context and conversion of a kernel argument
+    # to its device form (the measured size of a launch's argument tuple); KA declares no
+    # `public`
+    :argconvert, :launch_config, :mkcontext,
     # Base's documented hook for a type's own `deepcopy` (LatticeRHS: a copy has no owner
     # task)
     :deepcopy_internal,

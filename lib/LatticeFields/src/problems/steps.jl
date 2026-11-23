@@ -70,31 +70,56 @@ function BoundStep(
         c = nothing, fuse = nothing
     )
     P0 = Tuple(Praw)
+    sp = _at_budget(backend, p, sp, st, P0, cur, c, fuse)
     ls = Tuple(
         begin
             ck = l.kernel
-            # the parameters in the kernel's compute type (its `compute_type`), wrapped
-            # like `c` (a Dual of it under Dual parameters)
-            cc = if c === nothing
-                zero(ck.T)
-            else
-                zero(withvaltype(typeof(c), value_type(ck.T)))
-            end
-            S = launch_arrays(st, l, cur)
-            f = fuse === nothing ? nothing : fuse(l, cur)
-            b = if f === nothing
-                bind_program(backend, p, l, S, launch_parameters(ck, P0, cc), (0, 0))
-            else
-                bind_program(
-                    backend, p, l, (S..., f[1]),
-                    launch_parameters(ck, P0, cc), (0, 0); wrap = f[2]
-                )
-            end
+            cc = _launch_c(ck, c)
+            b = _bind_launch(backend, p, l, st, cur, fuse, launch_parameters(ck, P0, cc))
             ck.timed ? TimedDerived(b, derive_function(ck), P0, cc) : Timed(b)
         end
             for l in sp.launches
     )
     return BoundStep(ls, each(length(ls)))
+end
+
+# the parameters of a launch are in the kernel's compute type (its `compute_type`), wrapped
+# like `c` (a Dual of it under Dual parameters)
+_launch_c(ck, c) = c === nothing ? zero(ck.T) : zero(withvaltype(typeof(c), value_type(ck.T)))
+
+# the launch of `l` with parameters `P`, its arrays at the slots `cur`
+function _bind_launch(backend, p, l, st, cur, fuse::F, P) where {F}
+    S = launch_arrays(st, l, cur)
+    f = fuse === nothing ? nothing : fuse(l, cur)
+    return if f === nothing
+        bind_program(backend, p, l, S, P, (0, 0))
+    else
+        bind_program(backend, p, l, (S..., f[1]), P, (0, 0); wrap = f[2])
+    end
+end
+
+# The plan of `sp` at the backend's kernel-argument budget, its launches measured as this
+# binding binds them: the parameters as the tuple the derive function returns (the raw and
+# the hoisted values, all in the compute element type), so no derive function runs. The
+# argument types decide the sizes, so the plan is kept per those types.
+function _at_budget(backend, p, sp, st, P0, cur, c, fuse::F) where {F}
+    budget = Exec.kernel_argument_bytes(backend)
+    budget === nothing && return sp
+    function arguments(l)
+        ck = l.kernel
+        cc = _launch_c(ck, c)
+        P = ntuple(_ -> cc, ck.nparams + length(ck.derived))
+        return Exec.launch_argument_bytes(_bind_launch(backend, p, l, st, cur, fuse, P))
+    end
+    signature = (typeof(backend), _argument_types(st), typeof(P0), typeof(c), F)
+    return bound_plan(sp, budget, signature, arguments)
+end
+
+# the types of a store's arrays and tables
+function _argument_types(st::FieldStore)
+    return (
+        Tuple(Tuple(map(typeof, b)) for b in st.bufs), Tuple(map(typeof, st.tables)),
+    )
 end
 (bs::BoundStep)(rt) = bs.walk(bs.launches, rt)
 

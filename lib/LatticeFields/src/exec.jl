@@ -15,7 +15,7 @@ device wrapper for every device kernel. A kernel is a body `body(i, args...)` ru
   (no work item passes the guard); [`compile_all!`](@ref) compiles a set on host tasks.
 - **Capabilities and policy**: [`supports`](@ref) (what the hardware runs),
   [`default_float`](@ref) (the float type CorePotts emits by default), [`ishost`](@ref),
-  [`kernel_argument_bytes`](@ref) and [`array_argument_bytes`](@ref) (the kernel-argument
+  [`kernel_argument_bytes`](@ref) and [`launch_argument_bytes`](@ref) (the kernel-argument
   budget and the size of one array argument, which bound fusion).
 """
 module Exec
@@ -27,7 +27,7 @@ using Polyester: @batch
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 public HOST_GRAIN, COMPILE_ONLY, VERBOSE, compiling, ishost, supports, default_float,
-    kernel_argument_bytes, array_argument_bytes,
+    kernel_argument_bytes, launch_argument_bytes,
     register_float64!, float64_registered, FLOAT64_KERNELS, FLOAT64_ARRAY, host_launch!,
     launch!, compile!, compile_all!, Launch, Plan, walker
 
@@ -120,7 +120,8 @@ default_float(backend) = ishost(backend) ? Float64 : Float32
     kernel_argument_bytes(backend) -> Union{Int, Nothing}
 
 The kernel-argument budget of `backend` in bytes: the most argument data one kernel launch
-may pass. The planner splits a fusion whose array arguments would exceed it.
+may pass. The planner splits a fusion whose launch arguments
+([`launch_argument_bytes`](@ref)) would exceed it.
 
 The host executor passes arguments as ordinary Julia calls, so the CPU has no budget. The
 ROCm and Metal methods are in the package extensions (4096 bytes on both). Any other backend
@@ -140,7 +141,7 @@ julia> LatticeFields.Exec.kernel_argument_bytes(CPU()) === nothing
 true
 ```
 
-See also [`array_argument_bytes`](@ref).
+See also [`launch_argument_bytes`](@ref).
 """
 kernel_argument_bytes(::KernelAbstractions.CPU) = nothing
 function kernel_argument_bytes(backend)
@@ -153,32 +154,6 @@ function kernel_argument_bytes(backend)
             )
         )
     )
-end
-
-@kernel function _argument_probe!(a)
-    nothing
-end
-
-"""
-    array_argument_bytes(backend) -> Int
-
-The size in bytes of one array argument as `backend` passes it to a kernel: the device-side
-form that KernelAbstractions converts an array to (`KernelAbstractions.argconvert`), measured
-on an empty `Float32` vector (every LatticeFields array is a vector). The element type does
-not change it.
-
-# Arguments
-- `backend`: a KernelAbstractions device backend.
-
-# Returns
-- The size of the converted array in bytes.
-
-See also [`kernel_argument_bytes`](@ref).
-"""
-function array_argument_bytes(backend)
-    a = KernelAbstractions.allocate(backend, Float32, 0)
-    # (the size of the type: `sizeof` of an array value is its data)
-    return sizeof(typeof(KernelAbstractions.argconvert(_argument_probe!(backend), a)))
 end
 
 """
@@ -657,6 +632,44 @@ function compile!(l::LinearLaunch{K, WG}) where {K, WG}
         l.kernel(body, args, 0; ndrange = WG)
     end
     return nothing
+end
+
+"""
+    launch_argument_bytes(l::Launch) -> Int
+
+The bytes of the kernel arguments that the launch `l` passes, laid out as one tuple (the
+padding included). On a device these are the arguments of the kernel call that
+KernelAbstractions makes: the kernel function, its launch context (the ndrange and the
+workgroup layout), the body, the argument tuple and the last argument (`n`, or the
+Cartesian launch's flag), each in the form the backend converts it to
+(`KernelAbstractions.argconvert`). On the host they are the body, the argument tuple and the
+last argument as given (the host has no budget; the size compares launches).
+
+# Arguments
+- `l`: a prebuilt [`Launch`](@ref).
+
+# Returns
+- The size in bytes.
+
+See also [`kernel_argument_bytes`](@ref).
+"""
+launch_argument_bytes(l::LinearLaunch{HostExec}) = sizeof(Tuple{map(typeof, l.params)...})
+launch_argument_bytes(l::CartesianLaunch{HostExec}) = sizeof(Tuple{map(typeof, l.params)...})
+function launch_argument_bytes(l::LinearLaunch)
+    body, args, n = l.params
+    return _argument_bytes(l.kernel, l.ndrange == 0 ? nothing : l.ndrange, (body, args, n))
+end
+function launch_argument_bytes(l::CartesianLaunch)
+    body, args, _ = l.params
+    return _argument_bytes(l.kernel, nothing, (body, args, true))
+end
+# the call `kernel(args...; ndrange)` of a KernelAbstractions device kernel passes
+# `kernel.f(ctx, args...)`, each argument converted
+function _argument_bytes(k::K, ndrange, args::A) where {K, A}
+    nd, _, iterspace, _ = KernelAbstractions.launch_config(k, ndrange, nothing)
+    ctx = KernelAbstractions.mkcontext(k, nd, iterspace)
+    conv(x) = typeof(KernelAbstractions.argconvert(k, x))
+    return sizeof(Tuple{conv(k.f), conv(ctx), map(conv, args)...})
 end
 
 """

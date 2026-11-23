@@ -209,16 +209,14 @@ serves them all.
 - `spec::GroupSpec`: the group's description.
 - `program::Program`: the program of `alg`.
 - `programs::Dict`: the programs made so far, by [`update_key`](@ref).
-- `plans::Dict`: the plans made so far, as `(init plan, step plan)`, by algorithm, number
-  types, kernels and the backend's kernel-argument budget.
+- `plans::Dict`: the plans made so far, as `(init plan, step plan)`.
 """
 struct FieldGroup{N}
     spec::GroupSpec{N}
     program::Program{N}
     programs::Dict{Any, Program{N}}
     plans::Dict{
-        Tuple{Any, Type, Type, Vector{Int}, Vector{Int}, Union{Int, Nothing}},
-        Tuple{StepPlan{N}, StepPlan{N}},
+        Tuple{Any, Type, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}},
     }
 end
 function FieldGroup(
@@ -229,8 +227,9 @@ function FieldGroup(
     return FieldGroup{N}(
         spec, s, Dict{Any, Program{N}}(update_key(alg) => s),
         Dict{
-            Tuple{Any, Type, Type, Vector{Int}, Vector{Int}, Union{Int, Nothing}},
-            Tuple{StepPlan{N}, StepPlan{N}},
+            Tuple{Any, Type, Type, Vector{Int}, Vector{Int}}, Tuple{
+                StepPlan{N}, StepPlan{N},
+            },
         }()
     )
 end
@@ -344,18 +343,11 @@ function group_plans(
     s = group_program(g, alg)
     initids, stepids = kernels
     return lock(_PLANS_LOCK) do
-        key = (
-            update_key(alg), V, compute_type(alg, V), initids, stepids,
-            Exec.kernel_argument_bytes(backend),
-        )
-        get!(g.plans, key) do
+        get!(g.plans, (update_key(alg), V, compute_type(alg, V), initids, stepids)) do
             opts = _options(
                 o, V, backend; clock = clock_slot(g.spec), C = compute_type(alg, V), s
             )
-            (
-                plan(s, initids; backend, options = opts),
-                plan(s, stepids; backend, options = opts),
-            )
+            (plan(s, initids; options = opts), plan(s, stepids; options = opts))
         end
     end
 end
@@ -1718,7 +1710,12 @@ function bind_group(
     fused = if masks === nothing || Exec.ishost(backend)
         Int[]
     else
-        _fused_rules(prog, ip, st, ids)
+        # the mask launches as bound: the plan at the device's argument budget
+        mp = _at_budget(
+            backend, prog, ip, st, Tuple(p), _cur(st, swaps, 1, all_state), c,
+            _mask_fuse(prog, st, p, ids)
+        )
+        _fused_rules(prog, mp, st, ids)
     end
     stepclamps = Tuple(cl for (j, cl) in enumerate(clamps) if !(j in fused))
     copies = Tuple((st.bufs[f][1], st.bufs[f][2]) for f in swaps)

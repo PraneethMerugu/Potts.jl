@@ -1684,14 +1684,30 @@ function _lattice_rhs(
     fill!(U, zero(E))
     dU = similar(U)
     c = zero(E)
-    ls = map(Tuple(sp.launches)) do l
-        # a table's id numbers the tables, not the fields: it is never a state slot (a
-        # table whose index equalled a state field's id was once bound to the state)
-        S0 = Tuple(
-            Tuple(_rhs_binding(st, marks, id, role) for (id, role) in lane)
-                for lane in l.bind
+    # a table's id numbers the tables, not the fields: it is never a state slot (a table
+    # whose index equalled a state field's id was once bound to the state)
+    rhs_S0(l) = Tuple(
+        Tuple(_rhs_binding(st, marks, id, role) for (id, role) in lane) for lane in l.bind
+    )
+    rhs_S(S0) = map(lane -> map(a -> _resolve(a, U, dU), lane), S0)
+    # the launches at the backend's kernel-argument budget, measured as bound here (the
+    # parameters as the tuple the derive function returns, in `E`: no derive runs)
+    budget = Exec.kernel_argument_bytes(backend)
+    if budget !== nothing
+        sp = bound_plan(
+            sp, budget, (typeof(backend), _argument_types(st), typeof(U), E),
+            l -> Exec.launch_argument_bytes(
+                bind_program(
+                    backend, s, l, rhs_S(rhs_S0(l)),
+                    ntuple(_ -> c, l.kernel.nparams + length(l.kernel.derived)),
+                    (0.0, 0.0); R = E
+                )
+            )
         )
-        S = map(lane -> map(a -> _resolve(a, U, dU), lane), S0)
+    end
+    ls = map(Tuple(sp.launches)) do l
+        S0 = rhs_S0(l)
+        S = rhs_S(S0)
         np = s.nparams
         P = launch_parameters(l.kernel, ntuple(_ -> zero(E), np), c)
         RHSLaunch(

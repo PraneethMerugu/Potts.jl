@@ -113,9 +113,9 @@ function _implicit_plan(
     ) where {V}
     return lock(_PLANS_LOCK) do
         first(
-            get!(g.plans, (tag, V, C, Int[], ids, Exec.kernel_argument_bytes(backend))) do
+            get!(g.plans, (tag, V, C, Int[], ids)) do
                 p = plan(
-                    s, ids; backend, options = _options(
+                    s, ids; options = _options(
                         o, V, backend; clock = clock_slot(g.spec), C, s
                     )
                 )

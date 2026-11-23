@@ -8,14 +8,18 @@ using Test, LatticeFields
 include("../host_runner.jl")
 include("../fixtures.jl")
 using LatticeFields.IR: IRError, ZERO, coord, constant
-using LatticeFields.Schedule: array_arguments, merge_kernels, fusion_blocker
+using LatticeFields.Schedule: fusion_blocker
 using LatticeFields: Exec
+using LatticeFields.Problems: BoundStep
+using ForwardDiff: Dual
 
-# a stand-in device with a small kernel-argument budget: 25 arrays of 24 B
+# a stand-in device with the kernel-argument budget `SMALL_ARGS[]`: it binds host launches,
+# whose argument bytes are those of their argument tuple
 struct SmallArgs <: KernelAbstractions.GPU end
 struct MockArgsless <: KernelAbstractions.GPU end
-Exec.kernel_argument_bytes(::SmallArgs) = 600
-Exec.array_argument_bytes(::SmallArgs) = 24
+const SMALL_ARGS = Ref(0)
+Exec.ishost(::SmallArgs) = true
+Exec.kernel_argument_bytes(::SmallArgs) = SMALL_ARGS[]
 
 function regmsg(f)
     return try
@@ -237,27 +241,40 @@ end
     @testset "fusion stops at the backend's kernel-argument budget" begin
         src = read(joinpath(@__DIR__, "..", "shared", "schedule_fusion.jl"), String)
         @isdefined(smoother) || include_string(@__MODULE__, split(src, "nlaunch(s) =")[1])
-        # 20 smoothers: 5 arrays each and one shared mask
-        s = smoother((42, 42, 42), 20)
+        # 2 smoothers with 3 parameters each
+        s = smoother((8, 8, 8), 2)
         ids = collect(eachindex(s.kernels))
         scc = Dict(i => i for i in ids)
-        @test all(i -> fusion_blocker(s, ids[1:(i - 1)], i, scc) === nothing, ids[2:end])
+        @test fusion_blocker(s, ids[1:1], 2, scc) === nothing
         # the CPU has no budget: one launch
         @test Exec.kernel_argument_bytes(KernelAbstractions.CPU()) === nothing
         sp = plan(s)
-        @test length(sp.launches) == 1 && all(d -> d.reason == :legal, sp.decisions)
-        # a 600-byte budget at 24 B per array: groups of 4 (21 arrays; a fifth makes 26)
-        sp = plan(s; backend = SmallArgs())
-        @test length(sp.launches) == 5
-        @test all(l -> array_arguments(s, l.kernel.kernel) * 24 <= 600, sp.launches)
-        @test count(d -> d.reason == :limit, sp.decisions) == 4
-        @test occursin("budget of 600 B", sprint(Schedule.fusion_report, sp))
-        # each split is forced: the group plus the next kernel breaks the budget
-        for (l, d) in zip(sp.launches, filter(d -> d.reason == :limit, sp.decisions))
-            g = [findfirst(k -> k.key == m, s.kernels) for m in [l.members; d.candidate]]
-            @test array_arguments(s, merge_kernels(s, g, scc)) * 24 > 600
-        end
+        @test length(sp.launches) == 1
+        st = HostStore(s)
+        P = (0.5, 0.25, 0.75)
+        bytes(bs) = [Exec.launch_argument_bytes(x.launch) for x in bs.launches]
+        primal = only(bytes(BoundStep(KernelAbstractions.CPU(), s, sp, st, P)))
+        # a budget the primal launch fills: the primal binding keeps one launch
+        SMALL_ARGS[] = primal
+        @test bytes(BoundStep(SmallArgs(), s, sp, st, P)) == [primal]
+        # the Dual parameters make the fused launch larger: that binding splits
+        bs = BoundStep(SmallArgs(), s, sp, st, P; c = Dual(0.0, 1.0))
+        @test length(bs.launches) == 2
+        @test all(<=(primal), bytes(bs))
+        # the plans at the budget, one per argument types: primal one launch, Dual two
+        plans = collect(values(sp.bound))
+        @test sort([length(q.launches) for q in plans]) == [1, 2]
+        dp = only(filter(q -> length(q.launches) == 2, plans))
+        @test count(d -> d.reason == :limit, dp.decisions) == 1
+        @test occursin("budget of $primal B", sprint(Schedule.fusion_report, dp))
+        # the primal plan is still one launch
+        @test length(sp.launches) == 1
         # a backend with no known budget is refused, naming the method to define
-        @test_throws ArgumentError plan(s; backend = MockArgsless())
+        err = try
+            Exec.kernel_argument_bytes(MockArgsless())
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("kernel_argument_bytes", err.msg)
     end
 end

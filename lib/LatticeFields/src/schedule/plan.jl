@@ -220,11 +220,15 @@ end
 
 """
 A step: launches in queue order, then host slot swaps of the two-buffer fields written.
+`request` holds the arguments of the [`plan`](@ref) call, and `bound` the plans of the same
+request at a kernel-argument budget, one per argument signature ([`bound_plan`](@ref)).
 """
 struct StepPlan{N}
     launches::Vector{LaunchSpec{N}}
     swaps::Vector{Int32}
     decisions::Vector{FusionDecision}
+    request::Any
+    bound::Dict{Any, StepPlan{N}}
 end
 
 function _ndrange(p, k, strategy)
@@ -251,58 +255,87 @@ function workgroup(N, strategy)
 end
 
 """
-    plan(p::Program, ids = eachindex(p.kernels); backend = CPU(), options = CompileOptions(),
-         stages = LOWERING, fuse = !options.debug, merge = merge_kernels) -> StepPlan
+    plan(p::Program, ids = eachindex(p.kernels); options = CompileOptions(), stages = LOWERING,
+         fuse = !options.debug, merge = merge_kernels, budget = nothing, arguments = nothing)
+        -> StepPlan
 
 Order the kernels of one step, fuse every kernel into the current group when that is
 legal (every split is reported), lower each launch and bind buffers. Debug mode never
 fuses.
 
 A kernel joins the current group unless a fusion blocker (iteration space, a gated or
-reducing kernel, a dependency at an offset, a write conflict) or the backend's
-kernel-argument budget ([`Exec.kernel_argument_bytes`](@ref LatticeFields.Exec.kernel_argument_bytes))
-stops it. Each group is checked for legality and compiled. A launch is static when its
-kernel runs at one ndrange only.
+reducing kernel, a dependency at an offset, a write conflict) or the kernel-argument budget
+stops it. With a budget, `arguments(spec)` gives the bytes of the arguments of the launch
+`spec` as it is bound ([`Exec.launch_argument_bytes`](@ref LatticeFields.Exec.launch_argument_bytes)),
+and a fusion whose launch would pass more than `budget` bytes is split. Each group is
+checked for legality and compiled. A launch is static when its kernel runs at one ndrange
+only.
 
 # Arguments
 - `p`: the field program (`LatticeFields.IR.Program`).
 - `ids`: the indices of the kernels of `p` to plan.
 
 # Keywords
-- `backend = CPU()`: the KernelAbstractions backend the plan runs on; its kernel-argument
-  budget bounds fusion (the CPU has none).
 - `options = CompileOptions()`: the compile options of every launch.
 - `stages = LOWERING`: the lowering passes given to the kernel compiler.
 - `fuse = !options.debug`: `false` splits every kernel (reason `:debug`).
 - `merge = merge_kernels`: the function that merges a group into one kernel for
   compilation.
+- `budget = nothing`: the kernel-argument budget in bytes; `nothing` is no budget.
+- `arguments = nothing`: with a budget, the function `spec -> bytes` of a launch's
+  arguments; required when `budget` is given.
 
 # Returns
 - A `StepPlan`: the launch descriptions in order, the double-buffered fields to swap after
   the step, and every fusion decision.
 
-See also [`fusion_report`](@ref).
+See also [`fusion_report`](@ref), [`bound_plan`](@ref).
 """
 function plan(
         p::Program{N}, ids::Vector{Int} = collect(eachindex(p.kernels));
-        backend::B = KernelAbstractions.CPU(), options::CompileOptions = CompileOptions(),
-        stages = LOWERING, fuse::Bool = !options.debug, merge::M = merge_kernels
-    ) where {N, B, M}
-    limit = argument_limit(backend)
+        options::CompileOptions = CompileOptions(), stages = LOWERING,
+        fuse::Bool = !options.debug, merge::M = merge_kernels,
+        budget::Union{Int, Nothing} = nothing, arguments::A = nothing
+    ) where {N, M, A}
+    budget === nothing || arguments !== nothing || throw(
+        ArgumentError(
+            "a plan at a kernel-argument budget needs `arguments`, the bytes of a \
+                launch's arguments"
+        )
+    )
     comps = step_order(p, ids)
     scc = Dict(i => c for (c, comp) in enumerate(comps) for i in comp)
     seq = reduce(vcat, comps; init = Int[])
-    groups, decisions = Vector{Int}[], FusionDecision[]
+    launches, decisions = LaunchSpec{N}[], FusionDecision[]
+    # the step that writes each field so far (a field another component of the group
+    # writes is read from its next slot)
+    written = Dict{Int32, Int}()
+    launch(g) = _launch_spec(p, g, scc, written, options, stages, merge)
+    function close!(g, spec)
+        push!(launches, something(spec, launch(g)))
+        foreach(i -> foreach(f -> written[f] = scc[i], writes(p.kernels[i])), g)
+        return nothing
+    end
+    g, spec = Int[], nothing
     for i in seq
-        if isempty(groups)
-            push!(groups, [i])
+        if isempty(g)
+            push!(g, i)
             continue
         end
-        g = groups[end]
         blk = fuse ? fusion_blocker(p, g, i, scc) : (:debug, "fusion off (debug mode)")
-        if blk === nothing
-            lim = limit_blocker(p, merge_kernels(p, [g; i], scc), limit)
-            lim === nothing || (blk = (:limit, lim))
+        cand = nothing
+        if blk === nothing && budget !== nothing
+            cand = launch([g; i])
+            bytes = arguments(cand)
+            bytes > budget && (
+                blk = (
+                    :limit,
+                    string(
+                        "the launch arguments take ", bytes, " B, over the backend's \
+                            kernel-argument budget of ", budget, " B"
+                    ),
+                )
+            )
         end
         push!(
             decisions, FusionDecision(
@@ -310,33 +343,15 @@ function plan(
                 something(blk, (:legal, ""))...
             )
         )
-        blk === nothing ? push!(g, i) : push!(groups, [i])
-    end
-    launches = LaunchSpec{N}[]
-    written = Dict{Int32, Int}()
-    for g in groups
-        k = merge(p, g, scc)
-        legality(with_kernels(p, [k]))
-        ck = compile_kernel(p, k, options; stages)
-        # a field another component of the group writes is read from its next slot
-        function rebind(id, role)
-            return if role == :cur && haskey(written, id) &&
-                    all(i -> scc[i] != written[id], g)
-                :next
-            else
-                role
-            end
+        if blk === nothing
+            push!(g, i)
+            spec = cand
+        else
+            close!(g, spec)
+            g, spec = [i], nothing
         end
-        bind = [[(id, rebind(id, role)) for (id, role) in lane] for lane in ck.args]
-        push!(
-            launches,
-            LaunchSpec{N}(
-                ck, [p.kernels[i].key for i in g], bind,
-                workgroup(N, ck.strategy), _ndrange(p, k, ck.strategy), true
-            )
-        )
-        foreach(i -> foreach(f -> written[f] = scc[i], writes(p.kernels[i])), g)
     end
+    isempty(g) || close!(g, spec)
     nd = Dict{String, Set{Tuple}}()
     foreach(l -> push!(get!(nd, l.kernel.hash, Set{Tuple}()), l.ndrange), launches)
     launches = [
@@ -346,7 +361,58 @@ function plan(
         ) for l in launches
     ]
     swaps = sort!([f for f in keys(written) if p.fields[f].buffers == 2])
-    return StepPlan{N}(launches, swaps, decisions)
+    request = (; program = p, ids, options, stages, fuse, merge)
+    return StepPlan{N}(launches, swaps, decisions, request, Dict{Any, StepPlan{N}}())
+end
+
+# The launch of group `g`: merged, checked for legality, compiled and bound. A linear launch
+# is dynamic until the plan knows every ndrange of its kernel (a static launch passes no
+# more argument bytes than a dynamic one); a Cartesian launch is always static.
+function _launch_spec(p::Program{N}, g, scc, written, options, stages, merge) where {N}
+    k = merge(p, g, scc)
+    legality(with_kernels(p, [k]))
+    ck = compile_kernel(p, k, options; stages)
+    function rebind(id, role)
+        return if role == :cur && haskey(written, id) && all(i -> scc[i] != written[id], g)
+            :next
+        else
+            role
+        end
+    end
+    bind = [[(id, rebind(id, role)) for (id, role) in lane] for lane in ck.args]
+    return LaunchSpec{N}(
+        ck, [p.kernels[i].key for i in g], bind,
+        workgroup(N, ck.strategy), _ndrange(p, k, ck.strategy), ck.strategy == :cartesian
+    )
+end
+
+const _BOUND_LOCK = ReentrantLock()
+
+"""
+    bound_plan(sp::StepPlan, budget, signature, arguments) -> StepPlan
+
+The plan of `sp`'s request at the kernel-argument budget `budget`, with `arguments(spec)`
+the bytes of a launch's arguments as the caller binds it. It is made once per `signature`
+(the types that decide the argument sizes) and kept in `sp`; the call is thread-safe.
+
+# Arguments
+- `sp`: a plan from [`plan`](@ref).
+- `budget::Int`: the budget in bytes.
+- `signature`: the key of the argument types.
+- `arguments`: the function `spec -> bytes`.
+
+# Returns
+- The `StepPlan` at the budget.
+"""
+function bound_plan(sp::StepPlan, budget::Int, signature, arguments::A) where {A}
+    return lock(_BOUND_LOCK) do
+        get!(sp.bound, (budget, signature)) do
+            r = sp.request
+            plan(
+                r.program, r.ids; r.options, r.stages, r.fuse, r.merge, budget, arguments
+            )
+        end
+    end
 end
 
 """
