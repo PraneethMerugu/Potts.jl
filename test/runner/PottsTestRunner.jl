@@ -368,7 +368,8 @@ function run_paths(t::GroupTable, batch, shard)
     (shard === nothing && !any(has_file_rules, batch)) && return [t.testdir]
     in_batch(f) = any(g -> file_in_group(g, f), batch)
     in_shard(f) = shard === nothing || f in shard
-    return [joinpath(t.testdir, f) for f in test_files(t.testdir) if in_batch(f) && in_shard(f)]
+    files = filter(f -> in_batch(f) && in_shard(f), test_files(t.testdir))
+    return [joinpath(t.testdir, f) for f in files]
 end
 
 # The files of this shard (`nothing` when the run is not sharded). The files of all the item
@@ -414,7 +415,8 @@ function run_items(t::GroupTable, batch, sel::Selection; paths)
         (sel.qa || qa_named || !(:qa in tags)) || return false
         return isempty(sel.tags) || any(in(tags), sel.tags)
     end
-    isempty(names) || @info "Running $(join(names, ", ")) in $(t.testdir)" device = gpu workers
+    isempty(names) ||
+        @info "Running $(join(names, ", ")) in $(t.testdir)" device = gpu workers
     return withenv("POTTS_GPU" => (isempty(gpu) ? nothing : gpu)) do
         run_passes(t, keep, workers, paths, sel)
     end
@@ -466,7 +468,9 @@ function retestitems(t::GroupTable, pred, paths, nworkers, sel::Selection)
         nworker_threads = string(get(s, "worker_threads", Threads.nthreads())),
         test_end_expr = end_expr(),
     )
-    haskey(s, "memory_threshold") && (kw = (; kw..., memory_threshold = s["memory_threshold"]))
+    if haskey(s, "memory_threshold")
+        kw = (; kw..., memory_threshold = s["memory_threshold"])
+    end
     haskey(s, "logs") && (kw = (; kw..., logs = Symbol(s["logs"])))
     proj = ReTestItems.identify_project(t.testdir)
     return task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(proj))) do
@@ -491,7 +495,9 @@ function shuffle!(v::AbstractVector, seed::Integer)
 end
 
 """The paths in the order that `POTTS_TEST_ORDER` asks for (`default`: as given)."""
-function ordered_paths(paths, spec::AbstractString = get(ENV, "POTTS_TEST_ORDER", "default"))
+function ordered_paths(
+        paths, spec::AbstractString = get(ENV, "POTTS_TEST_ORDER", "default")
+    )
     s = lowercase(strip(String(spec)))
     (isempty(s) || s == "default") && return paths
     files = String[]
