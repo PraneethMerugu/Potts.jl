@@ -18,15 +18,17 @@
 # THE PUBLIC API THESE TESTS EXPECT (names, signatures, semantics)
 # =========================================================================================
 #
-# A. Named pairs (E2). Inside `@parameters`, a kind-indexed parameter may be written
-#        J[kind, kind] = Pairs(default = d, (k₁, k₂) => v, …)
-#        μ[kind, kind] = Pairs((k₁, k₂) => v, …; default = d, symmetric = false)
-#    - `Pairs` is bound inside model bodies (a new `Potts.DSL` name). `k₁`, `k₂` are kind
-#      names of the model's `@kinds`; `v` is a number or an expression of scalar parameters
-#      (as the matrix form allows, `api_defects_tests.jl`).
-#    - Symmetric fill (the default, `symmetric = true`): entry (k₁, k₂) and (k₂, k₁) both
-#      get v; every unlisted entry gets `default`. With `symmetric = false` only (k₁, k₂) is
-#      set.
+# A. Named pairs (E2; written as entry lines since D-334). Inside `@parameters`, a
+#    kind-indexed parameter may be written entry by entry,
+#        J[kind, kind] = d
+#        J[k₁, k₂] = v
+#        …
+#        μ[kind, kind] = d, [symmetric = false]
+#    - `k₁`, `k₂` are kind names of the model's `@kinds`; `v` is a number or an expression
+#      of scalar parameters (as the matrix form allows, `api_defects_tests.jl`).
+#    - Symmetric fill (the default): entry (k₁, k₂) and (k₂, k₁) both get v; every
+#      unlisted entry gets `d`. With the table declared `[symmetric = false]` only
+#      (k₁, k₂) is set.
 #    - It lowers to the same matrix: the parameter object equals the hand-written matrix
 #      form's (`prob.p == prob_matrix.p`, same type), so there is zero runtime cost, and a
 #      parameter entry follows `remake` on both sides of the diagonal.
@@ -37,9 +39,7 @@
 #      * a pair given twice is an error; with symmetric fill (k₂, k₁) after (k₁, k₂) counts
 #        as given twice (asymmetric input is only allowed with `symmetric = false`).
 #    - The matrix form stays (the matrix twins below are the controls).
-#    - Not pinned: kind classes inside `Pairs` and api-synthesis §2.2's `KindTable(a => b
-#      => v, …)` spelling; `Pairs` without `default`; a `Pairs` value for a non-kind-table
-#      parameter.
+#    - Not pinned: api-synthesis §2.2's `KindTable(a => b => v, …)` spelling.
 # B. `centroid(c, k)` (E7; api-synthesis §2.7, "cell-first, mirrors `displacement(c, k)`").
 #    Coordinate `k` (a literal axis) of the centroid of the cell that reference `c` names,
 #    in the same units and convention as `centroid(k)` for the current cell: lattice units,
@@ -107,7 +107,7 @@
 #      units while `position` is scaled by the spacing).
 #   O8 `centroid(c)` (one argument, a vector) is not pinned: it would clash with
 #      `centroid(k)`, the current cell's axis k.
-#   O9 `Pairs` value types: a mixed Int/Float/parameter list is pinned; class keys are not.
+#   O9 Entry value types: a mixed Int/Float/parameter list is pinned; class keys are not.
 #   R1 (ruling) The binding inside `integral(x; over = cluster)`: site scope, the owner's
 #   `kind` and
 #      `volume` (section 3, "integral(x; over = cluster) sums over the cluster's sites").
@@ -119,15 +119,15 @@
 # the hexagonal torus; 8 refusals and axis errors (negative controls); 9 device.
 #
 # Today (base commit 588ad407) every assertion that reads a new name fails (marked DEFECT
-# CHECK): `Pairs`, `minimum_image` and `separation` are undefined, `integral` has no `over`
-# keyword, and `centroid` has no two-argument method, so the fixtures that use them do not
-# build. The explicit-wrap twins, the matrix twins, the hand oracles' own checks and the
-# existing refusals pass (marked CONTROL). On the base commit (Apple M-series): 22 pass, 16
-# fail, 11 errors (fixtures that do not build), 1 broken (the device testset's skip); ~15 s
-# after precompilation. The hand values were checked on the base commit with today's
-# primitives (`centroid(k)`, `integral`, `CorePotts.centroid`, `centroid_distance`) on the
-# same states. Runtime: a few model compilations and ~10 MCS on small lattices; no FULL
-# tier.
+# CHECK): named entries, `minimum_image` and `separation` are undefined, `integral` has
+# no `over` keyword, and `centroid` has no two-argument method, so the fixtures that use
+# them do not build. The explicit-wrap twins, the matrix twins, the hand oracles' own
+# checks and the existing refusals pass (marked CONTROL). On the base commit (Apple
+# M-series): 22 pass, 16 fail, 11 errors (fixtures that do not build), 1 broken (the
+# device testset's skip); ~15 s after precompilation. The hand values were checked on
+# the base commit with today's primitives (`centroid(k)`, `integral`, `CorePotts.centroid`,
+# `centroid_distance`) on the same states. Runtime: a few model compilations and ~10 MCS
+# on small lattices; no FULL tier.
 
 @testsetup module CellReferenceHelpersSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -244,39 +244,40 @@ const PAIRS_BODY = quote
     end
     @sweep Metropolis(; temperature = T)
 end
-function pairs_expr(name::Symbol, Jline::Expr, μline::Expr)
+# the lines of a table: one line, or a `quote … end` block of entry lines
+table_lines(ex::Expr) = ex.head === :block ? ex.args : Any[ex]
+function pairs_expr(name::Symbol, Jlines::Expr, μlines::Expr)
     return :(
         @potts_model $name begin
             @kinds medium substrate cytoplasm nucleus
             @parameters begin
                 Jcn = 7.0
                 T = 4.0
-                $Jline
-                $μline
+                $(table_lines(Jlines)...)
+                $(table_lines(μlines)...)
             end
             $(PAIRS_BODY.args...)
         end
     )
 end
-const J_PAIRS = :(
-    J[kind, kind] = Pairs(
-        default = 0.0, (medium, substrate) => 20, (medium, cytoplasm) => 16,
-        (substrate, cytoplasm) => 3.5, (cytoplasm, nucleus) => Jcn,
-        (nucleus, nucleus) => 2.5
-    )
-)
-const μ_PAIRS = :(
-    μ[kind, kind] = Pairs(
-        (cytoplasm, nucleus) => 4.0, (nucleus, cytoplasm) => 9.0; default = 1.0,
-        symmetric = false
-    )
-)
+const J_PAIRS = quote
+    J[kind, kind] = 0.0
+    J[medium, substrate] = 20
+    J[medium, cytoplasm] = 16
+    J[substrate, cytoplasm] = 3.5
+    J[cytoplasm, nucleus] = Jcn
+    J[nucleus, nucleus] = 2.5
+end
+const μ_PAIRS = quote
+    μ[kind, kind] = 1.0, [symmetric = false]
+    μ[cytoplasm, nucleus] = 4.0
+    μ[nucleus, cytoplasm] = 9.0
+end
+# a line `x = v, [options]` (in `:(…)` the comma would make a tuple of two expressions)
 const J_MATRIX = :(J[kind, kind] = [0 20 16 0; 20 0 3.5 0; 16 3.5 0 Jcn; 0 0 Jcn 2.5])
-const μ_MATRIX = :(
-    μ[kind, kind] = [
-        1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 4.0;
-        1.0 1.0 9.0 1.0
-    ]
+const μ_MATRIX = Meta.parse(
+    "μ[kind, kind] = [1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 4.0; \
+    1.0 1.0 9.0 1.0], [symmetric = false]"
 )
 define(:HelperPairs, pairs_expr(:HelperPairs, J_PAIRS, μ_PAIRS))
 define(:PairsMatrix, pairs_expr(:PairsMatrix, J_MATRIX, μ_MATRIX))
@@ -611,7 +612,7 @@ end
             end
         end
         for name in (:HelperPairs, :Refs, :Wrap, :HelperHex)
-            # DEFECT CHECK: `Pairs`, `minimum_image`, … unknown today
+            # DEFECT CHECK: named entries, `minimum_image`, … unknown today
             @test builds(name)
         end
         @test builds(:PairsMatrix)                              # CONTROL: the matrix twin
@@ -620,14 +621,14 @@ end
     end
 end
 
-@testitem "cell reference helpers: Pairs lowers to the hand-written matrix (E2)" setup = [
+@testitem "cell reference helpers: named pairs lower to the hand-written matrix" setup = [
     CellReferenceHelpersSetup,
 ] tags = [
     :pottsmodels, :acceptance,
 ] begin
     # --------------------------------------------------------------------------------------
     # 2. Named pairs (E2)
-    @testset "cell reference helpers: Pairs lowers to the hand-written matrix (E2)" begin
+    @testset "cell reference helpers: named pairs lower to the hand-written matrix" begin
         pm = pairs_problem(:PairsMatrix)
         # CONTROL: the matrix twin carries the hand matrices
         @test getp(pm, :J)(pm) == J_hand()
@@ -657,49 +658,50 @@ end
     end
 end
 
-@testitem "cell reference helpers: Pairs refuses unknown names, non-kinds and pairs given \
-    twice (E2)" setup = [CellReferenceHelpersSetup] tags = [
+@testitem "cell reference helpers: named pairs refuse unknown names, non-kinds and pairs \
+    given twice" setup = [CellReferenceHelpersSetup] tags = [
     :pottsmodels, :acceptance,
 ] begin
-    @testset "cell reference helpers: Pairs refuses unknown names, non-kinds and pairs \
-        given twice (E2)" begin
+    @testset "cell reference helpers: named pairs refuse unknown names, non-kinds and \
+        pairs given twice" begin
         op = sys -> PAIRS_OP
         good_μ = μ_PAIRS
         bad(name, J) = build_error(name, pairs_expr(name, J, good_μ), op)
         # a misspelled kind
         e1 = bad(
-            :PairsTypo, :(
-                J[kind, kind] = Pairs(
-                    default = 0.0, (medium, cytoplsm) =>
-                        1.0
-                )
-            )
+            :PairsTypo, quote
+                J[kind, kind] = 0.0
+                J[medium, cytoplsm] = 1.0
+            end
         )
-        # DEFECT CHECK (today: `Pairs` undefined)
+        # DEFECT CHECK (today: named entries undefined)
         @test e1 isa ArgumentError
         @test occursin("cytoplsm", msg(e1))
         # a bound name that is not a kind (a parameter)
-        e2 = bad(:PairsParam, :(J[kind, kind] = Pairs(default = 0.0, (medium, Jcn) => 1.0)))
+        e2 = bad(
+            :PairsParam, quote
+                J[kind, kind] = 0.0
+                J[medium, Jcn] = 1.0
+            end
+        )
         @test e2 isa ArgumentError                                   # DEFECT CHECK
         @test occursin("Jcn", msg(e2))
         # the same pair twice
         e3 = bad(
-            :PairsTwice, :(
-                J[kind, kind] = Pairs(
-                    default = 0.0, (medium, substrate) => 1.0,
-                    (medium, substrate) => 2.0
-                )
-            )
+            :PairsTwice, quote
+                J[kind, kind] = 0.0
+                J[medium, substrate] = 1.0
+                J[medium, substrate] = 2.0
+            end
         )
         @test e3 isa ArgumentError                                   # DEFECT CHECK
         # the reversed pair under symmetric fill (even with the same value)
         e4 = bad(
-            :PairsRev, :(
-                J[kind, kind] = Pairs(
-                    default = 0.0, (medium, substrate) => 1.0,
-                    (substrate, medium) => 1.0
-                )
-            )
+            :PairsRev, quote
+                J[kind, kind] = 0.0
+                J[medium, substrate] = 1.0
+                J[substrate, medium] = 1.0
+            end
         )
         @test e4 isa ArgumentError                                   # DEFECT CHECK
         # control: the same reversed pair is accepted with symmetric = false (given to μ,
@@ -707,13 +709,11 @@ end
         e5 = build_error(
             :PairsAsym, pairs_expr(
                 :PairsAsym, J_PAIRS,
-                :(
-                    μ[kind, kind] = Pairs(
-                        (medium, substrate) => 1.0, (substrate, medium) => 2.0;
-                        default = 0.0,
-                        symmetric = false
-                    )
-                )
+                quote
+                    μ[kind, kind] = 0.0, [symmetric = false]
+                    μ[medium, substrate] = 1.0
+                    μ[substrate, medium] = 2.0
+                end
             ),
             op
         )

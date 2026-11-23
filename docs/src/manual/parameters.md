@@ -11,7 +11,9 @@ callback) and per trajectory of an ensemble, without regenerating code.
 | `J[kind, kind] = [0 16; 16 2]` | a table indexed by two kinds (medium first) |
 | `V₀[kind] = [0.0, 40.0, 25.0]` | a table indexed by one kind |
 | `J[kind, kind] = [0 Jx; Jx 2]` | a table whose entries are computed from other parameters |
-| `J[kind, kind] = Pairs((medium, cell) => 16, …; default = 0)` | a two-kind table written by its named entries (below) |
+| `J[medium, cell] = 16` | one entry of a table, by kind name (below) |
+| `J[kind, kind] = 0.0` | the value of every entry not listed by name |
+| `μ[kind, kind] = 0.0, [symmetric = false]` | a two-kind table whose (k₁, k₂) and (k₂, k₁) entries differ |
 | `d[1:2] = [1.0, 0.5]` | a vector; its components are `d_1`, `d_2` |
 | `λ = 1.0, [unit = u"J"]` | a parameter with a unit (see below) |
 | `T = 1.0, [tunable = false, bounds = (0, 10), description = "…"]` | a parameter with ModelingToolkit's other metadata (see below) |
@@ -105,41 +107,115 @@ the values, such as `sqrt` of a negative number. A call on literal numbers only,
 `DomainError`) comes from the model constructor. A model may not define its own `div` or
 `÷`, since in a model these are integer division.
 
-The inputs of a computed default must be declared before it in `@parameters`. A contact
-table (`J[kind, neighbor_kind]`) must be symmetric for the values it takes; an asymmetric one is an
-`ArgumentError`.
+The inputs of a computed default must be declared before it in `@parameters`.
 
 Values are converted to the problem's number type (`Float64`, or `Float32` for GPU
 problems), so a `remake` never changes the compiled code.
 
-## Named pairs: `Pairs`
+## Tables by kind name
 
-A contact table written as a matrix depends on the order of the kinds, and a swapped row is
-easy to miss. `Pairs` names each entry by its kinds instead:
+A table written as a matrix depends on the order of the kinds, and a swapped row is easy to
+miss. Write each entry by its kind names instead, one line per entry:
 
-```julia
-@kinds medium substrate cytoplasm nucleus
-@parameters begin
-    Jcn = 7.0
-    J[kind, kind] = Pairs(default = 0.0, (medium, substrate) => 20, (medium, cytoplasm) => 16,
-                          (substrate, cytoplasm) => 3.5, (cytoplasm, nucleus) => Jcn, (nucleus, nucleus) => 2.5)
-    μ[kind, kind] = Pairs((cytoplasm, nucleus) => 4.0, (nucleus, cytoplasm) => 9.0; default = 1.0, symmetric = false)
+```@example params
+@potts_model Named begin
+    @kinds medium dark light
+    @parameters begin
+        V₀[kind] = 0.0                   # every entry not listed below
+        V₀[dark] = 40.0
+        V₀[light] = 20.0
+        J[medium, medium] = 0
+        J[medium, dark] = 16
+        J[medium, light] = 16
+        J[dark, dark] = 2
+        J[dark, light] = 11              # also J[light, dark]
+        J[light, light] = 14
+    end
+    @lattice Lattice((40, 40); neighborhood = Moore(1))
+    @energy begin
+        cells(dark, light) => (volume - V₀[kind])^2
+        contacts => J[kind, neighbor_kind]
+    end
+    @sweep Metropolis(; temperature = 10.0)
 end
+
+@named named = Named()
+nprob = PottsProblem(named, layout(Tiling((5, 5); region = (11:30, 11:30),
+    kinds = [:dark, :light]), named), (0, 10))
+getp(nprob, :J)(nprob)
 ```
 
-- Each entry is `(k₁, k₂) => v`, where `k₁` and `k₂` are kind names from `@kinds` and `v` is
-  a number or an expression of parameters, as in the matrix form.
-- With `symmetric = true`, the default, an entry sets both (k₁, k₂) and (k₂, k₁). With
-  `symmetric = false` it sets only (k₁, k₂).
-- Every entry you do not list takes `default`, which is required.
-- When the model is built, `Pairs` becomes the same matrix as the written-out form. The
-  parameter object, the generated code and `remake` are identical, so it costs nothing at
-  run time.
-- Each of the following is an `ArgumentError` when the model is defined, and the message
-  names the problem:
-  - a misspelt kind;
-  - a name that is not a kind, such as a parameter or a kind class;
-  - a pair given twice. With symmetric fill, (k₂, k₁) after (k₁, k₂) counts as given twice.
+- An entry is `J[k₁, k₂] = v` (or `V₀[k] = v` for a one-kind table). `k₁` and `k₂` are kind
+  names from `@kinds`, including the medium. `v` is a number or an expression of
+  parameters, as in the matrix form.
+- A two-kind table is symmetric: `J[dark, light] = v` sets both `J[dark, light]` and
+  `J[light, dark]`. List one of the two.
+- The line `J[kind, kind] = v` gives the value of every entry that is not listed. Without
+  it, list every entry.
+- The table becomes the same array as the matrix form. The parameter object, the generated
+  code and `remake` are identical, so names cost nothing at run time.
+- In a model that extends another (`@extend`) and has no `@kinds` of its own, the entries
+  use the kind names the extension binds.
+
+### Asymmetric tables
+
+A table whose (k₁, k₂) and (k₂, k₁) entries differ, such as a cell-surface coefficient
+indexed by a cell's kind and its neighbor's, is declared with the option
+`symmetric = false` on its `kind, kind` line. An entry then sets one side only:
+
+```julia
+μ[kind, kind] = 1.0, [symmetric = false]
+μ[dark, light] = 4.0                   # μ[light, dark] stays 1.0
+μ[light, dark] = 9.0
+```
+
+The option applies to the matrix form too (`μ[kind, kind] = [1 2; 3 4], [symmetric = false]`).
+A table without it must be symmetric for every value it takes: when the model is built, in
+`remake`, in a setter and in the operating point. An asymmetric value is an `ArgumentError`
+that names the two entries.
+
+### Changing entries by name
+
+`remake`, setters and the operating point take a table's entries by name. The entries not
+listed keep their values, and a symmetric entry sets both sides:
+
+```@example params
+nprob2 = remake(nprob; p = [:J => [(:dark, :light) => 14.0], :V₀ => [:dark => 30.0]])
+getp(nprob2, :J)(nprob2)[2, 3], getp(nprob2, :J)(nprob2)[3, 2], getp(nprob2, :V₀)(nprob2)
+```
+
+The same entries work in `integ.ps[:J] = [(:dark, :light) => 14.0]`, in the operating
+point and in a constructor keyword. In a keyword, the entries apply over the declared
+table:
+
+```julia
+Model(; name = :m, J = [(:dark, :light) => 1.0])   # the declared J, with this entry
+Model(; name = :m, J = 5.0)                        # every entry 5.0
+```
+
+Everywhere a table takes one value, an array or entries. One value sets every entry, and an
+array replaces the table, its declared value and its entry lines. Outside a model, an entry
+names its kinds: `(1, 2) => v` is an `ArgumentError`, because `1` would read as a kind
+number, not as a matrix index.
+
+A table with an entry computed from parameters (`J[dark, light] = Jx`) is a computed
+parameter: change its inputs (`remake(prob; p = [:Jx => 14.0])`) instead.
+
+### Errors
+
+Each of the following is an `ArgumentError` when the model is defined or built. The message
+names the table and the entry, and suggests the fix:
+
+- a matrix of the wrong size. A matrix one row and one column short usually lacks the
+  medium's row and column, and the message says so;
+- named entries without a value for the medium, or for any other kind, when the table has
+  no `J[kind, kind] = v` line;
+- a name in an entry that is not a kind of `@kinds`, such as a misspelling, a parameter or
+  a kind class. The message lists the kinds. Declare `@kinds` before `@parameters`; in a
+  model that extends another, bind the base's kinds in the `@extend` line;
+- an entry given twice;
+- in a symmetric table, `J[k₁, k₂]` and `J[k₂, k₁]` both listed. Two different values
+  conflict; two equal values repeat. List one.
 
 ## Units
 

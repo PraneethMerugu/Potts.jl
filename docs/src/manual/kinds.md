@@ -8,9 +8,33 @@
 - Inside the model each kind name is its number: `medium` is 0, `dark` 1, `light` 2, … So
   `kind == dark` tests a kind, and `cells(dark, light)` selects kinds.
 - Kind-indexed tables (`J[kind, kind]`, `V₀[kind]`) are indexed in this order, medium
-  first.
+  first. Write their entries by kind name, `J[dark, light] = 11`, so that the order does
+  not matter (see [Tables by kind name](@ref manual-parameters)).
 - In operating points, kinds are given by name (`kind => [:dark, :light]`) or number
-  (`kind => [1, 2]`); saved states store numbers (`sol[:kind]`).
+  (`kind => [1, 2]`). Saved states store numbers (`sol[:kind]`); `kind_names` reads them
+  as names (below).
+
+## Kinds in results
+
+`sol[:kind]` gives the kind number of every cell, one vector per saved state, as for every
+cell variable. [`kind_names`](@ref) gives the names: `kind_names(sol)` is the list of
+kinds in number order, medium first, and `kind_names(sol, k)` names the kind numbers `k`
+(a number, an array, or an array of arrays such as `sol[:kind]`):
+
+```julia
+kind_names(sol)                   # [:medium, :dark, :light]
+kind_names(sol, sol[:kind][end])  # [:dark, :light, :dark, …]
+count(==(:dark), kind_names(sol, sol[:kind][end]))
+```
+
+`kind_names` takes a model, a compiled model, a problem, an integrator or a solution. For a
+categorical vector, with every kind as a level even when no cell has it, use
+CategoricalArrays:
+
+```julia
+using CategoricalArrays
+categorical(kind_names(sol, sol[:kind][end]); levels = kind_names(sol))
+```
 
 ## Kind classes
 
