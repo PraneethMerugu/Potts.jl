@@ -1,109 +1,201 @@
-# The Potts test suite
+# The Potts test suites
 
-The tests of `src/` (package `Potts`) are [ReTestItems](https://github.com/JuliaTesting/ReTestItems.jl)
-test items: every `*_tests.jl` file in this directory holds `@testitem`s, and the models and
-helpers they share are `@testsetup` modules. The lib packages (`lib/*/test`) keep their own
-runners.
+Every package of the monorepo keeps its tests in its own test environment: `test/` for
+`Potts` (the `src/` package) and the monorepo as a whole, and `lib/<Package>/test/` for each
+package in `lib/`. The tests are [ReTestItems](https://github.com/JuliaTesting/ReTestItems.jl)
+test items: every `*_tests.jl` file holds `@testitem`s, and the models and helpers that they
+share are `@testsetup` modules or files in `shared/`.
 
-## Run the suite
+One runner runs them all: `test/runner/PottsTestRunner.jl`. CI, the gate scripts, people at a
+REPL and agents call the same function, `run_tests`, and choose what runs with the same
+environment variables.
 
-```sh
-GROUP=Potts julia --project=test test/runtests.jl
+## Layout
+
+```
+test/
+  runtests.jl            # the monorepo's tests: calls PottsTestRunner.run_tests
+  test_groups.toml       # the groups of the monorepo's tests
+  runner/
+    PottsTestRunner.jl   # the runner of every package
+    session.jl           # a warm REPL session: Revise and the runner
+  shared/                # fixtures that the items of test/ share
+  *_tests.jl             # the items of Potts
+  device_coverage.jl     # the ROCm check at the end of GROUP=GPU
+lib/<Package>/test/
+  runtests.jl            # calls the same runner with this directory
+  test_groups.toml       # the groups of this package
+  shared/                # fixtures that the items of this package share
+  *_tests.jl
 ```
 
-`test/runtests.jl` dispatches from declarative `test_groups.toml` tables (`test/test_groups.toml`
-and `lib/<Pkg>/test/test_groups.toml`). When launching a sublibrary runner in a subprocess,
-`run_group` passes `--check-bounds=auto` unless `--check-bounds=yes` or `--check-bounds=no` is
-already active. Unknown `GROUP` values throw an `ArgumentError`.
+## Run tests
+
+```sh
+julia --project=test test/runtests.jl                                  # GROUP=All
+GROUP=Potts julia --project=test test/runtests.jl                      # the Potts suite
+GROUP=CorePotts_qa julia --project=test test/runtests.jl               # one group of a package
+GROUP=qa julia --project=lib/CorePotts/test lib/CorePotts/test/runtests.jl   # the same group
+POTTS_TEST_NAME="coarse field" GROUP=Potts julia --project=test test/runtests.jl
+```
+
+The environment variables choose what runs. Every package reads the same names.
+
+| Variable | What it selects | Default |
+|---|---|---|
+| `GROUP` | a group of the package's `test_groups.toml`, `All`, or `<Package>_<group>` | `All` |
+| `POTTS_TEST_NAME` | the items whose name matches this regex | every item |
+| `POTTS_TEST_TAGS` | the items with any of these tags (a comma list) | every item |
+| `POTTS_TEST_QA` | `false` (or `0`) skips the `:qa` items, except in a group that names the `qa` tag | `true` |
+| `POTTS_TEST_WORKERS` | the number of worker processes; `0` runs the items in the calling process | the package's `workers` |
+| `POTTS_TEST_SHARD` | `k/n`: only the k-th of n shards of the test files | `1/1` |
+| `POTTS_GPU` | the device backend: `rocm`, `metal`, or empty for no device | empty |
+
+These variables are for tools and logs:
+
+| Variable | What it does |
+|---|---|
+| `POTTS_TEST_ORDER` | the order of the test files: `default`, `reverse`, or `random[:seed]` |
+| `POTTS_TEST_PASSLOG` | a file that gets one line per top-level testset of each item: item, testset, and the counts of pass, fail, error and broken results |
+| `POTTS_TEST_END_EXPR_FILE` | a file with one Julia expression that runs after every item |
+| `POTTS_DEVICE_IR_DIR` | the directory of the device code that GROUP=GPU scans (a temporary directory when not set) |
+
+An unknown `GROUP` throws an `ArgumentError` that lists the valid groups. The runner reads no
+command-line arguments.
+
+A group of another package runs in a subprocess, in that package's test environment, with
+the same variables. The subprocess gets `--check-bounds=auto` unless the caller set
+`--check-bounds=yes` or `--check-bounds=no`.
+
+### The groups of the monorepo
 
 | GROUP | What runs |
 |---|---|
-| `All` (default) | all `in_all = true` packages in `test/test_groups.toml` (`LatticeFields`, `LatticePDE`, `CorePotts`, `MakiePotts`, `Potts`, `PottsModels`) |
-| `Potts` | `:potts` items, excluding `:gpu` and `:gpu_only` (`:qa` too unless `POTTS_QA=false`) |
-| `CorePotts`, `LatticeFields`, `LatticePDE`, `MakiePotts`, `PottsModels` | all `in_all = true` groups of that sublibrary |
-| `GPU` | device suites across `LatticeFields`, `CorePotts`, and `Potts`, plus ROCm kernel IR coverage (`test/device_coverage.jl`) |
-| `<Sublib>_<group>` | forwards `<group>` to `Potts` or `lib/<Sublib>`, validated against that package's `test_groups.toml` |
+| `All` (default) | `LatticeFields`, `LatticePDE`, `CorePotts`, `MakiePotts`, `Potts` and `PottsModels`, in that order |
+| `Potts` | the `:potts` items: every item of `test/` |
+| `Potts_core`, `Potts_fields`, `Potts_symbolic` | parts of `Potts` without the `:qa` items, chosen by file tag |
+| `Potts_qa` | the `:qa` items of `Potts` |
+| `Potts_gpu` | the items of `Potts` that name a device (`:device`) and the device files' items (`:gpu`), on one device |
+| `Multithreaded` | the `:multithreaded` items, in the calling process; run with `julia -t 4` |
+| `GPU` | `LatticeFields_gpu`, `LatticePDE_gpu`, `CorePotts_gpu` and `Potts_gpu` on one device (`POTTS_GPU`, else the platform's), without the `:qa` items; on ROCm, then `device_coverage.jl` |
+| `<Package>` | the `All` group of `lib/<Package>/test` |
+| `<Package>_<group>` | one group of `lib/<Package>/test` |
 
-Examples of `GROUP=<Sublib>_<group>` forwarding:
+The groups of each package are in its `test_groups.toml`.
 
-```sh
-GROUP=CorePotts_qa julia --project=test test/runtests.jl
-GROUP=CorePotts_core julia --project=test test/runtests.jl
-GROUP=LatticeFields_solvers julia --project=test test/runtests.jl
-GROUP=LatticePDE_qa julia --project=test test/runtests.jl
-GROUP=MakiePotts_core julia --project=test test/runtests.jl
-GROUP=Potts_qa julia --project=test test/runtests.jl
-GROUP=Potts_fields julia --project=test test/runtests.jl
-```
+## Workers, threads and time limits
 
-You can also run a sublibrary group directly from its own test directory with `GROUP=<group>`
-or positional CLI arguments (for example `julia --project=lib/LatticeFields/test lib/LatticeFields/test/runtests.jl solvers`),
-while keeping per-package environment variables (`COREPOTTS_GPU`, `LATTICEFIELDS_GPU`,
-`LATTICEPDE_GPU`, `*_QA`, `*_TEST_NAME`, `RETESTITEMS_NWORKERS`, `POTTSMODELS_SHARD`,
-`POTTS_TEST_END_EXPR_FILE`).
+The items run on worker processes, one item at a time on each worker. The defaults fit the
+24G memory scope of a run:
 
-### Declarative `test_groups.toml` schema
+| Package | Workers | Threads per worker | Time limit per item |
+|---|---|---|---|
+| `Potts` (`test/`) | 4 | 1 | 20 min |
+| `CorePotts`, `LatticeFields`, `LatticePDE` | 3 | the caller's | 60 min |
+| `MakiePotts` | 2 | the caller's | 60 min |
+| `PottsModels` | 0 (the calling process) | the caller's | 120 min |
 
-Each `test_groups.toml` declares named test groups for one package:
+`POTTS_TEST_WORKERS` replaces the number of workers in every package. A group that needs the
+calling process (`Multithreaded`), and every run on a device (`POTTS_GPU` set), uses no
+workers.
 
-| Package | Declared groups |
+At the root, a worker restarts after an item when the memory in use is above 80 % of the
+limit. The runner does not retry a failed item.
+
+Each run has up to three passes, in this order:
+
+1. every selected item that is not in the next two passes;
+2. the `:timing` items (they time code in the process) and the `:subprocess` items (they
+   start Julia processes): one at a time, on at most one worker;
+3. the `:device_scan` items: in the calling process, which compiled the device code of the
+   earlier passes.
+
+A pass with no items is skipped. When a pass fails, the next passes still run, and the run
+throws the first error.
+
+`POTTS_TEST_WORKERS=0` also gives the line coverage of a run (`--code-coverage=@$PWD`): with
+workers, every worker writes its own `.cov` files, and the record of a line depends on which
+process exited last.
+
+## The `test_groups.toml` schema
+
+The settings at the top of the file apply to every group of the package:
+
+| Key | Meaning |
 |---|---|
-| `Potts` (`test/test_groups.toml`) | `LatticeFields`, `LatticePDE`, `CorePotts`, `MakiePotts`, `Potts`, `PottsModels`, `GPU`, `Potts_core`, `Potts_fields`, `Potts_symbolic`, `Potts_qa`, `Potts_gpu` |
-| `CorePotts` | `core`, `qa`, `gpu` (`in_all = false`) |
-| `LatticeFields` | `exec`, `ir`, `compile`, `schedule`, `problems`, `solvers`, `qa`, `solvers_gate` (`in_all = false`), `gpu` (`in_all = false`) |
-| `LatticePDE` | `core`, `qa`, `gpu` (`in_all = false`) |
-| `MakiePotts` | `core`, `acceptance`, `adversarial`, `allocations`, `downstream_conformance`, `saved_state_channels` |
-| `PottsModels` | `core` (`num_threads = 4`), `qa`, `acceptance` (`in_all = false`), `reproductions` (`in_all = false`), `guardrails` (`in_all = false`) |
+| `all` | the groups of `GROUP=All`, in order (required) |
+| `workers` | the number of workers when `POTTS_TEST_WORKERS` is not set |
+| `worker_threads` | the threads of each worker (default: the caller's) |
+| `testitem_timeout` | seconds before an item fails (default 3600) |
+| `memory_threshold` | the memory fraction above which a worker restarts after an item |
+| `logs` | the ReTestItems `logs` mode |
 
-Julia reads only `in_all`, `group`, and structural routing fields (`sublib`, `tags`,
-`exclude_tags`). The remaining keys (`versions`, `os`, `runner`, `num_threads`, `timeout`,
-and optional `continue_on_error`, which is never `true` on core groups) are CI workflow
-metadata inputs.
+Each table is a group. A group has one of three forms.
 
-The items run on `POTTS_TEST_WORKERS` worker processes (default 4), one thread each. All
-workers share the memory limit of the run: a worker restarts after an item when the memory in
-use is above 80 % of the limit, and an item that runs longer than 20 min fails
-(`test/shared/rti.jl`). Items tagged `:timing` (they time code in-process) or `:subprocess`
-(they start Julia processes) run after the others, one at a time.
+- A group of items. It selects with `tags` (items with any of these tags; every item when
+  absent), `exclude_tags`, and the file rules `dirs` (the files under these directories),
+  `files` and `exclude_files`. The keys `device = true` (the group runs on a device),
+  `workers` (a fixed worker count) and `min_threads` (the caller needs at least this many
+  threads) set how it runs. A group with file rules runs alone; other consecutive groups
+  run as one ReTestItems run.
+- `package = "<Package>"`: the `All` group of `lib/<Package>/test`, in a subprocess.
+- `groups = [...]`: these groups in turn. With `device = true` they share one device; with
+  `qa = false` they skip the `:qa` items; `rocm_check` names a script that runs last, on
+  ROCm only.
 
-`POTTS_TEST_PASSLOG=<file>` appends one line per top-level testset of each item: item,
-testset, and the counts of pass, fail, error and broken results.
+A runner checks every key and throws an `ArgumentError` on one it does not know.
 
-`POTTS_TEST_WORKERS=0` runs the items in this process instead of in worker processes. Measure
-line coverage that way (`--code-coverage=@$PWD`): every worker writes its own `.cov` files, so
-the per-line record of a worker run is an artifact of which process exited last.
+## Run some items in a warm session
 
-## Run some items
-
-In a session that keeps its compiled code between runs (Revise picks up `src` edits):
+A session keeps its compiled code between runs:
 
 ```sh
-julia --project=test -i test/dev.jl
+julia --project=test -i test/runner/session.jl
+julia --project=lib/CorePotts/test -i test/runner/session.jl
 ```
 
 ```julia
-ti("coarse field")             # items whose name contains "coarse field"
-ti(r"^a Coarse\(4\)")          # items whose name matches a regex
-ti(; tags = :fields_coarse)    # the items of fields_coarse_tests.jl
-ti("is_kind"; nworkers = 1)    # in a fresh worker process
-tf("fields_short_tests.jl")    # every item of one file
+run_tests(name = "coarse field")             # items whose name matches "coarse field"
+run_tests(name = r"^a Coarse\(4\)")          # a regex
+run_tests(tags = :fields_coarse)             # the items with a tag
+run_tests(file = "fields_short_tests.jl")    # every item of one file
+run_tests(name = "is_kind", workers = 1)     # in a fresh worker process
 ```
 
-Revise must be in an environment on the load path (for example your default environment). The
-VS Code test explorer also runs single `@testitem`s.
+The keywords of `run_tests` override the variables: `group`, `name`, `tags`, `file`, `qa`,
+`workers` and `shard`. In a session, the items run in the session's process
+(`POTTS_TEST_WORKERS=0`), and at the root `GROUP` is `Potts`, so that a name selects among
+the Potts items and starts no subprocess. Set either variable before you load the file to
+choose otherwise.
+
+The test files are read again on every call. Revise picks up `src` edits when it is on the
+load path (for example in your default environment); the session warns when it is not. The
+items share one process, so state that an item changes stays for the next call. Results that
+you report come from a fresh process (`runtests.jl`).
+
+Agents use the same session through the Kaimon MCP server: one session per test
+environment, which loads `test/runner/session.jl` with its first `ex`, then calls
+`run_tests`. The VS Code test explorer also runs single `@testitem`s.
 
 ## Tags
 
-- `:potts`: every item of this directory.
-- the file's name without `_tests.jl` (for example `:fields_coarse`).
-- `:qa`: Aqua, JET, ExplicitImports and the other quality checks (qa_tests.jl).
-- `:gpu`: the device files (gpu_tests.jl, transfer_counts_tests.jl, device_ir_tests.jl); `:rocm`: ROCm only.
-- `:device`: an item that names a device; it also runs in GROUP=GPU.
-- `:device_scan`: the scan for `double` in device code; it runs last in GROUP=GPU, in the process that
-  compiled the kernels (`PottsRTI.device_suite`).
-- `:gpu_only`: an item that cannot run in a fresh worker (the scan reads the process cache);
-  GROUP=GPU without `POTTS_DEVICE_ONLY=false` only.
-- `:timing`, `:subprocess`: run serially (see above).
+- `:potts`: every item of `test/`; `:corepotts` and `:latticepde`: every item of those
+  packages.
+- The file's name without `_tests.jl` (for example `:fields_coarse`).
+- `:qa`: Aqua, JET, ExplicitImports and the other quality checks.
+- `:gpu`: the items of a device file (`gpu_tests.jl`, `transfer_counts_tests.jl`,
+  `device_ir_tests.jl`); `:rocm`: on ROCm only.
+- `:gpu_only`: an item that runs only on a device.
+- `:device`: an item that names a device; it also runs in `GROUP=GPU`.
+- `:device_scan`: the scan for `double` in the device code; it runs last, in the process
+  that compiled the kernels.
+- `:multithreaded`: an item that needs four threads; only a group that names this tag runs
+  it.
+- `:timing`, `:subprocess`: they run in the second pass.
+
+An item with `:gpu` or `:gpu_only` runs only when a device is selected (`POTTS_GPU` set, or
+a group with `device = true`). With `POTTS_GPU` set, these items join any run: `POTTS_GPU=rocm
+GROUP=All` runs every suite on ROCm.
 
 ## Write an item
 
