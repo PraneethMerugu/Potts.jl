@@ -1,7 +1,7 @@
 # Generated FV kernels on a device (Metal or ROCm), Float32: the bit-exactness checks (fused
 # vs split on the device, device vs host executor, one-ulp negative control), and the owned
-# and ODE problems on device arrays against the host. Included by runtests.jl when
-# POTTS_GPU is set (device_backend.jl defines DEV).
+# and ODE problems on device arrays against the host. The items are `:gpu_only`: they run
+# only with a device selected (POTTS_GPU, or GROUP=gpu); device_backend.jl defines DEV.
 
 @testsetup module LF_problems_device
 using Test, LatticeFields

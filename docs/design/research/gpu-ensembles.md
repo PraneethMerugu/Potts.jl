@@ -686,7 +686,8 @@ The go/no-go numbers for each item are in §9.
   RGF type). Mitigation: group by type, or error with the reason.
 - **R10, test matrix.** The GPU group is Metal-only (`lib/CorePotts/test/gpu.jl:1-3`;
   `Metal` in `test/Project.toml`), and D-157 defers Metal. A ROCm GPU group (AMDGPU in the
-  test project, `COREPOTTS_GPU=rocm`) is a prerequisite of GE1.
+  test project, `COREPOTTS_GPU=rocm`) is a prerequisite of GE1. (Done; the variable is now
+  `POTTS_GPU=rocm`, D-336.)
 - **R11, minor.** `source::Int` (8 B) per colour site (`checkerboard.jl:202`) and Int64 index
   arithmetic cost registers and bandwidth. Storing `dir::UInt8` instead is an easy C-c win.
 
@@ -740,8 +741,9 @@ machine and backend.
     - GE5 proceeds only if K3's mean run length at W = 256 is ≥ 64 on OpenVT growth
       snapshots.
 - **GE0b ROCm GPU test group.** Add AMDGPU to the GPU test environment and select it with
-  `COREPOTTS_GPU=rocm`. Port `test/gpu.jl`'s Metal checks. Accept: the group passes on
-  gfx1151, and the no-`double` IR check stands in for Metal (D-157).
+  `COREPOTTS_GPU=rocm` (now `POTTS_GPU=rocm`, D-336). Port `test/gpu.jl`'s Metal checks.
+  Accept: the group passes on gfx1151, and the no-`double` IR check stands in for Metal
+  (D-157).
 
 ### Phase 1: cheap to moderate, the expected payoff
 
