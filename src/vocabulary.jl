@@ -568,7 +568,7 @@ function _check_kind_table(name, A, kinds, symmetric::Bool)
     (symmetric && ndims(A) == 2) || return nothing
     for j in 1:nk, i in 1:(j - 1)
         a, b = _table_number(A[i, j]), _table_number(A[j, i])
-        (a === nothing || b === nothing || isequal(a, b)) && continue
+        (a === nothing || b === nothing || a == b || isequal(a, b)) && continue
         throw(
             ArgumentError(
                 "kind table `$name` is symmetric, but `$name[$(kinds[i]), $(kinds[j])]` = \

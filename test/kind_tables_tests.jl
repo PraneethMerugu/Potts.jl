@@ -212,6 +212,10 @@ end
         # a mirrored NaN is symmetric
         r = remake(prob; p = [:J => [(:dark, :light) => NaN]])
         @test isnan(J_of(r)[2, 3]) && isnan(J_of(r)[3, 2])
+        # so is a mirrored signed zero
+        M = Matrix(J_of(prob))
+        M[2, 3], M[3, 2] = 0.0, -0.0
+        @test J_of(remake(prob; p = [:J => M])) == M
         # an entry gives kind names: a number would read as a kind number, not an index
         @test kt_throws(
             ArgumentError, "give kind names",

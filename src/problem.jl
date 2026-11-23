@@ -2267,7 +2267,7 @@ function _check_parameter_tables(c::CompiledPottsSystem, @nospecialize(out))
     _check_kind_tables(getfield(c, :sys), out)
     for name in _contact_tables(c)
         J = getproperty(out, name)
-        isequal(J, transpose(J)) ||
+        all(((x, y),) -> x == y || isequal(x, y), zip(J, transpose(J))) ||
             throw(ArgumentError("kind table `$name` is used in a contact energy and must \
                 be symmetric"))
     end
