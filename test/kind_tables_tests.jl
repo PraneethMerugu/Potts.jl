@@ -298,7 +298,8 @@ end
         # the right size, and every entry listed without a value for the rest
         @test kt_build(
             :KTAsymOK, Expr(
-                :block, V, :(J[kind, kind] = 1.0), Meta.parse("μ[kind, kind] = 0.0, [symmetric = false]"),
+                :block, V, :(J[kind, kind] = 1.0),
+                Meta.parse("μ[kind, kind] = 0.0, [symmetric = false]"),
                 :(μ[dark, light] = 11), :(μ[light, dark] = 12)
             )
         ) === nothing
