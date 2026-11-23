@@ -1,5 +1,6 @@
-# Named pairs (E2) and the E7 geometry helpers (D-243): forms the frozen acceptance
-# test lib/PottsModels/test/acceptance/cell_reference_helpers_tests.jl does not reach.
+# The E7 geometry helpers (D-243): forms the frozen acceptance test
+# lib/PottsModels/test/acceptance/cell_reference_helpers_tests.jl does not reach. (Kind
+# tables by name are tested in kind_tables_tests.jl.)
 
 @testsetup module RefHelpersSetup
 using Potts, Test
@@ -20,46 +21,6 @@ module RhPDE
             [Q, qin(t, x, y)]
         )
     end
-end
-
-# --- Pairs: the same generated code (fingerprint) as the written-out matrix ---------------
-@potts_model RHPairs begin
-    @kinds medium ka kb
-    @parameters begin
-        Jab = 5.0
-        J[kind, kind] = Pairs(
-            default = 0.0, (medium, ka) => 12, (medium, kb) => 14.0, (
-                ka, kb,
-            ) => Jab
-        )
-    end
-    @lattice Lattice((10, 10); boundary = Closed(), neighborhood = Moore(1))
-    @energy begin
-        cells => (volume - 6.0)^2
-        contacts => J[kind, neighbor_kind]
-    end
-    @sweep Metropolis(; temperature = 3.0)
-end
-
-@potts_model RHMatrix begin
-    @kinds medium ka kb
-    @parameters begin
-        Jab = 5.0
-        J[kind, kind] = [0 12 14.0; 12 0 Jab; 14.0 Jab 0]
-    end
-    @lattice Lattice((10, 10); boundary = Closed(), neighborhood = Moore(1))
-    @energy begin
-        cells => (volume - 6.0)^2
-        contacts => J[kind, neighbor_kind]
-    end
-    @sweep Metropolis(; temperature = 3.0)
-end
-
-function rh_pairs_op()
-    σ = zeros(Int32, 10, 10)
-    σ[2:4, 2:3] .= 1
-    σ[5:7, 2:3] .= 2
-    return [ownership => σ, kind => [:ka, :kb]]
 end
 
 # --- the reference helpers in further forms
@@ -464,81 +425,6 @@ function rh_mask_problem(; T = Float64)
     )
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
-end
-
-@testitem "Pairs: the matrix form's parameters and generated code" setup = [
-    RefHelpersSetup,
-] tags = [
-    :potts, :ref_helpers,
-] begin
-    @testset "Pairs: the matrix form's parameters and generated code" begin
-        pp = PottsProblem(RHPairs(; name = :r), rh_pairs_op(), (0, 2))
-        pm = PottsProblem(RHMatrix(; name = :r), rh_pairs_op(), (0, 2))
-        @test pp.p == pm.p && typeof(pp.p) == typeof(pm.p)
-        # zero cost: the same code
-        @test pp.f.fingerprint == pm.f.fingerprint
-        @test getp(pp, :J)(pp) == [0 12 14; 12 0 5; 14 5 0]
-        # negative control: another value of the parameter entry changes the table, on both
-        # sides
-        pr = remake(pp; p = [:Jab => 1.5])
-        @test getp(pr, :J)(pr)[2, 3] == 1.5 && getp(pr, :J)(pr)[3, 2] == 1.5 && pr.p != pp.p
-    end
-end
-
-@testitem "Pairs: refusals and the runtime checks" setup = [RefHelpersSetup] tags = [
-    :potts, :ref_helpers,
-] begin
-    @testset "Pairs: refusals and the runtime checks" begin
-        # a kind class as a key, and a missing default (both open in D-243: refused at macro
-        # expansion)
-        e = try
-            macroexpand(
-                @__MODULE__, :(
-                    @potts_model RHPairsClass begin
-                        @kinds begin
-                            medium
-                            ka
-                            kb
-                            both = (ka, kb)
-                        end
-                        @parameters J[kind, kind] = Pairs(
-                            default = 0.0, (medium, both) =>
-                                1.0
-                        )
-                        @lattice Lattice(
-                            (6, 6); boundary = Closed(),
-                            neighborhood = Moore(1)
-                        )
-                        @energy contacts => J[kind, neighbor_kind]
-                        @sweep Metropolis(; temperature = 1.0)
-                    end
-                )
-            )
-            nothing
-        catch err
-            err isa LoadError ? err.error : err
-        end
-        @test e isa ArgumentError
-        @test_throws ArgumentError Potts.DSL.Pairs(1.0; default = 0.0)
-        @test_throws ArgumentError Potts.DSL.Pairs((0, 1) => 1.0; symmetric = false)
-        # the matrix the macro lowers to: symmetric fill, the default, a repeated pair by
-        # number
-        ks = [:medium, :a]
-        table(t; symmetric = true) = Potts._kind_table(:J, 2, ks, t; symmetric)
-        t = Potts.DSL.Pairs((0, 1) => 2, (1, 1) => 3.5; default = 0.0)
-        @test table(t) == [0.0 2.0; 2.0 3.5]
-        @test table(t) isa Matrix{Float64}
-        @test_throws ArgumentError table(
-            Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 1; default = 0)
-        )
-        @test table(
-            Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 2; default = 0); symmetric = false
-        ) == [0 1; 2 0]
-        # without a default, every entry is listed
-        @test_throws ArgumentError table(Potts.DSL.Pairs((0, 1) => 1.0))
-        # not a kind
-        @test_throws ArgumentError table(Potts.DSL.Pairs((0, 5) => 1; default = 0))
-    end
 end
 
 @testitem "E7 helpers: copy-scope and hexagonal refusals" setup = [RefHelpersSetup] tags = [

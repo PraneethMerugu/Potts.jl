@@ -1285,8 +1285,8 @@ end
 # sweep `Model(; T = t)`) keeps one type, so nothing recompiles.
 _computed_params(ps) = [x for x in ps if _is_symbolic(info(x).default)]
 # the fingerprint's text of a default: numbers as Float64 (`0` and `0.0` are one derivation:
-# the Pairs and matrix forms of a kind table give one type), arrays element by element with
-# their size
+# the entry-line and matrix forms of a kind table give one type), arrays element by element
+# with their size
 function _canon_default(d::AbstractArray)
     return string(size(d)) * "[" * join(map(_canon_default, d), ", ") * "]"
 end

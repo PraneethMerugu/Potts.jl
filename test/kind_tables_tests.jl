@@ -1,5 +1,5 @@
-# Kind tables written by kind name: the entry lines `J[k₁, k₂] = v`, `Pairs(…)` and one
-# value for every entry lower to the array of the matrix form (one path after parsing);
+# Kind tables written by kind name: the entry lines `J[k₁, k₂] = v` and one value for
+# every entry lower to the array of the matrix form (one path after parsing);
 # `remake`, setters and operating points change entries by name; results read as kind
 # names (`kind_names`); and the build errors name the table, the entry and the fix.
 
@@ -54,7 +54,7 @@ function kt_build(M::Symbol, params::Expr)
     )
 end
 
-# the same tables in three spellings: the matrix form, entry lines, and `Pairs`
+# the same tables in two spellings: the matrix form and entry lines
 @potts_model KTMatrix begin
     @kinds medium dark light
     @parameters begin
@@ -101,31 +101,6 @@ end
     @sweep Metropolis(; temperature = 4.0)
 end
 
-@potts_model KTPairs begin
-    @kinds medium dark light
-    @parameters begin
-        Jx = 11.0
-        V₀[medium] = 0.0
-        V₀[dark] = 30.0
-        V₀[light] = 20.0
-        J[kind, kind] = Pairs(
-            (medium, medium) => 0, (dark, dark) => 2, (dark, light) => Jx,
-            (light, light) => 14; default = 16
-        )
-        μ[kind, kind] = Pairs(
-                (medium, dark) => 1.0, (medium, light) => 2.0, (dark, medium) => 3.0,
-                (dark, dark) => 4.0, (dark, light) => 5.0, (light, medium) => 6.0,
-                (light, dark) => 7.0, (light, light) => 8.0; default = 0.0
-            ), [symmetric = false]
-    end
-    @lattice Lattice((12, 12); neighborhood = Moore(1))
-    @energy begin
-        cells => (volume - V₀[kind])^2 + μ[kind, kind] * volume
-        contacts => J[kind, neighbor_kind]
-    end
-    @sweep Metropolis(; temperature = 4.0)
-end
-
 # numbers only (no computed entry), so `remake` and setters may set the tables
 @potts_model KTPlain begin
     @kinds medium dark light
@@ -159,22 +134,19 @@ J_of(p) = getp(p, :J)(p)
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "kind tables: entry lines, Pairs and the matrix form give one problem" setup = [
+@testitem "kind tables: entry lines and the matrix form give one problem" setup = [
     KindTableSetup,
 ] tags = [:potts, :kind_tables] begin
-    @testset "kind tables: entry lines, Pairs and the matrix form give one problem" begin
+    @testset "kind tables: entry lines and the matrix form give one problem" begin
         pm = kt_prob(KTMatrix(; name = :m))
         pn = kt_prob(KTNamed(; name = :m))
-        pp = kt_prob(KTPairs(; name = :m))
         @test J_of(pm) == [0 16 16; 16 2 11; 16 11 14]
         @test getp(pm, :μ)(pm) == [0 1 2; 3 4 5; 6 7 8]
-        for p in (pn, pp)
-            # the same values, parameter type and generated code
-            @test p.p == pm.p
-            @test typeof(p.p) == typeof(pm.p)
-            @test p.f.fingerprint == pm.f.fingerprint
-            @test total_energy(p) == total_energy(pm)
-        end
+        # the same values, parameter type and generated code
+        @test pn.p == pm.p
+        @test typeof(pn.p) == typeof(pm.p)
+        @test pn.f.fingerprint == pm.f.fingerprint
+        @test total_energy(pn) == total_energy(pm)
         # an entry computed from a parameter follows it, on both sides of the diagonal
         r = remake(pn; p = [:Jx => 5.0])
         @test J_of(r)[2, 3] == 5.0 && J_of(r)[3, 2] == 5.0
@@ -255,6 +227,10 @@ end
             ),
             # an unknown kind name, a kind class and a parameter as an index
             (:KTTypo, :($V; J[kind, kind] = 0; J[dark, lihgt] = 1), "lihgt"),
+            (
+                :KTTypoKinds, :($V; J[kind, kind] = 0; J[dark, lihgt] = 1),
+                "the kinds are medium, dark, light",
+            ),
             (:KTClass, :($V; J[kind, kind] = 0; J[both, light] = 1), "kind class"),
             (:KTParam, :($V; q = 1.0; J[kind, kind] = 0; J[q, light] = 1), "`q`"),
             # an entry given twice, and (k₁, k₂) against (k₂, k₁) in a symmetric table

@@ -338,66 +338,7 @@ function kind_parameter(
     )
 end
 
-"""
-    Pairs((k₁, k₂) => v, …; default)
-
-A two-kind table written by its named entries: the value of a kind table declared
-`J[kind, kind]` in `@parameters`.
-
-`Pairs` and the entry lines `J[k₁, k₂] = v` are two spellings of one form. Both lower to
-the matrix form when the model is built, so the parameter object, the generated code and
-`remake` are those of the written-out matrix.
-
-# Arguments
-- `(k₁, k₂) => v`: one entry. `k₁` and `k₂` are kind names of `@kinds`, and `v` is a number
-  or an expression of parameters. If the table is symmetric (the default), the entry also
-  sets (k₂, k₁).
-
-# Keywords
-- `default`: the value of every entry that is not listed. Without it, every entry must be
-  listed.
-
-# Returns
-- `Pairs`: the entries, made into the matrix when the model is built.
-
-# Examples
-```julia
-@parameters begin
-    Jcc = 2.0
-    J[kind, kind] = Pairs((medium, cell) => 16, (cell, cell) => Jcc; default = 0.0)
-end
-```
-
-A pair given twice, a kind name not in `@kinds`, and (for a symmetric table) both (k₁, k₂)
-and (k₂, k₁) are an `ArgumentError` when the model is built. The table's symmetry is
-declared with the table, `J[kind, kind] = Pairs(…), [symmetric = false]`.
-
-See also [`kind_names`](@ref).
-"""
-struct Pairs
-    entries::Vector{Pair{Any, Any}}
-    default::Any
-end
-function Pairs(entries::Pair...; default = nothing, kws...)
-    isempty(kws) || _pairs_refusal(entries, kws)
-    return Pairs(Pair{Any, Any}[e for e in entries], default)
-end
-Pairs(args...; kws...) = _pairs_refusal(args, kws)
-function _pairs_refusal(args, kws)
-    got = join(map(repr, args), ", ")
-    isempty(kws) || (got *= " and the keywords " * join(("`$k`" for k in keys(kws)), ", "))
-    note = haskey(kws, :symmetric) ?
-        " (an asymmetric table is declared with the table: `J[kind, kind] = Pairs(…), \
-        [symmetric = false]`)" : ""
-    throw(
-        ArgumentError(
-            "`Pairs` takes kind pairs `(k₁, k₂) => v` and the keyword `default`; got " *
-                got * note
-        )
-    )
-end
-
-function _pairs_kind_name(k)
+function _kind_word(k)
     (
         u = _unwrap(k); i = u isa SymbolicUtils.BasicSymbolic ? info(u) : nothing;
         i === nothing ? repr(k) : string(i.name)
@@ -407,7 +348,7 @@ end
 # --- Kind tables: every written form becomes one array here ------------------------------
 #
 # A kind table (`J[kind, kind]`, `V₀[kind]`) is written as a vector or matrix (medium
-# first), as one value for every entry, as `Pairs(…)`, or as entry lines `J[k₁, k₂] = v`.
+# first), as one value for every entry, or as entry lines `J[k₁, k₂] = v`.
 # `_kind_table` turns each into the array; everything after it (the parameter's symbol,
 # checks, compilation, `remake`) sees only the array. Entries are keyed by kind number (a
 # kind name is its number inside a model) or, in `remake` and setters, by kind name.
@@ -415,7 +356,7 @@ end
 # `J[dark, light]` for an entry key `ks` of table `name`
 function _entry_text(name, kinds, ks)
     word(k) = k isa Integer && 0 <= k < length(kinds) ? string(kinds[k + 1]) :
-        k isa Symbol ? string(k) : _pairs_kind_name(k)
+        k isa Symbol ? string(k) : _kind_word(k)
     return string(name, "[", join(map(word, ks), ", "), "]")
 end
 _entry_value_text(v) = v isa AbstractString ? repr(v) : string(v)
@@ -429,7 +370,7 @@ function _entry_kind(name, kinds, ks, k)
         i === nothing || return i - 1
     end
     what = k isa Integer && !(k isa Bool) ? "kind number $k" :
-        k isa Symbol ? "`$k`" : "`$(_pairs_kind_name(k))`"
+        k isa Symbol ? "`$k`" : "`$(_kind_word(k))`"
     throw(
         ArgumentError(
             "kind table `$name`: $what in `$(_entry_text(name, kinds, ks))` is not a \
@@ -444,7 +385,7 @@ end
 
 The array of kind table `name` with `nd` kind axes, in a model whose kinds (the medium
 first) are `kinds`. `value` is the declared value: an array (returned as given, with no
-`entries`), `Pairs(…)`, `nothing` (no value: every entry listed) or one value for every
+`entries`), `nothing` (no value: every entry listed) or one value for every
 entry. `entries` are `ks => v` with `ks` a kind or a tuple of kinds. With `symmetric` (two
 kind axes), (k₁, k₂) also sets (k₂, k₁). `base`, an array, gives the unlisted entries (in
 `remake` and setters, the current table).
@@ -454,21 +395,7 @@ function _kind_table(
         symmetric::Bool = true, base = nothing
     )
     nk = length(kinds)
-    if value isa Pairs
-        nd == 2 || throw(
-            ArgumentError(
-                "kind table `$name[kind]` has one kind axis: `Pairs` writes a two-kind \
-                    table; write the entries as `$name[k] = v`"
-            )
-        )
-        isempty(entries) || throw(
-            ArgumentError(
-                "kind table `$name` is written both as `Pairs(…)` and as entry lines \
-                    `$name[k₁, k₂] = v`; keep one form"
-            )
-        )
-        entries, value = value.entries, value.default
-    elseif value isa AbstractArray
+    if value isa AbstractArray
         ndims(value) == nd || throw(
             ArgumentError(
                 "kind table `$name` has $nd kind $(nd == 1 ? "axis" : "axes") but its \
@@ -3217,7 +3144,7 @@ const DSL = (;
     centroid = _centroid, displacement = _displacement, integral = _integral,
     dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean,
     CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer,
-    Pairs, minimum_image = _minimum_image, separation = _separation, ismember,
+    minimum_image = _minimum_image, separation = _separation, ismember,
     neighbor = _primed, angles = _angles, prev = _rel_prev, next = _rel_next,
     rank = _rel_rank, linked = _rel_linked,
 )

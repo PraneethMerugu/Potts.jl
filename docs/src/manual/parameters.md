@@ -157,13 +157,6 @@ getp(nprob, :J)(nprob)
 - In a model that extends another (`@extend`) and has no `@kinds` of its own, the entries
   use the kind names the extension binds.
 
-`Pairs` writes the same entries as one value, and `default` gives the value of the entries
-not listed:
-
-```julia
-J[kind, kind] = Pairs((medium, dark) => 16, (dark, light) => Jx; default = 0.0)
-```
-
 ### Asymmetric tables
 
 A table whose (k₁, k₂) and (k₂, k₁) entries differ, such as a cell-surface coefficient

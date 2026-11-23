@@ -77,9 +77,10 @@ struct _Parts
     declared::Dict{Symbol, String}   # name → what declared it (collision checks)
     # names bound by `@extend a, b = base = Base()` (kind class members)
     bound::Set{Symbol}
+    kinds::Vector{Symbol}        # the kinds of `@kinds`, in order (for messages)
 end
 function _Parts(structural, params, code, mod, declared)
-    return _Parts(structural, params, code, mod, declared, Set{Symbol}())
+    return _Parts(structural, params, code, mod, declared, Set{Symbol}(), Symbol[])
 end
 
 # The names `@extend n₁, n₂ = base = Base()` binds before the first `@kinds` (the
@@ -988,6 +989,7 @@ function _section!(parts, sec, args, ln = nothing)
         end
         for (i, k) in enumerate(names)
             _declare!(parts, k, "kind")
+            push!(parts.kinds, k)
             push!(code, :($k = $(i - 1)), :(push!(__kinds, $(QuoteNode(k)))))
         end
         for (g, members) in classes
@@ -1811,7 +1813,6 @@ function _kind_table_lines(parts, lines)
                 )
             )
         end
-        _is_pairs_table(t.decl[]) && _check_pairs(parts, k, t.decl[])
     end
     return tables
 end
@@ -1849,8 +1850,6 @@ function _kind_table_code(parts, k, t)
     )
 end
 
-_is_pairs_table(val) = val isa Expr && val.head === :call && val.args[1] === :Pairs
-
 # A kind name `m` in an entry of kind table `k` (`where`, as written): a kind of `@kinds`
 # (or one an `@extend` base binds, checked when built); a misspelling, a parameter, a kind
 # class or another declared name is refused here, naming it
@@ -1866,30 +1865,12 @@ function _check_kind_name(parts, k, m, where)
     what == "kind" && return nothing
     what === nothing && m in parts.bound && return nothing
     not_kind = if what === nothing
-        "not a kind of @kinds (a misspelling?)"
+        "not a kind of @kinds (a misspelling?)" *
+            (isempty(parts.kinds) ? "" : "; the kinds are $(join(parts.kinds, ", "))")
     else
         "$(_with_article(what)), not a kind; an entry is indexed by kind names of @kinds"
     end
     throw(ArgumentError("kind table `$k`: `$m` in $where is " * not_kind))
-end
-
-# `Pairs((k₁, k₂) => v, …; default)` of kind table `k`: every key names a kind (pairs given
-# twice are found when the table is built, by `_kind_table`)
-function _check_pairs(parts, k, val)
-    for a in val.args[2:end]
-        a isa Expr && a.head in (:parameters, :kw) && continue
-        (
-            a isa Expr && a.head === :call && a.args[1] === :(=>) && a.args[2] isa Expr &&
-                a.args[2].head === :tuple &&
-                length(a.args[2].args) == 2
-        ) ||
-            throw(ArgumentError("kind table `$k = Pairs(…)`: an entry is `(k₁, k₂) => v` \
-                with two kind names; got `$a`"))
-        for m in a.args[2].args
-            _check_kind_name(parts, k, m, "`$a`")
-        end
-    end
-    return val
 end
 
 # `integral(x; over = s)`: `s` is `cluster`; another name is refused here (it need not be
