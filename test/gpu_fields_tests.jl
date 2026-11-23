@@ -59,10 +59,11 @@ end
 # A coupled model on ROCm runs the step plan made for the device: its field group binds the
 # plan at the device's kernel-argument budget, made for the argument types it binds, and
 # every launch fits that budget. The host run binds the plan with no budget.
-@testitem "a coupled model on ROCm runs the plan made at the device's argument budget" \
-    setup = [GpuSetup, FieldsSetup] tags = [:potts, :gpu, :device] begin
+@testitem "a coupled model on ROCm runs the plan at the device's argument budget" setup = [
+    GpuSetup, FieldsSetup,
+] tags = [:potts, :gpu, :device] begin
     if PottsDevices.device_name() == "rocm"
-        @testset "a coupled model on ROCm runs the plan made at the device's argument \
+        @testset "a coupled model on ROCm runs the plan at the device's argument \
             budget" begin
             Exec = Potts.LatticeFields.Exec
             backend = PottsDevices.device_backend()
