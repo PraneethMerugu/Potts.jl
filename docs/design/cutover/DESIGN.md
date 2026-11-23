@@ -81,7 +81,7 @@ arguments and `Pre` are refused.
   ndrange for single-ndrange bodies, a plan walk emitted per plan as a RuntimeGeneratedFunction
   (no `@generated`), and host-parallel compile.
 - **Fusion:** every kernel fuses with its neighbor in the step order whenever that is legal
-  (D-333; the cost model of the cutover design is deleted).
+  (D-335; the cost model of the cutover design is deleted).
 - **Ordering:** topological over the cross-read graph, Jacobi inside cycles, `Sequential` for a
   stated paper sequence (D-257 item 2).
 - **Masked solves:** an eliminated SPD form; rule M and the Any fold in the hierarchy; PCG with
