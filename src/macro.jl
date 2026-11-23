@@ -78,7 +78,7 @@ struct _Parts
     # names bound by `@extend a, b = base = Base()` (kind class members)
     bound::Set{Symbol}
     kinds::Vector{Symbol}        # the kinds of `@kinds`, in order (for messages)
-    extends::Base.RefValue{Bool}   # the model has an `@extend` (for messages)
+    extends::Ref{Bool}           # the model has an `@extend` (for messages)
 end
 function _Parts(structural, params, code, mod, declared)
     return _Parts(
