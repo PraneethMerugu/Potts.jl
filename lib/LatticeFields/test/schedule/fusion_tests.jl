@@ -1,7 +1,5 @@
-# Fusion decisions against the cost model (its regime table, as measured on the field-kernel
-# benchmarks), with the shared-reads rule and a fixed stream cap as negative controls;
-# fusion legality; ordering; fused execution bit-exact with split execution; static ndrange
-# marking.
+# Fusion is taken whenever it is legal, at every problem size; fused execution matches split
+# execution; fusion legality; ordering; static ndrange marking.
 
 @testsetup module LF_schedule_fusion
 using Test, LatticeFields
@@ -15,61 +13,54 @@ include("../shared/schedule_fusion.jl")
 include("../shared/export_all.jl")
 end
 
-@testitem "cost model reproduces the measured regime table" setup = [
+@testitem "fusion is taken whenever legal, at every size" setup = [
     LF_schedule_fusion,
 ] tags = [
     :latticefields, :schedule,
 ] begin
-    @testset "cost model reproduces the measured regime table" begin
-        # launch-bound 42³: merge every component, independent fields included
-        @test nlaunch(smoother((42, 42, 42), 4)) == 1
-        @test nlaunch(residual((42, 42, 42), 4)) == 1
-        @test nlaunch(restrict((42, 42, 42), 4)) == 1
-        # 3D 128³ (≈ 44 MB per split component): fused still wins for smoother, restrict,
-        # prolong
-        @test nlaunch(smoother((128, 128, 128), 4)) == 1
-        @test nlaunch(restrict((128, 128, 128), 4)) == 1
-        @test nlaunch(prolong((128, 128, 128), 4)) == 1
-        # 3D 256³ DRAM, mask-only sharing: fused loses from 16 streams up
-        for K in 3:5
-            s = smoother((256, 256, 256), K)
-            tf, ts = all_vs_split(s)
-            @test tf > ts
-            @test nlaunch(s) > 1
+    @testset "fusion is taken whenever legal, at every size" begin
+        cases = [
+            (smoother, (42, 42, 42), 4), (smoother, (256, 256, 256), 5),
+            (residual, (42, 42, 42), 4), (residual, (256, 256, 256), 4),
+            (restrict, (42, 42, 42), 4), (restrict, (256, 256, 256), 4),
+            (prolong, (128, 128, 128), 4), (prolong, (256, 256, 256), 4),
+            (independent, (64, 64), 8), (independent, (4096, 4096), 8),
+        ]
+        for (family, dims, K) in cases
+            sp = plan(family(dims, K))
+            @test length(sp.launches) == 1
+            @test length(sp.decisions) == K - 1
+            @test all(d -> d.merged && d.reason == :legal, sp.decisions)
         end
-        # 2D 4096², independent fields, K = 8: split
-        @test nlaunch(independent((4096, 4096), 8)) == 8
-        # modeled launch-bound smoother time is in the measured range (15.8–18.1 µs)
-        tf, ts = all_vs_split(smoother((42, 42, 42), 4))
-        @test 12.0e-6 < tf < 22.0e-6 && 1.3 < ts / tf < 2.2
+        # the report names every fusion
+        r = sprint(fusion_report, plan(independent((4096, 4096), 3)))
+        @test count("fuse  ", r) == 2 && !occursin("split", r)
+        # control: debug planning splits the same programs
+        @test length(plan(smoother((256, 256, 256), 5); fuse = false).launches) == 5
     end
 end
 
-@testitem "negative controls: shared-reads rule and a fixed stream cap disagree" setup = [
-    LF_schedule_fusion,
-] tags = [
+@testitem "fused steps match split steps" setup = [LF_schedule_fusion] tags = [
     :latticefields, :schedule,
 ] begin
-    @testset "negative controls: shared-reads rule and a fixed stream cap disagree" begin
-        s = restrict((42, 42, 42), 4)
-        # shared reads would split; cost merges
-        @test !shares_read(s) && nlaunch(s) == 1
-        s = smoother((256, 256, 256), 4)
-        # shared reads would merge; cost splits
-        @test shares_read(s) && nlaunch(s) > 1
-        s = smoother((42, 42, 42), 4)
-        @test !stream_cap_ok(s, 16) && nlaunch(s) == 1    # a 16-stream cap would split
-        # and the cost model itself is what decides: a launch-free model splits the 42³
-        # smoother
-        @test length(
-            plan(
-                s;
-                cost = CostModel(;
-                    launch0 = 0.0, launch_per_array = 0.0, eta_lo_ws = 1.0,
-                    eta_hi_ws = 2.0, bw_cache = 235.0e9
-                )
-            ).launches
-        ) > 1
+    @testset "fused steps match split steps" begin
+        for (family, dims, K) in (
+                (smoother, (9, 7, 6), 3), (residual, (11, 6), 4),
+                (restrict, (8, 6, 4), 3), (prolong, (10, 8), 3),
+                (independent, (13, 5), 4),
+            )
+            s = family(dims, K)
+            fused, split = plan(s), plan(s; fuse = false)
+            @test length(fused.launches) == 1 && length(split.launches) == K
+            a, b = step_fields(s, fused), step_fields(s, split)
+            @test keys(a) == keys(b)
+            @test all(k -> isapprox(a[k], b[k]; rtol = 1.0e-6), keys(a))
+        end
+        # control: a changed parameter changes the fused result
+        s = smoother((9, 7, 6), 3)
+        a = step_fields(s, plan(s))
+        b = step_fields(s, plan(s); P = (0.3, 0.3, 0.7))
+        @test !isapprox(a["out1"], b["out1"]; rtol = 1.0e-6)
     end
 end
 
@@ -88,7 +79,7 @@ end
         d = only(sp.decisions)
         @test !d.merged && d.reason == :illegal && occursin("at offset (1, 0, 0)", d.detail)
         @test occursin("split z_produce | a_consume  illegal", sprint(fusion_report, sp))
-        # the cost model alone would have merged it (same traffic as the legal case)
+        # the same pair at offset 0 is legal, so it fuses
         @test plan(producer_consumer((0, 0, 0))).decisions[1].merged
     end
 end

@@ -8,7 +8,8 @@ using Test, LatticeFields
 include("../host_runner.jl")
 include("../fixtures.jl")
 using LatticeFields.IR: IRError, ZERO, coord, constant
-using LatticeFields.Schedule: live_estimate
+using LatticeFields.Schedule: live_estimate, kernel_arrays, merge_kernels, fusion_blocker,
+    MAX_ARRAYS, MAX_LIVE
 
 function regmsg(f)
     return try
@@ -230,24 +231,20 @@ end
     @testset "fusion hard limits: array arguments and the register prefilter" begin
         src = read(joinpath(@__DIR__, "..", "shared", "schedule_fusion.jl"), String)
         @isdefined(smoother) || include_string(@__MODULE__, split(src, "nlaunch(s) =")[1])
-        # η = 1 at this size: cost alone fuses all
         s = smoother((42, 42, 42), 20)
         sp = plan(s)
         @test length(sp.launches) > 1
         @test any(d -> d.reason == :limit, sp.decisions)
         @test all(
-            l -> length(Schedule.traffic(s, l.kernel.kernel).arrays) <= 32,
-            sp.launches
+            l -> length(kernel_arrays(s, l.kernel.kernel)) <= MAX_ARRAYS, sp.launches
         )
         @test length(plan(smoother((42, 42, 42), 4)).launches) == 1
-        @test length(
-            plan(
-                s; cost = CostModel(;
-                    max_arrays = 1000, max_arg_bytes = 10^6,
-                    max_live = 10^6
-                )
-            ).launches
-        ) == 1                # negative control: without limits
-        @test live_estimate(s.kernels[1]) < 96
+        # negative control: every kernel may legally join the others, and the merge of all
+        # of them breaks the array limit, so the limit is what splits
+        ids = collect(eachindex(s.kernels))
+        scc = Dict(i => i for i in ids)
+        @test all(i -> fusion_blocker(s, ids[1:(i - 1)], i, scc) === nothing, ids[2:end])
+        @test length(kernel_arrays(s, merge_kernels(s, ids, scc))) > MAX_ARRAYS
+        @test live_estimate(s.kernels[1]) < MAX_LIVE
     end
 end

@@ -115,9 +115,7 @@ struct FusionDecision
     group::Vector{String}
     candidate::String
     merged::Bool
-    reason::Symbol            # :cost | :illegal | :space | :debug
-    t_fused::Float64
-    t_split::Float64
+    reason::Symbol            # :legal | :illegal | :space | :limit | :debug
     detail::String
 end
 
@@ -254,15 +252,17 @@ end
 
 """
     plan(p::Program, ids = eachindex(p.kernels); options = CompileOptions(),
-         cost = CostModel(), stages = LOWERING, fuse = !options.debug,
-         merge = merge_kernels) -> StepPlan
+         stages = LOWERING, fuse = !options.debug, merge = merge_kernels) -> StepPlan
 
-Order the kernels of one step, fuse by the cost model (`t_fused < Σ t_split`; legality
-first, every split reported), lower each launch and bind buffers. Debug mode never fuses.
+Order the kernels of one step, fuse every kernel into the current group when that is
+legal (every split is reported), lower each launch and bind buffers. Debug mode never
+fuses.
 
-A kernel joins the current group only if no fusion blocker and no resource limit stops it
-and the modeled fused time is less than the modeled split time. Each group is checked for
-legality and compiled. A launch is static when its kernel runs at one ndrange only.
+A kernel joins the current group unless a fusion blocker (iteration space, a gated or
+reducing kernel, a dependency at an offset, a write conflict) or a hard resource limit
+(array arguments, kernel-argument bytes, the register prefilter) stops it. Each group is
+checked for legality and compiled. A launch is static when its kernel runs at one ndrange
+only.
 
 # Arguments
 - `p`: the field program (`LatticeFields.IR.Program`).
@@ -270,7 +270,6 @@ legality and compiled. A launch is static when its kernel runs at one ndrange on
 
 # Keywords
 - `options = CompileOptions()`: the compile options of every launch.
-- `cost = CostModel()`: the cost model of the fusion decisions.
 - `stages = LOWERING`: the lowering passes given to the kernel compiler.
 - `fuse = !options.debug`: `false` splits every kernel (reason `:debug`).
 - `merge = merge_kernels`: the function that merges a group into one kernel for
@@ -284,15 +283,12 @@ See also [`fusion_report`](@ref).
 """
 function plan(
         p::Program{N}, ids::Vector{Int} = collect(eachindex(p.kernels));
-        options::CompileOptions = CompileOptions(), cost::CostModel = CostModel(),
-        stages = LOWERING, fuse::Bool = !options.debug, merge::M = merge_kernels
-    ) where {
-        N, M,
-    }
+        options::CompileOptions = CompileOptions(), stages = LOWERING,
+        fuse::Bool = !options.debug, merge::M = merge_kernels
+    ) where {N, M}
     comps = step_order(p, ids)
     scc = Dict(i => c for (c, comp) in enumerate(comps) for i in comp)
     seq = reduce(vcat, comps; init = Int[])
-    ws = working_set(p, [traffic(p, p.kernels[i]) for i in seq])
     groups, decisions = Vector{Int}[], FusionDecision[]
     for i in seq
         if isempty(groups)
@@ -300,38 +296,18 @@ function plan(
             continue
         end
         g = groups[end]
-        names = [p.kernels[j].key for j in g]
         blk = fuse ? fusion_blocker(p, g, i, scc) : (:debug, "fusion off (debug mode)")
-        if blk !== nothing
-            push!(
-                decisions, FusionDecision(
-                    names, p.kernels[i].key, false, blk[1], NaN, NaN, blk[2]
-                )
-            )
-            push!(groups, [i])
-            continue
+        if blk === nothing
+            lim = limit_blocker(p, merge_kernels(p, [g; i], scc))
+            lim === nothing || (blk = (:limit, lim))
         end
-        mk = merge_kernels(p, [g; i], scc)
-        tm = traffic(p, mk)
-        lim = limit_blocker(cost, mk, tm)
-        if lim !== nothing
-            push!(
-                decisions, FusionDecision(
-                    names, p.kernels[i].key, false, :limit, NaN, NaN, lim
-                )
-            )
-            push!(groups, [i])
-            continue
-        end
-        tf = modeled_time(cost, N, tm, ws)
-        ts = modeled_time(cost, N, traffic(p, merge_kernels(p, g, scc)), ws) +
-            modeled_time(cost, N, traffic(p, p.kernels[i]), ws)
         push!(
             decisions, FusionDecision(
-                names, p.kernels[i].key, tf < ts, :cost, tf, ts, ""
+                [p.kernels[j].key for j in g], p.kernels[i].key, blk === nothing,
+                something(blk, (:legal, ""))...
             )
         )
-        tf < ts ? push!(g, i) : push!(groups, [i])
+        blk === nothing ? push!(g, i) : push!(groups, [i])
     end
     launches = LaunchSpec{N}[]
     written = Dict{Int32, Int}()
@@ -374,7 +350,7 @@ end
     fusion_report(io, plan::StepPlan)
 
 The fusion decisions of a step plan, one line per decision: `fuse` or `split`, the kernels,
-the candidate and the reason (the modeled fused and split times of a cost decision). Part of
+the candidate, the reason and, for a split, what blocked the fusion. Part of
 `Problems.field_report`, which prints it per field group.
 
 # Arguments
@@ -388,17 +364,9 @@ function fusion_report(io::IO, sp::StepPlan)
     for d in sp.decisions
         println(
             io, d.merged ? "fuse  " : "split ",
-            join(d.group, "+"), " | ", d.candidate, "  ",
-            d.reason, _decision_detail(d)
+            join(d.group, "+"), " | ", d.candidate, "  ", d.reason,
+            isempty(d.detail) ? "" : string(": ", d.detail)
         )
     end
     return nothing
-end
-# the detail of a fusion decision: the modeled times of a cost decision, else its text
-function _decision_detail(d)
-    d.reason == :cost || return string(": ", d.detail)
-    return string(
-        " fused=", round(d.t_fused * 1.0e6; digits = 2),
-        "µs split=", round(d.t_split * 1.0e6; digits = 2), "µs"
-    )
 end
