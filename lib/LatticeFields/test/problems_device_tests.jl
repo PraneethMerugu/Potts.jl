@@ -188,3 +188,39 @@ end
         end
     end
 end
+
+@testitem "fusion at the device's kernel-argument budget runs (gpu)" setup = [
+    LF_problems_device,
+] tags = [
+    :latticefields, :problems, :gpu_only,
+] begin
+    src = read(joinpath(@__DIR__, "shared", "schedule_fusion.jl"), String)
+    @isdefined(smoother) || include_string(@__MODULE__, split(src, "nlaunch(s) =")[1])
+    @testset "fusion at the device's kernel-argument budget runs ($gpu)" begin
+        budget, per = Exec.kernel_argument_bytes(DEV), Exec.array_argument_bytes(DEV)
+        @test budget == 4096 && per > 0
+        # enough smoothers (5 arrays each, one shared mask) to pass the budget
+        K = cld(budget ÷ per, 5) + 1
+        s = smoother((8, 8, 8), K)
+        fused = plan(s; backend = DEV, options = devopts())
+        split = plan(s; backend = DEV, options = devopts(), fuse = false)
+        @test 1 < length(fused.launches) < K
+        @test any(d -> d.reason == :limit, fused.decisions)
+        @test all(
+            l -> Schedule.array_arguments(s, l.kernel.kernel) * per <= budget,
+            fused.launches
+        )
+        # the largest fused launches run and match one launch per kernel
+        function run(sp)
+            st = FieldStore(DEV, s)
+            for (i, f) in enumerate(s.fields), b in st.bufs[i]
+                x = rand(Xoshiro(i), eltype(b), length(b))
+                copyto!(b, eltype(b) <: AbstractFloat ? x .* eltype(b)(0.1) : x)
+            end
+            Problems.run_step!(DEV, s, sp, st, (0.3, 0.2, 0.1))
+            KA.synchronize(DEV)
+            return [Array(Problems.current(st, s, "out$k")) for k in 1:K]
+        end
+        @test all(map((a, b) -> isapprox(a, b; rtol = 1.0e-6), run(fused), run(split)))
+    end
+end

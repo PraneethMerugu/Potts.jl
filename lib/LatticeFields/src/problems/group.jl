@@ -209,14 +209,16 @@ serves them all.
 - `spec::GroupSpec`: the group's description.
 - `program::Program`: the program of `alg`.
 - `programs::Dict`: the programs made so far, by [`update_key`](@ref).
-- `plans::Dict`: the plans made so far, as `(init plan, step plan)`.
+- `plans::Dict`: the plans made so far, as `(init plan, step plan)`, by algorithm, number
+  types, kernels and the backend's kernel-argument budget.
 """
 struct FieldGroup{N}
     spec::GroupSpec{N}
     program::Program{N}
     programs::Dict{Any, Program{N}}
     plans::Dict{
-        Tuple{Any, Type, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}},
+        Tuple{Any, Type, Type, Vector{Int}, Vector{Int}, Union{Int, Nothing}},
+        Tuple{StepPlan{N}, StepPlan{N}},
     }
 end
 function FieldGroup(
@@ -227,9 +229,8 @@ function FieldGroup(
     return FieldGroup{N}(
         spec, s, Dict{Any, Program{N}}(update_key(alg) => s),
         Dict{
-            Tuple{Any, Type, Type, Vector{Int}, Vector{Int}}, Tuple{
-                StepPlan{N}, StepPlan{N},
-            },
+            Tuple{Any, Type, Type, Vector{Int}, Vector{Int}, Union{Int, Nothing}},
+            Tuple{StepPlan{N}, StepPlan{N}},
         }()
     )
 end
@@ -343,11 +344,18 @@ function group_plans(
     s = group_program(g, alg)
     initids, stepids = kernels
     return lock(_PLANS_LOCK) do
-        get!(g.plans, (update_key(alg), V, compute_type(alg, V), initids, stepids)) do
+        key = (
+            update_key(alg), V, compute_type(alg, V), initids, stepids,
+            Exec.kernel_argument_bytes(backend),
+        )
+        get!(g.plans, key) do
             opts = _options(
                 o, V, backend; clock = clock_slot(g.spec), C = compute_type(alg, V), s
             )
-            (plan(s, initids; options = opts), plan(s, stepids; options = opts))
+            (
+                plan(s, initids; backend, options = opts),
+                plan(s, stepids; backend, options = opts),
+            )
         end
     end
 end

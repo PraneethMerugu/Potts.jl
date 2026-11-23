@@ -251,7 +251,7 @@ function workgroup(N, strategy)
 end
 
 """
-    plan(p::Program, ids = eachindex(p.kernels); options = CompileOptions(),
+    plan(p::Program, ids = eachindex(p.kernels); backend = CPU(), options = CompileOptions(),
          stages = LOWERING, fuse = !options.debug, merge = merge_kernels) -> StepPlan
 
 Order the kernels of one step, fuse every kernel into the current group when that is
@@ -259,16 +259,18 @@ legal (every split is reported), lower each launch and bind buffers. Debug mode 
 fuses.
 
 A kernel joins the current group unless a fusion blocker (iteration space, a gated or
-reducing kernel, a dependency at an offset, a write conflict) or a hard resource limit
-(array arguments, kernel-argument bytes, the register prefilter) stops it. Each group is
-checked for legality and compiled. A launch is static when its kernel runs at one ndrange
-only.
+reducing kernel, a dependency at an offset, a write conflict) or the backend's
+kernel-argument budget ([`Exec.kernel_argument_bytes`](@ref LatticeFields.Exec.kernel_argument_bytes))
+stops it. Each group is checked for legality and compiled. A launch is static when its
+kernel runs at one ndrange only.
 
 # Arguments
 - `p`: the field program (`LatticeFields.IR.Program`).
 - `ids`: the indices of the kernels of `p` to plan.
 
 # Keywords
+- `backend = CPU()`: the KernelAbstractions backend the plan runs on; its kernel-argument
+  budget bounds fusion (the CPU has none).
 - `options = CompileOptions()`: the compile options of every launch.
 - `stages = LOWERING`: the lowering passes given to the kernel compiler.
 - `fuse = !options.debug`: `false` splits every kernel (reason `:debug`).
@@ -283,9 +285,10 @@ See also [`fusion_report`](@ref).
 """
 function plan(
         p::Program{N}, ids::Vector{Int} = collect(eachindex(p.kernels));
-        options::CompileOptions = CompileOptions(), stages = LOWERING,
-        fuse::Bool = !options.debug, merge::M = merge_kernels
-    ) where {N, M}
+        backend::B = KernelAbstractions.CPU(), options::CompileOptions = CompileOptions(),
+        stages = LOWERING, fuse::Bool = !options.debug, merge::M = merge_kernels
+    ) where {N, B, M}
+    limit = argument_limit(backend)
     comps = step_order(p, ids)
     scc = Dict(i => c for (c, comp) in enumerate(comps) for i in comp)
     seq = reduce(vcat, comps; init = Int[])
@@ -298,7 +301,7 @@ function plan(
         g = groups[end]
         blk = fuse ? fusion_blocker(p, g, i, scc) : (:debug, "fusion off (debug mode)")
         if blk === nothing
-            lim = limit_blocker(p, merge_kernels(p, [g; i], scc))
+            lim = limit_blocker(p, merge_kernels(p, [g; i], scc), limit)
             lim === nothing || (blk = (:limit, lim))
         end
         push!(

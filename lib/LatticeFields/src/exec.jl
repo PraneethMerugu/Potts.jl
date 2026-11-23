@@ -14,7 +14,9 @@ device wrapper for every device kernel. A kernel is a body `body(i, args...)` ru
 - **Compile before enqueue**: [`compile!`](@ref) compiles a kernel by a launch with `n = 0`
   (no work item passes the guard); [`compile_all!`](@ref) compiles a set on host tasks.
 - **Capabilities and policy**: [`supports`](@ref) (what the hardware runs),
-  [`default_float`](@ref) (the float type CorePotts emits by default), [`ishost`](@ref).
+  [`default_float`](@ref) (the float type CorePotts emits by default), [`ishost`](@ref),
+  [`kernel_argument_bytes`](@ref) and [`array_argument_bytes`](@ref) (the kernel-argument
+  budget and the size of one array argument, which bound fusion).
 """
 module Exec
 
@@ -25,6 +27,7 @@ using Polyester: @batch
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 public HOST_GRAIN, COMPILE_ONLY, VERBOSE, compiling, ishost, supports, default_float,
+    kernel_argument_bytes, array_argument_bytes,
     register_float64!, float64_registered, FLOAT64_KERNELS, FLOAT64_ARRAY, host_launch!,
     launch!, compile!, compile_all!, Launch, Plan, walker
 
@@ -112,6 +115,71 @@ Float64
 ```
 """
 default_float(backend) = ishost(backend) ? Float64 : Float32
+
+"""
+    kernel_argument_bytes(backend) -> Union{Int, Nothing}
+
+The kernel-argument budget of `backend` in bytes: the most argument data one kernel launch
+may pass. The planner splits a fusion whose array arguments would exceed it.
+
+The host executor passes arguments as ordinary Julia calls, so the CPU has no budget. The
+ROCm and Metal methods are in the package extensions (4096 bytes on both). Any other backend
+needs a method; without one this throws.
+
+# Arguments
+- `backend`: a KernelAbstractions backend.
+
+# Returns
+- The budget in bytes, or `nothing` when there is no budget.
+
+# Examples
+```jldoctest
+julia> using LatticeFields; using LatticeFields.Exec.KernelAbstractions: CPU
+
+julia> LatticeFields.Exec.kernel_argument_bytes(CPU()) === nothing
+true
+```
+
+See also [`array_argument_bytes`](@ref).
+"""
+kernel_argument_bytes(::KernelAbstractions.CPU) = nothing
+function kernel_argument_bytes(backend)
+    throw(
+        ArgumentError(
+            string(
+                "no kernel-argument budget is known for backend ", typeof(backend),
+                "; define `LatticeFields.Exec.kernel_argument_bytes(::",
+                typeof(backend), ")` (bytes, or `nothing` for no budget)"
+            )
+        )
+    )
+end
+
+@kernel function _argument_probe!(a)
+    nothing
+end
+
+"""
+    array_argument_bytes(backend) -> Int
+
+The size in bytes of one array argument as `backend` passes it to a kernel: the device-side
+form that KernelAbstractions converts an array to (`KernelAbstractions.argconvert`), measured
+on an empty `Float32` vector (every LatticeFields array is a vector). The element type does
+not change it.
+
+# Arguments
+- `backend`: a KernelAbstractions device backend.
+
+# Returns
+- The size of the converted array in bytes.
+
+See also [`kernel_argument_bytes`](@ref).
+"""
+function array_argument_bytes(backend)
+    a = KernelAbstractions.allocate(backend, Float32, 0)
+    # (the size of the type: `sizeof` of an array value is its data)
+    return sizeof(typeof(KernelAbstractions.argconvert(_argument_probe!(backend), a)))
+end
 
 """
     register_float64!(parts::String...)

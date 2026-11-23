@@ -8,8 +8,14 @@ using Test, LatticeFields
 include("../host_runner.jl")
 include("../fixtures.jl")
 using LatticeFields.IR: IRError, ZERO, coord, constant
-using LatticeFields.Schedule: live_estimate, kernel_arrays, merge_kernels, fusion_blocker,
-    MAX_ARRAYS, MAX_LIVE
+using LatticeFields.Schedule: array_arguments, merge_kernels, fusion_blocker
+using LatticeFields: Exec
+
+# a stand-in device with a small kernel-argument budget: 25 arrays of 24 B
+struct SmallArgs <: KernelAbstractions.GPU end
+struct MockArgsless <: KernelAbstractions.GPU end
+Exec.kernel_argument_bytes(::SmallArgs) = 600
+Exec.array_argument_bytes(::SmallArgs) = 24
 
 function regmsg(f)
     return try
@@ -223,28 +229,35 @@ end
     end
 end
 
-@testitem "fusion hard limits: array arguments and the register prefilter" setup = [
+@testitem "fusion stops at the backend's kernel-argument budget" setup = [
     LF_compile_regressions,
 ] tags = [
     :latticefields, :compile,
 ] begin
-    @testset "fusion hard limits: array arguments and the register prefilter" begin
+    @testset "fusion stops at the backend's kernel-argument budget" begin
         src = read(joinpath(@__DIR__, "..", "shared", "schedule_fusion.jl"), String)
         @isdefined(smoother) || include_string(@__MODULE__, split(src, "nlaunch(s) =")[1])
+        # 20 smoothers: 5 arrays each and one shared mask
         s = smoother((42, 42, 42), 20)
-        sp = plan(s)
-        @test length(sp.launches) > 1
-        @test any(d -> d.reason == :limit, sp.decisions)
-        @test all(
-            l -> length(kernel_arrays(s, l.kernel.kernel)) <= MAX_ARRAYS, sp.launches
-        )
-        @test length(plan(smoother((42, 42, 42), 4)).launches) == 1
-        # negative control: every kernel may legally join the others, and the merge of all
-        # of them breaks the array limit, so the limit is what splits
         ids = collect(eachindex(s.kernels))
         scc = Dict(i => i for i in ids)
         @test all(i -> fusion_blocker(s, ids[1:(i - 1)], i, scc) === nothing, ids[2:end])
-        @test length(kernel_arrays(s, merge_kernels(s, ids, scc))) > MAX_ARRAYS
-        @test live_estimate(s.kernels[1]) < MAX_LIVE
+        # the CPU has no budget: one launch
+        @test Exec.kernel_argument_bytes(KernelAbstractions.CPU()) === nothing
+        sp = plan(s)
+        @test length(sp.launches) == 1 && all(d -> d.reason == :legal, sp.decisions)
+        # a 600-byte budget at 24 B per array: groups of 4 (21 arrays; a fifth makes 26)
+        sp = plan(s; backend = SmallArgs())
+        @test length(sp.launches) == 5
+        @test all(l -> array_arguments(s, l.kernel.kernel) * 24 <= 600, sp.launches)
+        @test count(d -> d.reason == :limit, sp.decisions) == 4
+        @test occursin("budget of 600 B", sprint(Schedule.fusion_report, sp))
+        # each split is forced: the group plus the next kernel breaks the budget
+        for (l, d) in zip(sp.launches, filter(d -> d.reason == :limit, sp.decisions))
+            g = [findfirst(k -> k.key == m, s.kernels) for m in [l.members; d.candidate]]
+            @test array_arguments(s, merge_kernels(s, g, scc)) * 24 > 600
+        end
+        # a backend with no known budget is refused, naming the method to define
+        @test_throws ArgumentError plan(s; backend = MockArgsless())
     end
 end

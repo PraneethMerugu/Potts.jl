@@ -1,6 +1,5 @@
 # Definitions of schedule/fusion_tests.jl that other test files use.
-using LatticeFields.Schedule: merge_kernels, step_order, fusion_report, fusion_blocker,
-    kernel_arrays, MAX_ARRAYS
+using LatticeFields.Schedule: merge_kernels, step_order, fusion_report
 
 """
 K masked-Helmholtz smoother components sharing one byte mask (6 streams each: u stencil,
