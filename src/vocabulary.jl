@@ -350,8 +350,9 @@ end
 # A kind table (`J[kind, kind]`, `V₀[kind]`) is written as a vector or matrix (medium
 # first), as one value for every entry, or as entry lines `J[k₁, k₂] = v`.
 # `_kind_table` turns each into the array; everything after it (the parameter's symbol,
-# checks, compilation, `remake`) sees only the array. Entries are keyed by kind number (a
-# kind name is its number inside a model) or, in `remake` and setters, by kind name.
+# checks, compilation, `remake`) sees only the array. Entries are keyed by kind number
+# inside a model (a kind name is its number there) and by kind name everywhere else
+# (`remake`, setters, operating points and constructor keywords).
 
 # `J[dark, light]` for an entry key `ks` of table `name`
 function _entry_text(name, kinds, ks)
@@ -361,8 +362,22 @@ function _entry_text(name, kinds, ks)
 end
 _entry_value_text(v) = v isa AbstractString ? repr(v) : string(v)
 
-# the 0-based kind number of `k` in an entry of table `name`
-function _entry_kind(name, kinds, ks, k)
+# the 0-based kind number of `k` in an entry of table `name`. With `by_name` (`remake`,
+# setters, operating points and constructor keywords) an entry names its kinds; a number
+# there is refused, since it would read as a kind number, not as a matrix index.
+function _entry_kind(name, kinds, ks, k, by_name::Bool = false)
+    if by_name && !(k isa Symbol)
+        names = join((":$(kinds[min(i + 1, length(kinds))])" for i in 1:length(ks)), ", ")
+        throw(
+            ArgumentError(
+                "kind table `$name`: the entry key \
+                    `$(repr(length(ks) == 1 ? ks[1] : ks))` gives `$(repr(k))`, not a \
+                    kind name; give kind names, \
+                    $(length(ks) == 1 ? names : "($names)") => v (the kinds are \
+                    $(join(kinds, ", ")))"
+            )
+        )
+    end
     if k isa Integer && !(k isa Bool)
         0 <= k < length(kinds) && return Int(k)
     elseif k isa Symbol
@@ -381,18 +396,20 @@ function _entry_kind(name, kinds, ks, k)
 end
 
 """
-    _kind_table(name, nd, kinds, value, entries = (); symmetric = true, base = nothing)
+    _kind_table(name, nd, kinds, value, entries = (); symmetric = true, base = nothing,
+                by_name = false)
 
 The array of kind table `name` with `nd` kind axes, in a model whose kinds (the medium
 first) are `kinds`. `value` is the declared value: an array (returned as given, with no
 `entries`), `nothing` (no value: every entry listed) or one value for every
 entry. `entries` are `ks => v` with `ks` a kind or a tuple of kinds. With `symmetric` (two
 kind axes), (k₁, k₂) also sets (k₂, k₁). `base`, an array, gives the unlisted entries (in
-`remake` and setters, the current table).
+`remake` and setters, the current table). With `by_name`, entry keys must be kind names
+(`Symbol`s); inside a model, where a kind name is its number, they are numbers.
 """
 function _kind_table(
         name::Symbol, nd::Integer, kinds, value, entries = ();
-        symmetric::Bool = true, base = nothing
+        symmetric::Bool = true, base = nothing, by_name::Bool = false
     )
     nk = length(kinds)
     if value isa AbstractArray
@@ -437,7 +454,7 @@ function _kind_table(
                     $nd kind $(nd == 1 ? "axis" : "axes")"
             )
         )
-        ix = NTuple{nd, Int}(map(k -> _entry_kind(name, kinds, ks, k) + 1, ks))
+        ix = NTuple{nd, Int}(map(k -> _entry_kind(name, kinds, ks, k, by_name) + 1, ks))
         cells = symmetric && nd == 2 ? unique([ix, reverse(ix)]) : [ix]
         for c in cells
             haskey(given, c) || continue
@@ -551,7 +568,7 @@ function _check_kind_table(name, A, kinds, symmetric::Bool)
     (symmetric && ndims(A) == 2) || return nothing
     for j in 1:nk, i in 1:(j - 1)
         a, b = _table_number(A[i, j]), _table_number(A[j, i])
-        (a === nothing || b === nothing || a == b) && continue
+        (a === nothing || b === nothing || isequal(a, b)) && continue
         throw(
             ArgumentError(
                 "kind table `$name` is symmetric, but `$name[$(kinds[i]), $(kinds[j])]` = \

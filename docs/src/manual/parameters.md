@@ -184,9 +184,22 @@ nprob2 = remake(nprob; p = [:J => [(:dark, :light) => 14.0], :V₀ => [:dark => 
 getp(nprob2, :J)(nprob2)[2, 3], getp(nprob2, :J)(nprob2)[3, 2], getp(nprob2, :V₀)(nprob2)
 ```
 
-The same entries work in `integ.ps[:J] = [(:dark, :light) => 14.0]` and in the operating
-point. A table with an entry computed from parameters (`J[dark, light] = Jx`) is a
-computed parameter: change its inputs (`remake(prob; p = [:Jx => 14.0])`) instead.
+The same entries work in `integ.ps[:J] = [(:dark, :light) => 14.0]`, in the operating
+point and in a constructor keyword. In a keyword, the entries apply over the declared
+table:
+
+```julia
+Model(; name = :m, J = [(:dark, :light) => 1.0])   # the declared J, with this entry
+Model(; name = :m, J = 5.0)                        # every entry 5.0
+```
+
+Everywhere a table takes one value, an array or entries. One value sets every entry, and an
+array replaces the table, its declared value and its entry lines. Outside a model, an entry
+names its kinds: `(1, 2) => v` is an `ArgumentError`, because `1` would read as a kind
+number, not as a matrix index.
+
+A table with an entry computed from parameters (`J[dark, light] = Jx`) is a computed
+parameter: change its inputs (`remake(prob; p = [:Jx => 14.0])`) instead.
 
 ### Errors
 
@@ -198,7 +211,8 @@ names the table and the entry, and suggests the fix:
 - named entries without a value for the medium, or for any other kind, when the table has
   no `J[kind, kind] = v` line;
 - a name in an entry that is not a kind of `@kinds`, such as a misspelling, a parameter or
-  a kind class;
+  a kind class. The message lists the kinds. Declare `@kinds` before `@parameters`; in a
+  model that extends another, bind the base's kinds in the `@extend` line;
 - an entry given twice;
 - in a symmetric table, `J[k₁, k₂]` and `J[k₂, k₁]` both listed. Two different values
   conflict; two equal values repeat. List one.

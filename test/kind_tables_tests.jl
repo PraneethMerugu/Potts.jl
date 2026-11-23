@@ -204,8 +204,55 @@ end
                 prob; p = [:J => [(:dark, :light) => 1.0, (:light, :dark) => 2.0]]
             )
         )
+        # one number sets every entry, in `remake` and in a setter
+        @test J_of(remake(prob; p = [:J => 5.0])) == fill(5.0, 3, 3)
+        @test getp(prob, :V₀)(remake(prob; p = (V₀ = 2.0,))) == [2, 2, 2]
+        integ.ps[:μ] = 3.0
+        @test integ.ps[:μ] == fill(3.0, 3, 3)
+        # a mirrored NaN is symmetric
+        r = remake(prob; p = [:J => [(:dark, :light) => NaN]])
+        @test isnan(J_of(r)[2, 3]) && isnan(J_of(r)[3, 2])
+        # an entry gives kind names: a number would read as a kind number, not an index
+        @test kt_throws(
+            ArgumentError, "give kind names",
+            () -> remake(prob; p = [:J => [(1, 2) => 5.0]])
+        )
+        @test kt_throws(
+            ArgumentError, "give kind names", () -> remake(prob; p = [:V₀ => [1 => 5.0]])
+        )
+        @test kt_throws(
+            ArgumentError, "give kind names", () -> (integ.ps[:J] = [(0, :dark) => 5.0])
+        )
         # the source problem is unchanged
         @test J_of(prob) == [0 16 16; 16 16 11; 16 11 16]
+    end
+end
+
+@testitem "kind tables: constructor keywords take every table form" setup = [
+    KindTableSetup,
+] tags = [:potts, :kind_tables] begin
+    @testset "kind tables: constructor keywords take every table form" begin
+        declared = [0 16 16; 16 16 11; 16 11 16]
+        # entries set over the declared table (both sides of a symmetric table)
+        p = kt_prob(KTPlain(; name = :m, J = [(:dark, :light) => 1.0]))
+        @test J_of(p) == [0 16 16; 16 16 1; 16 1 16]
+        p = kt_prob(KTPlain(; name = :m, V₀ = [:dark => 31.0]))
+        @test getp(p, :V₀)(p) == [0, 31, 20] && J_of(p) == declared
+        p = kt_prob(KTPlain(; name = :m, μ = Dict((:dark, :light) => 5.0)))
+        @test getp(p, :μ)(p) == [1 1 1; 1 1 5; 1 1 1]
+        # one number or an array replaces the declared value and its entry lines
+        @test J_of(kt_prob(KTPlain(; name = :m, J = 5.0))) == fill(5.0, 3, 3)
+        @test J_of(kt_prob(KTPlain(; name = :m, J = 2 * ones(3, 3)))) == fill(2.0, 3, 3)
+        # negative control: no keyword keeps the declared table
+        @test J_of(kt_prob(KTPlain(; name = :m))) == declared
+        # refusals: a kind number as an entry key, an unknown kind
+        @test kt_throws(
+            ArgumentError, "give kind names",
+            () -> KTPlain(; name = :m, J = [(1, 2) => 1.0])
+        )
+        @test kt_throws(
+            ArgumentError, "drak", () -> KTPlain(; name = :m, J = [(:drak, :light) => 1.0])
+        )
     end
 end
 
@@ -261,6 +308,8 @@ end
             ),
             # no value at all
             (:KTNone, :($V; J[kind, kind]), "has no value"),
+            # a number as an index: the whole table takes `kind` on every axis
+            (:KTNumber, :($V; J[2, 2] = ones(3, 3)), "J[kind, kind]"),
         ]
         @testset "$M" for (M, params, token) in cases
             e = kt_build(M, params)
@@ -286,6 +335,37 @@ end
                 J[dark, dark] = 2; J[dark, light] = 11; J[light, light] = 14
             )
         ) === nothing
+        # a kind name before `@kinds`, and a base kind not bound by the `@extend` line
+        e = kt_error(
+            () -> Core.eval(
+                @__MODULE__, :(
+                    @potts_model KTEarly begin
+                        @parameters begin
+                            J[kind, kind] = 1.0
+                            J[dark, light] = 2.0
+                        end
+                        @kinds medium dark light
+                    end
+                )
+            )
+        )
+        @test e isa ArgumentError &&
+            occursin("declare @kinds before @parameters", sprint(showerror, e))
+        e = kt_error(
+            () -> Core.eval(
+                @__MODULE__, :(
+                    @potts_model KTUnbound begin
+                        @extend dark = base = KTPlain()
+                        @parameters begin
+                            J[kind, kind] = 1.0
+                            J[dark, light] = 2.0
+                        end
+                    end
+                )
+            )
+        )
+        @test e isa ArgumentError &&
+            occursin("bind it in the @extend line", sprint(showerror, e))
         # a table of the wrong size given to `remake` names the size it needs
         prob = kt_prob(KTPlain(; name = :m))
         @test kt_throws(
@@ -327,5 +407,11 @@ end
         # a number that is not a kind
         @test kt_throws(ArgumentError, "not a kind number", () -> kind_names(sol, 3))
         @test kt_throws(ArgumentError, "not a kind number", () -> kind_names(sol, [1, -1]))
+        # a problem not built from a model has kinds without names
+        σ = zeros(Int32, 8, 8)
+        σ[2:4, 2:4] .= 1
+        f = CPMFunction((st, p, prop, ctx) -> 0.0; temperature = (st, p, prop, ctx) -> 1.0)
+        bare = PottsProblem(f, initial_state(σ, [1]), Lattice((8, 8)), (0, 2), (;))
+        @test kt_throws(ArgumentError, "not built from a model", () -> kind_names(bare))
     end
 end

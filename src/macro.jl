@@ -78,9 +78,12 @@ struct _Parts
     # names bound by `@extend a, b = base = Base()` (kind class members)
     bound::Set{Symbol}
     kinds::Vector{Symbol}        # the kinds of `@kinds`, in order (for messages)
+    extends::Base.RefValue{Bool}   # the model has an `@extend` (for messages)
 end
 function _Parts(structural, params, code, mod, declared)
-    return _Parts(structural, params, code, mod, declared, Set{Symbol}(), Symbol[])
+    return _Parts(
+        structural, params, code, mod, declared, Set{Symbol}(), Symbol[], Ref(false)
+    )
 end
 
 # The names `@extend n₁, n₂ = base = Base()` binds before the first `@kinds` (the
@@ -389,6 +392,10 @@ function _potts_model(name::Symbol, body::Expr, mod)
     _check_old_condition_sections(name, body, mod)
     parts = _Parts(Any[], Symbol[], Any[], mod, Dict{Symbol, String}())
     union!(parts.bound, _extend_bound_names(body))
+    parts.extends[] = any(
+        ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"),
+        body.args
+    )
     for ex in body.args
         ex isa LineNumberNode && (push!(parts.code, ex); continue)
         if ex isa Expr && ex.head === :macrocall && ex.args[1] in SECTIONS
@@ -503,10 +510,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
             ]...
         )
     )
-    extends = any(
-        ex -> ex isa Expr && ex.head === :macrocall &&
-            ex.args[1] === Symbol("@extend"), body.args
-    )
+    extends = parts.extends[]
     finish = :(
         $P.PottsSystem(;
             name, kinds = __kinds, lattice = __lattice, parameters = __params,
@@ -791,7 +795,8 @@ function _conditional!(parts::_Parts, ex)
         else
             return begin
                 sub = _Parts(
-                    parts.structural, parts.params, Any[], parts.mod, parts.declared
+                    parts.structural, parts.params, Any[], parts.mod, parts.declared,
+                    parts.bound, parts.kinds, parts.extends
                 )
                 for st in (b isa Expr && b.head === :block ? b.args : Any[b])
                     if st isa LineNumberNode
@@ -1818,8 +1823,9 @@ function _kind_table_lines(parts, lines)
 end
 
 # the code that builds kind table `k`: `_kind_table` makes the array of every written form
-# (a constructor keyword `Model(; J = …)` replaces the declared value and the entries),
-# then `kind_parameter` the parameter
+# (a constructor keyword `Model(; J = …)` with a table or one number replaces the declared
+# value and the entries; one with entries, `Model(; J = [(:dark, :light) => 1.0])`, sets
+# them over the declared table), then `kind_parameter` the parameter
 function _kind_table_code(parts, k, t)
     P = :(Potts)
     sym = findfirst(o -> o.args[1] === :symmetric, t.kw)
@@ -1844,7 +1850,9 @@ function _kind_table_code(parts, k, t)
             if $(_kw_local(k)) === nothing
                 $P._kind_table($q, $nd, __kinds, $value, $entries; symmetric = $s)
             else
-                $P._kind_table($q, $nd, __kinds, $(_kw_local(k)); symmetric = $s)
+                $P._keyword_table(
+                    $q, $nd, __kinds, $(_kw_local(k)), $value, $entries; symmetric = $s
+                )
             end; $(meta...)
         )
     )
@@ -1864,9 +1872,15 @@ function _check_kind_name(parts, k, m, where)
     what = get(parts.declared, m, nothing)
     what == "kind" && return nothing
     what === nothing && m in parts.bound && return nothing
-    not_kind = if what === nothing
-        "not a kind of @kinds (a misspelling?)" *
-            (isempty(parts.kinds) ? "" : "; the kinds are $(join(parts.kinds, ", "))")
+    known = isempty(parts.kinds) ? "" : "; the kinds are $(join(parts.kinds, ", "))"
+    not_kind = if what === nothing && parts.extends[]
+        "not a kind of @kinds or of the @extend line (a misspelling?)$known; to use a \
+            kind of the base model, bind it in the @extend line, \
+            `@extend $m, … = base = Base()`"
+    elseif what === nothing && isempty(parts.kinds)
+        "not a kind: no kinds are declared yet; declare @kinds before @parameters"
+    elseif what === nothing
+        "not a kind of @kinds (a misspelling?)$known"
     else
         "$(_with_article(what)), not a kind; an entry is indexed by kind names of @kinds"
     end
