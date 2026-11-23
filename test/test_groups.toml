@@ -1,93 +1,39 @@
-# Declarative test groups for the Potts monorepo root (test/runtests.jl).
-# Julia reads `in_all`, `group`, and routing fields (`sublib`, `tags`, `exclude_tags`).
-# `versions`, `os`, `runner`, `num_threads`, and `timeout` are CI workflow metadata.
+# Test groups of the monorepo root (test/runtests.jl). The schema is in test/README.md.
 
+# GROUP=All: these groups, in this order
+all = ["LatticeFields", "LatticePDE", "CorePotts", "MakiePotts", "Potts", "PottsModels"]
+# Workers share the 24G memory scope of the run: 4 workers of one thread each; a worker
+# restarts after an item when the scope is above 80 % of its limit; an item that runs longer
+# than 20 min fails.
+workers = 4
+worker_threads = 1
+memory_threshold = 0.8
+testitem_timeout = 1200
+
+# Each package's own suite, in its own test environment (lib/<Package>/test)
 [LatticeFields]
-group = "LatticeFields"
-sublib = "LatticeFields"
-in_all = true
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
+package = "LatticeFields"
 
 [LatticePDE]
-group = "LatticePDE"
-sublib = "LatticePDE"
-in_all = true
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
+package = "LatticePDE"
 
 [CorePotts]
-group = "CorePotts"
-sublib = "CorePotts"
-in_all = true
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
+package = "CorePotts"
 
 [MakiePotts]
-group = "MakiePotts"
-sublib = "MakiePotts"
-in_all = true
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
-
-[Potts]
-group = "Potts"
-in_all = true
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 120
+package = "MakiePotts"
 
 [PottsModels]
-group = "PottsModels"
-sublib = "PottsModels"
-in_all = true
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 4
-timeout = 180
+package = "PottsModels"
 
-[GPU]
-group = "GPU"
-in_all = false
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64", "rocm"]
-num_threads = 1
-timeout = 120
-
-[Multithreaded]
-group = "Multithreaded"
-in_all = false
-tags = ["multithreaded"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 4
-timeout = 60
-
-# Potts root-package sub-groups (selected via GROUP=Potts_<group>; already included in [Potts]).
+# The Potts suite (test/*_tests.jl)
+[Potts]
+tags = ["potts"]
 
 [Potts_core]
-group = "Potts_core"
-in_all = false
 tags = ["potts"]
 exclude_tags = [
-    "qa", "gpu", "gpu_only", "multithreaded",
+    "qa",
     "field_vocabulary", "fields", "fields_boundary", "fields_coarse", "fields_components",
     "fields_couple", "fields_couple_checks", "fields_couple_bindings", "fields_couple_names", "fields_couple_arrays_faces",
     "fields_couple_inputs", "fields_implicit", "fields_jiang", "fields_report", "fields_short",
@@ -95,58 +41,43 @@ exclude_tags = [
     "adaptive", "algebraic", "draws_folds", "edge_updates", "initialization", "kind_classes",
     "mtk_native", "solvers", "sweep_spec", "symbolic", "units", "system_container",
 ]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
 
 [Potts_fields]
-group = "Potts_fields"
-in_all = false
 tags = [
     "field_vocabulary", "fields", "fields_boundary", "fields_coarse", "fields_components",
     "fields_couple", "fields_couple_checks", "fields_couple_bindings", "fields_couple_names", "fields_couple_arrays_faces",
     "fields_couple_inputs", "fields_implicit", "fields_jiang", "fields_report", "fields_short",
     "fields_steppers",
 ]
-exclude_tags = ["qa", "gpu", "gpu_only", "multithreaded"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
+exclude_tags = ["qa"]
 
 [Potts_symbolic]
-group = "Potts_symbolic"
-in_all = false
 tags = [
     "adaptive", "algebraic", "draws_folds", "edge_updates", "initialization", "kind_classes",
     "mtk_native", "solvers", "sweep_spec", "symbolic", "units", "system_container",
 ]
-exclude_tags = ["qa", "gpu", "gpu_only", "multithreaded"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
+exclude_tags = ["qa"]
 
 [Potts_qa]
-group = "Potts_qa"
-in_all = false
 tags = ["qa"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 30
 
+# The Potts part of GROUP=GPU: the items that name a device and the device files' items
 [Potts_gpu]
-group = "Potts_gpu"
-in_all = false
 tags = ["device", "gpu"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64", "rocm"]
-num_threads = 1
-timeout = 90
+exclude_tags = ["qa"]
+device = true
+
+# The items that need four threads, in this process (julia -t 4)
+[Multithreaded]
+tags = ["multithreaded"]
+exclude_tags = ["qa", "gpu_only"]
+workers = 0
+min_threads = 4
+
+# The device tests of every package on one device (POTTS_GPU, else the platform's), without
+# the QA items; on ROCm, then the check that every CorePotts kernel was scanned
+[GPU]
+groups = ["LatticeFields_gpu", "LatticePDE_gpu", "CorePotts_gpu", "Potts_gpu"]
+device = true
+qa = false
+rocm_check = "device_coverage.jl"
