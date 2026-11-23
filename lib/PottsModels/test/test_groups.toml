@@ -14,8 +14,10 @@ logs = "batched"
 [core]
 exclude_files = ["qa_tests.jl"]
 
+# the QA file; a qa group (its tags name `qa`), so POTTS_TEST_QA=false drops it from All
 [qa]
 files = ["qa_tests.jl"]
+tags = ["qa"]
 
 [acceptance]
 dirs = ["acceptance"]

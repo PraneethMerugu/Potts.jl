@@ -143,7 +143,7 @@ end
 @testitem "FBDF matrix-free on the device with LatticeMultigrid" setup = [
     LP_precond,
 ] tags = [
-    :latticepde, :precond,
+    :latticepde, :precond, :device,
 ] begin
     if lowercase(get(ENV, "POTTS_GPU", "")) == "rocm"
         using AMDGPU: AMDGPU

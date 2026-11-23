@@ -12,7 +12,7 @@ item-name pattern (see [`name_pattern`](@ref)).
 | `GROUP` | a group of the package's `test_groups.toml` | `All` |
 | `POTTS_TEST_NAME` | regex on item names | all items |
 | `POTTS_TEST_TAGS` | comma list; items with any of these tags | all items |
-| `POTTS_TEST_QA` | `false` skips the `:qa` items | `true` |
+| `POTTS_TEST_QA` | `false` skips the `:qa` items, except in a qa group named in `GROUP` | `true` |
 | `POTTS_TEST_WORKERS` | worker processes; `0` runs the items in this process | the package's `workers` |
 | `POTTS_TEST_SHARD` | `k/n`: the k-th of n shards of the test files | `1/1` |
 | `POTTS_GPU` | device backend: `rocm`, `metal` or empty | empty |
@@ -20,6 +20,12 @@ item-name pattern (see [`name_pattern`](@ref)).
 Tooling variables: `POTTS_TEST_ORDER` (`default`, `reverse` or `random[:seed]`, the order of
 the test files), `POTTS_TEST_PASSLOG` (a file that gets one line per top-level testset) and
 `POTTS_TEST_END_EXPR_FILE` (a file whose expression runs after every item).
+
+`GROUP` takes the groups of the package's own table. At the root it also takes
+`<Package>_<group>`, a group of a package that the root runs; a package's runner does not.
+
+Kaimon's `run_tests` tool is a supported route: it runs `runtests.jl` with the pattern as
+the argument (test/README.md).
 
 test/README.md describes the `test_groups.toml` schema and the rules below in full.
 """
@@ -88,14 +94,55 @@ end
 function parse_shard(s::AbstractString)
     parts = split(s, '/')
     length(parts) == 2 || throw(ArgumentError("POTTS_TEST_SHARD must be k/n; got \"$s\""))
-    k, n = parse.(Int, parts)
-    1 <= k <= n || throw(ArgumentError("POTTS_TEST_SHARD = $k/$n: need 1 ≤ k ≤ n"))
+    k, n = tryparse.(Int, parts)
+    (k === nothing || n === nothing) &&
+        throw(ArgumentError("POTTS_TEST_SHARD must be k/n with integers k, n; got \"$s\""))
     return (k, n)
+end
+
+# `shard` is a tuple `(k, n)` of integers with 1 ≤ k ≤ n; the one check of both the keyword
+# and POTTS_TEST_SHARD
+function as_shard(s)
+    s isa Tuple{Integer, Integer} || throw(
+        ArgumentError("shard must be a tuple (k, n) of integers; got $(repr(s))")
+    )
+    k, n = Int(s[1]), Int(s[2])
+    1 <= k <= n || throw(ArgumentError("shard = ($k, $n): need 1 ≤ k ≤ n"))
+    return (k, n)
+end
+
+function as_workers(w)
+    w === nothing && return nothing
+    (w isa Integer && w >= 0) ||
+        throw(ArgumentError("workers must be an integer ≥ 0 or nothing; got $(repr(w))"))
+    return Int(w)
 end
 
 as_regex(::Nothing) = nothing
 as_regex(r::Regex) = r
 as_regex(s::AbstractString) = Regex(s)
+function as_regex(x)
+    throw(ArgumentError("name must be a Regex, a string or nothing; got $(repr(x))"))
+end
+
+"""
+    inline_pattern(r::Regex) -> String
+
+The pattern of `r` with its flags written inline (`r"abc"i` gives `"(?i)abc"`), so that a
+package's subprocess that reads it from `POTTS_TEST_NAME` matches the same names. Only the
+flags `i`, `m`, `s` and `x` can be written inline; another throws an `ArgumentError`.
+"""
+function inline_pattern(r::Regex)
+    flags = match(r"\"([a-z]*)\z", repr(r))
+    f = flags === nothing ? "" : flags[1]
+    all(in("imsx"), f) || throw(
+        ArgumentError(
+            "the name pattern $(repr(r)) has a flag that cannot be written inline \
+            (only i, m, s and x can); pass the pattern as a string"
+        )
+    )
+    return isempty(f) ? r.pattern : "(?$f)" * r.pattern
+end
 
 as_tags(t::Symbol) = [t]
 as_tags(t::AbstractString) = Symbol.(filter!(!isempty, strip.(split(t, ','))))
@@ -122,6 +169,12 @@ const GROUP_KEYS = (
     "device", "workers", "min_threads", "qa", "rocm_check",
 )
 
+"""
+    load_groups(testdir) -> GroupTable
+
+The groups of `testdir/test_groups.toml`. An unknown key or setting, a missing `all` list,
+or an `all` entry that is not a group throws an `ArgumentError`.
+"""
 function load_groups(testdir::AbstractString)
     path = joinpath(testdir, "test_groups.toml")
     isfile(path) || throw(ArgumentError("no test_groups.toml in $testdir"))
@@ -164,6 +217,19 @@ end
 # a group of this package's items (not another package's suite, not a group of groups)
 is_item_group(opts) = !haskey(opts, "package") && !haskey(opts, "groups")
 
+# a group whose tags name `qa`: its `:qa` items run whatever `qa` says when it is named
+is_qa_group(opts) = "qa" in get(opts, "tags", String[])
+
+"""
+    all_groups(t, qa) -> Vector{String}
+
+The groups of `GROUP=All`: the `all` list of the table, without the qa groups (groups whose
+`tags` name `qa`) when `qa` is false.
+"""
+function all_groups(t::GroupTable, qa::Bool)
+    return [g for g in t.settings["all"] if qa || !is_qa_group(t.groups[g])]
+end
+
 package_dir(t::GroupTable, pkg) = joinpath(dirname(t.testdir), "lib", pkg, "test")
 
 # GROUP = "<Package>_<group>" for a package that a group of this table runs
@@ -198,25 +264,31 @@ Run the test items of the package whose test directory is `testdir`. Each keywor
 comes from the environment (see [`PottsTestRunner`](@ref)), so CI, the gates, a REPL and an
 agent differ only in the variables they set.
 
-- `group`: a group of `testdir/test_groups.toml`, `"All"`, or `"<Package>_<group>"` for a
-  package that a group of the table runs.
-- `name`: a `Regex` or a regex string on item names.
+- `group`: a group of `testdir/test_groups.toml` or `"All"`. At the root, also
+  `"<Package>_<group>"`: a group of a package that a group of the root table runs.
+- `name`: a `Regex` or a regex string on item names. A `Regex` passes to a package's
+  subprocess with its flags inline (`r"x"i` as `"(?i)x"`).
 - `tags`: items that carry any of these tags (`Symbol`s, or a comma list).
-- `file`: a test file, relative to `testdir`: every item of that file (`group` is not used).
-- `qa`: `false` skips the `:qa` items, except in a group that names the `qa` tag.
-- `workers`: worker processes; `0` runs the items in this process.
-- `shard`: `(k, n)`: only the k-th of n shards of the test files.
+- `file`: a test file, relative to `testdir`: every item of that file. `group` and `shard`
+  are not used.
+- `qa`: `false` skips the `:qa` items and drops the qa groups (groups whose `tags` name
+  `qa`) from `All`. A qa group named in `group` runs its items either way.
+- `workers`: worker processes (an integer ≥ 0); `0` runs the items in this process.
+- `shard`: a tuple `(k, n)` of integers, 1 ≤ k ≤ n: only the k-th of n shards of the test
+  files.
+
+Kaimon's `run_tests` tool runs `runtests.jl` with its pattern as the one argument (see
+[`name_pattern`](@ref)), so it is a supported route too.
 """
 function run_tests(
         testdir::AbstractString = dirname(Base.active_project());
         group::AbstractString = env_group(), name = env_name(), tags = env_tags(),
         file::Union{AbstractString, Nothing} = nothing, qa::Bool = env_qa(),
-        workers::Union{Integer, Nothing} = env_workers(), shard = env_shard()
+        workers = env_workers(), shard = env_shard()
     )
-    ensure_testitem_macros()
     sel = Selection(
         as_regex(name), as_tags(tags), file === nothing ? nothing : String(file), qa,
-        workers === nothing ? nothing : Int(workers), (Int(shard[1]), Int(shard[2])),
+        as_workers(workers), as_shard(shard),
     )
     t = load_groups(testdir)
     if sel.file !== nothing
@@ -236,17 +308,22 @@ end
 
 function run_group(t::GroupTable, name::String, sel::Selection)
     if name == "All"
-        return run_sequence(t, t.settings["all"], sel)
+        return run_sequence(t, all_groups(t, sel.qa), sel)
     elseif haskey(t.groups, name)
         return run_sequence(t, [name], sel)
     end
     split = split_package_group(t, name)
-    split === nothing && throw(
-        ArgumentError(
-            "Unknown test GROUP = \"$name\" in $(t.testdir). Valid groups: \
-            $(valid_groups(t)), or <Package>_<group> for a package these groups run."
+    if split === nothing
+        packages = sort!([o["package"] for o in values(t.groups) if haskey(o, "package")])
+        more = isempty(packages) ? "" :
+            ", or <Package>_<group> for a group of $(join(packages, ", "))"
+        throw(
+            ArgumentError(
+                "Unknown test GROUP = \"$name\" in $(t.testdir). Valid groups: \
+                $(valid_groups(t))$more."
+            )
         )
-    )
+    end
     return run_package(t, split[1], split[2], sel)
 end
 
@@ -318,7 +395,7 @@ end
 # the selection, passed on to a subprocess as its environment
 function selection_env(sel::Selection)
     env = Pair{String, String}[
-        "POTTS_TEST_NAME" => sel.name === nothing ? "" : sel.name.pattern,
+        "POTTS_TEST_NAME" => sel.name === nothing ? "" : inline_pattern(sel.name),
         "POTTS_TEST_TAGS" => join(sel.tags, ','),
         "POTTS_TEST_QA" => string(sel.qa),
         "POTTS_TEST_SHARD" => "$(sel.shard[1])/$(sel.shard[2])",
@@ -350,12 +427,12 @@ end
 
 # ReTestItems shows a filter only an item's name and tags: a group's files are chosen by the
 # paths of its run (`run_paths`), so a group with file rules runs on its own
-function item_in_group(opts, ti)
+function item_in_group(opts, tags)
     want = tagset(opts, "tags")
-    (isempty(want) || any(in(ti.tags), want)) || return false
-    any(in(ti.tags), tagset(opts, "exclude_tags")) && return false
+    (isempty(want) || any(in(tags), want)) || return false
+    any(in(tags), tagset(opts, "exclude_tags")) && return false
     # items that need the process's threads run only in a group that names them
-    return !has_tag(ti, :multithreaded) || :multithreaded in want
+    return !(:multithreaded in tags) || :multithreaded in want
 end
 
 """Every test file under `testdir`, relative to it, in a fixed order."""
@@ -429,41 +506,61 @@ function run_items(t::GroupTable, batch, sel::Selection; paths)
         )
     end
     fixed = [g["workers"] for g in batch if haskey(g, "workers")]
-    workers = if !isempty(gpu)
-        0                            # one process on the device
+    workers = if device
+        0                            # a device group: one process on the device
     elseif !isempty(fixed)
         first(fixed)                 # the group needs this process (its threads)
     else
         something(sel.workers, get(t.settings, "workers", 0))
     end
-    qa_named = any(g -> :qa in tagset(g, "tags"), batch)
-    function keep(ti)
-        tags = ti.tags
-        # items for the device run only when a device is selected; `:rocm` ones on ROCm only
-        (has_tag(ti, :gpu) || has_tag(ti, :gpu_only)) && isempty(gpu) && return false
-        has_tag(ti, :rocm) && gpu != "rocm" && return false
-        isempty(batch) || any(g -> item_in_group(g, ti), batch) || return false
-        (sel.qa || qa_named || !(:qa in tags)) || return false
-        return isempty(sel.tags) || any(in(tags), sel.tags)
-    end
+    keep(ti) = selected(batch, ti.tags; qa = sel.qa, tags = sel.tags, gpu)
+    on_device(ti) = !isempty(gpu) && device_item(ti.tags)
     isempty(names) ||
         @info "Running $(join(names, ", ")) in $(t.testdir)" device = gpu workers
     return withenv("POTTS_GPU" => (isempty(gpu) ? nothing : gpu)) do
-        run_passes(t, keep, workers, paths, sel)
+        run_passes(t, keep, on_device, workers, paths, sel)
     end
 end
 
+# an item that uses the device when one is selected
+device_item(tags) = any(in(tags), (:gpu, :gpu_only, :device, :device_scan))
+
+"""
+    selected(batch, item_tags; qa = true, tags = Symbol[], gpu = "") -> Bool
+
+Whether an item with the tags `item_tags` runs in a run of the item groups `batch` (the
+group tables; empty for a `file` run), with the selection `qa` and `tags` and the device
+`gpu` (`""` for none). A `:qa` item runs when `qa` is true, or in a qa group: `GROUP=All`
+drops the qa groups when `qa` is false (see [`all_groups`](@ref)), so a qa group in a run
+was named explicitly.
+"""
+function selected(batch, item_tags; qa::Bool = true, tags = Symbol[], gpu = "")
+    # items for the device run only when a device is selected; `:rocm` ones on ROCm only
+    (:gpu in item_tags || :gpu_only in item_tags) && isempty(gpu) && return false
+    :rocm in item_tags && gpu != "rocm" && return false
+    qa_ok(g) = qa || !(:qa in item_tags) || (g !== nothing && is_qa_group(g))
+    if isempty(batch)
+        qa_ok(nothing) || return false
+    else
+        any(g -> item_in_group(g, item_tags) && qa_ok(g), batch) || return false
+    end
+    return isempty(tags) || any(in(item_tags), tags)
+end
+
 # Items that time code in-process (`:timing`) or start Julia subprocesses (`:subprocess`)
-# run after the others, one at a time, on uncontended cores. The scan of the device code
-# (`:device_scan`) reads the kernel cache of the process that compiled the other items, so
-# it runs last, in this process.
+# run after the others, one at a time, on uncontended cores. With a device selected, the
+# items that use it (`device_item`) run next, in this process: the scan of the device code
+# (`:device_scan`) reads the kernel cache of the process that compiled them, so it runs
+# last, in this process too.
 serial(ti) = has_tag(ti, :timing) || has_tag(ti, :subprocess)
 scan(ti) = has_tag(ti, :device_scan)
 
-function run_passes(t::GroupTable, keep, workers, paths, sel::Selection)
+function run_passes(t::GroupTable, keep, on_device, workers, paths, sel::Selection)
+    host(ti) = keep(ti) && !on_device(ti) && !scan(ti)
     passes = (
-        (ti -> keep(ti) && !serial(ti) && !scan(ti), workers),
-        (ti -> keep(ti) && serial(ti) && !scan(ti), min(workers, 1)),
+        (ti -> host(ti) && !serial(ti), workers),
+        (ti -> host(ti) && serial(ti), min(workers, 1)),
+        (ti -> keep(ti) && on_device(ti) && !scan(ti), 0),
         (ti -> keep(ti) && scan(ti), 0),
     )
     errs = Tuple{Any, Any}[]                     # (exception, backtrace), in pass order
@@ -508,6 +605,7 @@ function retestitems(t::GroupTable, pred, paths, nworkers, sel::Selection)
         kw = (; kw..., memory_threshold = s["memory_threshold"])
     end
     haskey(s, "logs") && (kw = (; kw..., logs = Symbol(s["logs"])))
+    ensure_testitem_macros()
     proj = ReTestItems.identify_project(t.testdir)
     return task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(proj))) do
         ReTestItems.runtests(pred, paths...; kw...)
