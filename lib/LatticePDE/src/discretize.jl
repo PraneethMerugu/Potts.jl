@@ -13,7 +13,7 @@ struct FiniteVolume end
 
 """
     LatticeDiscretization(grid; methods = Dict(), T = nothing, backend = nothing,
-        domain = nothing, clock = nothing)
+        domain = nothing, clock = nothing, fuse = true)
 
 How a `PDESystem` is put on a lattice. `grid = Grid(dims)` gives only the site counts: the
 spacing is derived from the system's domain (`extent ./ dims`) and periodicity from its
@@ -64,6 +64,10 @@ of `τ`; a given `dt` must divide `τ`) and the step index `k` that an equation 
 then `1`, `2`, …, kept as an integer by the stepper (never computed from a float time).
 Without a clock, `ExplicitEuler` needs `dt`, and `step_index` is refused.
 
+`fuse = false` runs one kernel launch per kernel: the kernels of a step are not fused into
+one launch (by default they are, wherever that is legal). The results are the same; use it
+where the fused launches are slower than split ones on your hardware.
+
 # Arguments
 - `grid::Grid`: the site counts, `Grid(dims)`.
 
@@ -73,12 +77,13 @@ Without a clock, `ExplicitEuler` needs `dt`, and `step_index` is refused.
 - `backend = nothing`: the backend; `nothing` is the host.
 - `domain = nothing`: the `Bool` input that marks an irregular domain.
 - `clock = nothing`: the clock's period `τ`.
+- `fuse = true`: whether the kernels of a step are fused into one launch where legal.
 
 An unknown keyword throws an `ArgumentError`.
 
 # Fields
 - `grid::Grid`, `methods`, `T`, `backend`, `domain::Union{Nothing, String}` (the key of
-  the domain input), `clock::Union{Nothing, Float64}`: as given.
+  the domain input), `clock::Union{Nothing, Float64}`, `fuse::Bool`: as given.
 
 See also [`FiniteVolume`](@ref), [`Coarse`](@ref), [`lattice_domain`](@ref).
 """
@@ -89,16 +94,17 @@ struct LatticeDiscretization{N, M, B} <: AbstractDiscretization
     backend::B
     domain::Union{Nothing, String}
     clock::Union{Nothing, Float64}
+    fuse::Bool
 end
 function LatticeDiscretization(
         grid::Grid; methods = Dict(), T::Union{Type, Nothing} = nothing,
-        backend = nothing, domain = nothing, clock = nothing, kw...
+        backend = nothing, domain = nothing, clock = nothing, fuse::Bool = true, kw...
     )
     isempty(kw) || throw(
         ArgumentError(
             string(
-                "`LatticeDiscretization` takes `methods`, `T`, `backend`, `domain` and ",
-                "`clock`; got ", join(("`$k`" for k in keys(kw)), ", "),
+                "`LatticeDiscretization` takes `methods`, `T`, `backend`, `domain`, ",
+                "`clock` and `fuse`; got ", join(("`$k`" for k in keys(kw)), ", "),
                 ". The problem is chosen by the algorithm: ",
                 "`discretize` returns one SciML problem, which `solve` takes with a field \
                     algorithm or an OrdinaryDiffEq solver"
@@ -121,7 +127,7 @@ function LatticeDiscretization(
         _name(_opof(domain))
     end
     return LatticeDiscretization(
-        grid, methods, T, backend, key, clock === nothing ? nothing : Float64(clock)
+        grid, methods, T, backend, key, clock === nothing ? nothing : Float64(clock), fuse
     )
 end
 

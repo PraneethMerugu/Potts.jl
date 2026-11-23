@@ -204,10 +204,11 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
   of the step (Jacobi), across solvers too;
 - `discretization` (any `SciMLBase.AbstractDiscretization`) discretizes the fields. Left
   out, or a `LatticeDiscretization(Grid(dims))` of the model's lattice, the fields are the
-  fused lattice fields described above. Any other discretization steps the problem
-  `discretize(Potts.fields(model), discretization; inputs)` over each MCS window, solved
-  with `field_solver` (required: a SciML algorithm such as `Tsit5()`), on the CPU. Each
-  window starts from the fields' current values and the CPM inputs at that MCS
+  fused lattice fields described above (`LatticeDiscretization(Grid(dims); fuse = false)`
+  runs one launch per kernel, with the same results). Any other discretization steps the
+  problem `discretize(Potts.fields(model), discretization; inputs)` over each MCS window,
+  solved with `field_solver` (required: a SciML algorithm such as `Tsit5()`), on the CPU.
+  Each window starts from the fields' current values and the CPM inputs at that MCS
   ([`Potts.field_inputs`](@ref) names them). The discretization must take
   `inputs = [name => array, …]` and give an integrator that reads and writes each field by
   name (`getu`, `setu`) as a vector of the lattice's sites in column-major order, and sets
@@ -828,7 +829,7 @@ function CorePotts.remake_function(
     spec = _resolve_solvers(
         c; field_solver, ode_solver,
         solvers = kept ? mi.solvers.solvers : solvers, kept, discretization,
-        mi.T
+        mi.T, mi.solvers.fuse
     )
     values = _parameter_dict(c, prob.p)
     track = _track(track)

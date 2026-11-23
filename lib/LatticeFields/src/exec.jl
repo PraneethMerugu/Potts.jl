@@ -15,8 +15,9 @@ device wrapper for every device kernel. A kernel is a body `body(i, args...)` ru
   (no work item passes the guard); [`compile_all!`](@ref) compiles a set on host tasks.
 - **Capabilities and policy**: [`supports`](@ref) (what the hardware runs),
   [`default_float`](@ref) (the float type CorePotts emits by default), [`ishost`](@ref),
-  [`kernel_argument_bytes`](@ref) and [`launch_argument_bytes`](@ref) (the kernel-argument
-  budget and the size of one array argument, which bound fusion).
+  [`kernel_argument_bytes`](@ref) and [`launch_argument_bytes`](@ref) (the backend's
+  kernel-argument budget and the size of a launch's whole argument tuple, which bound
+  fusion).
 """
 module Exec
 
@@ -319,7 +320,8 @@ end
 Run `body(i, args...)` for `i in 1:n` on `backend`, without synchronizing: the host
 executor on the CPU, else the device wrapper with a dynamic ndrange and the backend's
 workgroup size (one compile per body and argument types, whatever `n`). Nothing runs for
-`n ≤ 0`. In compile mode ([`compiling`](@ref)) a device launch compiles the kernel instead.
+`n ≤ 0`. In compile mode ([`compiling`](@ref)) a device launch compiles the kernel
+instead.
 
 # Arguments
 - `backend`: a KernelAbstractions backend.
@@ -461,9 +463,9 @@ end
 const LinearLaunch{K, WG} = Launch{K, WG, <:Tuple{Any, Tuple, Int}}
 const CartesianLaunch{K, WG} = Launch{K, WG, <:Tuple{Any, Tuple, Tuple}}
 
-# The Cartesian device kernel (the Schedule–Exec contract, contract.jl): `body(x, args...)`
-# with `x::NTuple{N, Int}` 1-based; the body guards every axis itself (padded items are
-# no-ops). `live = false` is the compile launch: no item calls the body.
+# The Cartesian device kernel (the Schedule–Exec contract, contract.jl):
+# `body(x, args...)` with `x::NTuple{N, Int}` 1-based; the body guards every axis itself
+# (padded items are no-ops). `live = false` is the compile launch: no item calls the body.
 @kernel unsafe_indices = true function _kernel_cart!(body, args, live)
     x = @index(Global, NTuple)
     if live
@@ -653,8 +655,9 @@ last argument as given (the host has no budget; the size compares launches).
 
 See also [`kernel_argument_bytes`](@ref).
 """
-launch_argument_bytes(l::LinearLaunch{HostExec}) = sizeof(Tuple{map(typeof, l.params)...})
-launch_argument_bytes(l::CartesianLaunch{HostExec}) = sizeof(Tuple{map(typeof, l.params)...})
+launch_argument_bytes(l::LinearLaunch{HostExec}) = _host_bytes(l)
+launch_argument_bytes(l::CartesianLaunch{HostExec}) = _host_bytes(l)
+_host_bytes(l) = sizeof(Tuple{map(typeof, l.params)...})
 function launch_argument_bytes(l::LinearLaunch)
     body, args, n = l.params
     return _argument_bytes(l.kernel, l.ndrange == 0 ? nothing : l.ndrange, (body, args, n))

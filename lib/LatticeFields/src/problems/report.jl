@@ -579,8 +579,17 @@ function group_report(
     )
     f === nothing || _fact_lines(io, alg, f)
     _line(io, "run", _runtext(rt.totals, rt.status))
-    _fusion_lines(io, rt.step)
+    _fusion_lines(io, _run_plan(rt))
     return nothing
+end
+
+# the step plan that the launches of `rt` run: on a device, the plan at its kernel-argument
+# budget for the argument types it binds (`BoundStep`)
+function _run_plan(rt::GroupRuntime)
+    rt.step isa StepPlan || return rt.step
+    return _at_budget(
+        rt.backend, rt.program, rt.step, rt.store, Tuple(rt.p), rt.store.cur, rt.c, nothing
+    )
 end
 
 function _state_type(rt::GroupRuntime)
@@ -1161,6 +1170,9 @@ function _sciml_tail(io, prob, m::LatticeMetadata)
     fp = field_problem(prob)
     _problem_lines(io, fp)
     _function_lines(io, prob, m)
+    # the launches of the right side, once it is built
+    rhs = m.rhs[]
+    rhs isa LatticeRHS && _fusion_lines(io, rhs.plan)
     _system_bound(io, fp)
     return nothing
 end

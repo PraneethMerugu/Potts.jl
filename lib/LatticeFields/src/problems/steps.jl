@@ -85,7 +85,9 @@ end
 
 # the parameters of a launch are in the kernel's compute type (its `compute_type`), wrapped
 # like `c` (a Dual of it under Dual parameters)
-_launch_c(ck, c) = c === nothing ? zero(ck.T) : zero(withvaltype(typeof(c), value_type(ck.T)))
+function _launch_c(ck, c)
+    return c === nothing ? zero(ck.T) : zero(withvaltype(typeof(c), value_type(ck.T)))
+end
 
 # the launch of `l` with parameters `P`, its arrays at the slots `cur`
 function _bind_launch(backend, p, l, st, cur, fuse::F, P) where {F}
@@ -111,9 +113,14 @@ function _at_budget(backend, p, sp, st, P0, cur, c, fuse::F) where {F}
         P = ntuple(_ -> cc, ck.nparams + length(ck.derived))
         return Exec.launch_argument_bytes(_bind_launch(backend, p, l, st, cur, fuse, P))
     end
-    signature = (typeof(backend), _argument_types(st), typeof(P0), typeof(c), F)
+    signature = (
+        typeof(backend), _argument_types(st), typeof(P0), typeof(c), F, fuse_key(fuse),
+    )
     return bound_plan(sp, budget, signature, arguments)
 end
+
+# what besides the argument types decides the launches a fuse hook changes
+fuse_key(fuse) = nothing
 
 # the types of a store's arrays and tables
 function _argument_types(st::FieldStore)

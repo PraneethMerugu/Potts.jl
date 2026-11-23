@@ -60,7 +60,7 @@ struct RHSContext{N, B}
     tables::Vector                             # `key => values`, as given (`_table_list`)
     faces::Vector{FaceCheck}
     t0::Float64
-    plans::Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}
+    plans::Dict{Tuple{Type, CompileOptions}, Tuple{StepPlan{N}, StepPlan{N}}}
     index::Any                                 # for the parameter checks (names)
     stability::Any                             # … and the front end's `check_parameters`
     # … with the inputs it reads in an index (host, by site)
@@ -90,7 +90,7 @@ maps) and `Val(false)` for a system without one (a `LinearProblem` or `Nonlinear
 - `builds::Base.RefValue{Int}`: the count of builds (an owned solve builds none).
 - `lock::ReentrantLock`: guards the build.
 - `sem::Base.RefValue{Any}`: the semantic program of the right side (built once).
-- `plans`: its init and step plans per value type.
+- `plans`: its init and step plans per value type and compile options.
 """
 struct LatticeMetadata{P <: FieldProblem, H} <: SciMLBase.AbstractDiscretizationMetadata{H}
     problem::P
@@ -108,7 +108,7 @@ function LatticeMetadata(fp::FieldProblem{N}) where {N}
         fp,
         fp.kind == :map ? :map : :ode, Ref{Any}(nothing), Ref(0), ReentrantLock(),
         Ref{Any}(nothing),
-        Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}()
+        Dict{Tuple{Type, CompileOptions}, Tuple{StepPlan{N}, StepPlan{N}}}()
     )
 end
 function _sem(m::LatticeMetadata)
@@ -123,7 +123,7 @@ function _rhs_options(fp::FieldProblem)
     o = fp.options
     return CompileOptions(
         o.T, o.I, o.float64_ok, o.debug, o.index, o.lanes,
-        clock_slot(fp.group.spec), o.S, o.declared
+        clock_slot(fp.group.spec), o.S, o.declared, o.fuse
     )
 end
 # a solution of SciML's solvers is returned as it is: no SciMLBase wrapper (a
@@ -1199,6 +1199,8 @@ struct LatticeRHS{L <: Tuple, W, E, X, I}
     store::FieldStore
     ctx::X
     init::I                                    # the init plan
+    # the step plan its launches run (at the backend's kernel-argument budget)
+    plan::Any
     lastp::Vector{Any}                         # [the parameter vector init last ran with]
     lastv::Vector{Float64}                     # … and its primal values
     checkp::Vector{Any}                        # [the parameter vector last checked]
@@ -1719,7 +1721,7 @@ function _lattice_rhs(
     Exec.compile_all!(backend, [r.launch for r in ls])
     f = LatticeRHS{typeof(ls), typeof(each(length(ls))), E, typeof(ctx), typeof(ip)}(
         ls,
-        each(length(ls)), ctx.faces, st, ctx, ip, Any[nothing], Float64[], Any[nothing],
+        each(length(ls)), ctx.faces, st, ctx, ip, sp, Any[nothing], Float64[], Any[nothing],
         Float64[],
         Dict{Type, Any}(), Type[],
         Any[nothing], Dict{Task, Any}(), ReentrantLock(), Any[nothing],
@@ -1839,7 +1841,8 @@ function ode_problem(
         s, backend, collect(String, state),
         Dict{String, String}(rates), collect(String, init), options,
         tabs, faces, Float64(tspan[1]),
-        Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}(), index, stability, binputs, String[],
+        Dict{Tuple{Type, CompileOptions}, Tuple{StepPlan{N}, StepPlan{N}}}(), index,
+        stability, binputs, String[],
         false
     )
     ids = Int[fieldid(s, k) for k in state]

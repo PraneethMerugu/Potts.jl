@@ -48,7 +48,7 @@ function compile_kernel(
     o.T === nothing && (
         o = CompileOptions(
             Float32, o.I, o.float64_ok, o.debug,
-            o.index, o.lanes, o.clock, o.S, o.declared
+            o.index, o.lanes, o.clock, o.S, o.declared, o.fuse
         )
     )
     check_types(p, k, o)
@@ -58,7 +58,8 @@ function compile_kernel(
     big > typemax(Int32) && o.I == Int32 &&
         (
         o = CompileOptions(
-            o.T, Int64, o.float64_ok, o.debug, o.index, o.lanes, o.clock, o.S, o.declared
+            o.T, Int64, o.float64_ok, o.debug, o.index, o.lanes, o.clock, o.S,
+            o.declared, o.fuse
         )
     )
     if !o.debug
