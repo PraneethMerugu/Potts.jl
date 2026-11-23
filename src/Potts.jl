@@ -55,11 +55,10 @@ for name in names(CorePotts)
     (name === :CorePotts || !Base.isexported(CorePotts, name)) || @eval export $name
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, compose, extend,
-    total_energy, energy_change, generated_code, observe, Adaptive, ExplicitEuler,
-    ExplicitMap,
-    BackwardEuler, CrankNicolson, BDF2, QuasiSteady, LatticeNewton, FieldGroups,
-    substep_counts, steady_fields, field_series, field_report, LatticePCG, LatticeGMRES,
-    LatticeMultigrid, LatticeBlockSolve, Coarse
+    total_energy, energy_change, generated_code, observe, kind_names, Adaptive,
+    ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady,
+    LatticeNewton, FieldGroups, substep_counts, steady_fields, field_series, field_report,
+    LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, Coarse
 # `LatticeMultigrid(; cycle = VCycle(ν₁, ν₂))` (not exported: a short name)
 public VCycle
 # the declared parameters and variables of a model (MTK's `parameters` lists the compiled

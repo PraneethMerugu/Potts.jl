@@ -16,7 +16,12 @@
         λ = 1.0
         V₀ = 40.0
         T = 10.0
-        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+        J[medium, medium] = 0
+        J[medium, dark] = 16
+        J[medium, light] = 16
+        J[dark, dark] = 2
+        J[dark, light] = 11
+        J[light, light] = 14
     end
     #<
     @energy begin

@@ -31,9 +31,10 @@ end
         λ = 2.0
         T = 10.0
         λ_F = 20.0
-        J[kind, kind] = Pairs(
-            default = 0.0, (medium, body) => 10, (medium, front) => 6, (body, front) => 6
-        )
+        J[kind, kind] = 0.0
+        J[medium, body] = 10
+        J[medium, front] = 6
+        J[body, front] = 6
     end
     @variables V_target(cell) = ifelse(kind == front, 30.0, ifelse(kind == body, 60.0, 0.0))
     @lattice Lattice((48, 48); boundary = Periodic(), neighborhood = Moore(1))

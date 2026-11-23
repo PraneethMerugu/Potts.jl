@@ -751,9 +751,22 @@ See also [`@potts_model`](@ref), [`Potts.PottsPart`](@ref).
 """
 function PottsSystem(; name::Symbol, checks::Bool = true, kw...)
     part = _robin_slots(_check_field_lines(PottsPart(; kw...)))
+    checks && _check_part_kind_tables(part)
     pre = _staged(name, part)
     checks && _check_primed_names(_check_name_categories(_check_reserved_names(pre)))
     return _wrap_payload(name, nothing, part)
+end
+
+# every kind table of a model against its kinds (`_check_kind_table`): a table of the wrong
+# size, or an asymmetric table not declared `[symmetric = false]`, is an error when the
+# model is built
+function _check_part_kind_tables(part::PottsPart)
+    for x in part.parameters
+        i = info(x)
+        (i !== nothing && i.role === :kindtable) || continue
+        _check_kind_table(i.name, i.default, part.kinds, _is_symmetric_table(i))
+    end
+    return part
 end
 
 # A Robin coefficient α or β that is an expression of parameters (`(g1 + g2) * c(t, 0, y) -

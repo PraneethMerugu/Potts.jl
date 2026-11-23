@@ -151,3 +151,37 @@ end
         ).f.fingerprint
     end
 end
+
+@testitem "contact tables written by kind name equal the paper matrices" setup = [
+    TutorialModelsSetup,
+] tags = [:pottsmodels, :core] begin
+    @testset "contact tables written by kind name equal the paper matrices" begin
+        T = TutorialModels
+        σg, kg = graner_glazier_state()
+        gg = [ownership => σg, kind => kg]
+        aop = akeeb_state(; lattice = (99, 60))
+        # the matrices the models were written with before they named their entries (PRL
+        # p. 2015; Akeeb et al. Table 1), in kind order
+        J_gg = [0 16 16; 16 2 11; 16 11 14]
+        J_ak = [0.0 2.0 10.0; 2.0 16.0 2.0; 10.0 2.0 5.0]
+        cases = [
+            ("Graner–Glazier", GranerGlazier, gg, J_gg, (;)),
+            ("Graner–Glazier page", T.CellSorting, gg, J_gg, (;)),
+            ("Akeeb", AkeebInvasion, aop, J_ak, (; lattice = (99, 60))),
+            ("Akeeb page", T.LeaderFollowerInvasion, aop, J_ak, (; lattice = (99, 60))),
+        ]
+        @testset "$label" for (label, M, op, J, kw) in cases
+            named = PottsProblem(M(; name = :m, kw...), op, (0, 1); capacity = 1000)
+            matrix = PottsProblem(M(; name = :m, J, kw...), op, (0, 1); capacity = 1000)
+            @test getp(named, :J)(named) == J
+            # the same parameter object, type and generated code as the matrix form
+            @test typeof(named.p) == typeof(matrix.p)
+            @test same_problem(named, matrix)
+            # negative control: one entry changed, on both sides of the diagonal
+            J2 = copy(J)
+            J2[2, 3] = J2[3, 2] = J[2, 3] + 1
+            other = PottsProblem(M(; name = :m, J = J2, kw...), op, (0, 1); capacity = 1000)
+            @test !same_problem(named, other)
+        end
+    end
+end

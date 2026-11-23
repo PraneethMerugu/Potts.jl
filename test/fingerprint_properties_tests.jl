@@ -33,7 +33,7 @@ end
             end
             @kinds medium cell
             @parameters begin
-                J[2, 2] = [0.0 4.0; 4.0 2.0]
+                J[kind, kind] = [0.0 4.0; 4.0 2.0]
                 λ = 1.0
                 V₀ = 9.0
                 k = 0.3
@@ -76,7 +76,7 @@ end
                 k = 0.3
                 Dcoef = 0.1
                 T = 1.0
-                J[2, 2] = [0.0 4.0; 4.0 2.0]
+                J[kind, kind] = [0.0 4.0; 4.0 2.0]
                 V₀ = 9.0
                 λ = 1.0
             end
