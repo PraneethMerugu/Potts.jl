@@ -177,8 +177,10 @@ that keeps them current ([`commit_moments!`](@ref)). The lifecycle updates every
 tracker incrementally and does not recount it from `σ`. A hand-written model whose
 `commit!` does not maintain a tracker that the state holds (the moments above all) uses
 stale values for the whole run: its division planes pass through stale centroids. Potts
-adds `commit_moments!` whenever it adds the moment columns. On a periodic axis a centroid
-is defined only while the cell spans less than half the period.
+adds `commit_moments!` whenever it adds the moment columns. The moment trackers stay exact
+only while every site of the cell lies within half a period of its anchor on each periodic
+axis. A cell that spreads further (for example a fragmented cell) corrupts its moments for
+the rest of the run, and its division planes are then wrong.
 
 Both kinds of division can happen in one MCS:
 
