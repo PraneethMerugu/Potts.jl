@@ -228,11 +228,11 @@ end
         @test integ.p.pb == 21
         # A-53: contact tables stay symmetric
         @test_throws ArgumentError setp(integ, :J)(integ, [0 2; 5 1])
+        # A-57: an asymmetric table is refused; a scalar fills every entry
         @test_throws ArgumentError PottsProblem(
-            AuditDerived(; name = :d), [op; :J => 2.0], (
-                0, 2,
-            )
-        )   # A-57
+            AuditDerived(; name = :d), [op; :J => [0 2; 5 1]], (0, 2)
+        )
+        @test all(==(2), PottsProblem(AuditDerived(; name = :d), [op; :J => 2.0], (0, 2)).p.J)
         # A-15: reinit! validates shapes, takes symbolic maps, reruns callback
         # initialization
         σ2 = zeros(Int32, 12, 12)
