@@ -1,4 +1,4 @@
-# GPU group (opt-in: COREPOTTS_GPU or POTTS_GPU = metal | rocm; the backend comes from
+# GPU group (opt-in: POTTS_GPU = metal | rocm; the backend comes from
 # test/shared/devices.jl, D-157). Trackers stay exact on the device; statistics
 # agree with the CPU (D-029: statistical, not bitwise, CPU/GPU agreement).
 

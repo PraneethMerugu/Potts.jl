@@ -21,7 +21,7 @@ using LatticeFields: LatticeFields, Problems as LFP
 # imports an earlier file made in the old single Main
 using SciMLBase: ReturnCode
 using SymbolicIndexingInterface: SymbolicIndexingInterface
-include("shared/lp_runner.jl")
+include("shared/preamble.jl")
 include("shared/discretize.jl")
 include("shared/problems.jl")
 include("shared/bounds.jl")

@@ -16,9 +16,9 @@
         # negative control: a variable is not a parameter
         q = named(Potts.declared_variables(sys), :q)
         @test !MTKB.isparameter(q)
-        # a kind table's shape is its default's: a scalar default is refused when the model
-        # is built
-        @test has(mn_error(() -> MNScalarTable(; name = :m)), "kind table")
+        # a scalar default fills the kinds-by-kinds table
+        Js = named(Potts.declared_parameters(MNScalarTable(; name = :m)), :J)
+        @test Js isa Symbolics.Arr && size(Js) == (2, 2)
     end
 end
 

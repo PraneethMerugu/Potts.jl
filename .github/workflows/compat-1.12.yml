@@ -68,7 +68,7 @@ jobs:
             cpus=$(( 2 * (k - 1) ))-$(( 2 * k - 1 )),$(( 2 * (k - 1) + 16 ))-$(( 2 * k + 15 ))
             (
               start=$(date +%s)
-              taskset -c "$cpus" env OPENVT_PACKAGE_BULK="$HOME/potts-ci/openvt-bulk" POTTSMODELS_SHARD="$k/3" GROUP=PottsModels \
+              taskset -c "$cpus" env OPENVT_PACKAGE_BULK="$HOME/potts-ci/openvt-bulk" POTTS_TEST_SHARD="$k/3" GROUP=PottsModels \
                 julia "$JULIA_112_FLAG" -t 4 --project=test test/runtests.jl > "$LOGS/shard-$k.log" 2>&1
               echo "$? $(( $(date +%s) - start ))" > "$LOGS/shard-$k.exit"
             ) &

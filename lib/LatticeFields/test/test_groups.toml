@@ -1,92 +1,38 @@
-# Declarative test groups for LatticeFields.
-# Julia reads `in_all`, `group`, and `tags`; the remaining keys are CI metadata.
+# Test groups of LatticeFields (lib/LatticeFields/test/runtests.jl). The schema is in
+# test/README.md.
+
+# GROUP=All: these groups
+all = ["exec", "ir", "compile", "schedule", "problems", "solvers", "qa"]
+# 3 workers fit the 24G memory scope; each gets this process's thread count
+workers = 3
+testitem_timeout = 3600
+logs = "batched"
 
 [exec]
-group = "exec"
-in_all = true
 tags = ["exec"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 30
 
 [ir]
-group = "ir"
-in_all = true
 tags = ["ir"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 30
 
 [compile]
-group = "compile"
-in_all = true
 tags = ["compile"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 30
 
 [schedule]
-group = "schedule"
-in_all = true
 tags = ["schedule"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 30
 
 [problems]
-group = "problems"
-in_all = true
 tags = ["problems"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 30
 
 [solvers]
-group = "solvers"
-in_all = true
 tags = ["solvers"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
 
 [qa]
-group = "qa"
-in_all = true
 tags = ["qa"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 30
 
+# the solver iteration budget sweep over sizes (about 10 minutes)
 [solvers_gate]
-group = "solvers_gate"
-in_all = false
 tags = ["solvers_gate"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
 
 [gpu]
-group = "gpu"
-in_all = false
 tags = ["gpu_only"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64", "rocm"]
-num_threads = 1
-timeout = 60
+device = true

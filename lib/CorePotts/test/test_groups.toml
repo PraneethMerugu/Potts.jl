@@ -1,33 +1,20 @@
-# Declarative test groups for CorePotts.
-# Julia reads `in_all`, `group`, `tags`, and `exclude_tags`; the remaining keys are CI metadata.
+# Test groups of CorePotts (lib/CorePotts/test/runtests.jl). The schema is in test/README.md.
+
+# GROUP=All: these groups
+all = ["core", "qa"]
+# 3 workers fit the 24G memory scope; each gets this process's thread count
+workers = 3
+testitem_timeout = 3600
+logs = "batched"
 
 [core]
-group = "core"
-in_all = true
 tags = ["corepotts"]
-exclude_tags = ["qa", "gpu_only"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 60
+exclude_tags = ["qa"]
 
 [qa]
-group = "qa"
-in_all = true
 tags = ["qa"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64"]
-num_threads = 1
-timeout = 30
 
+# the items that name a device, then the scan of the compiled kernels (`:device_scan`)
 [gpu]
-group = "gpu"
-in_all = false
 tags = ["device", "device_scan"]
-versions = ["1.12", "1.13"]
-os = ["self-hosted"]
-runner = ["self-hosted", "Linux", "X64", "rocm"]
-num_threads = 1
-timeout = 60
+device = true

@@ -280,8 +280,8 @@ end
 
 # D-157, ROCm: no `double` in any kernel this suite compiled (a full scan of the process's
 # kernel cache). It is an item of its own, tagged `:device_scan`: it runs after every other
-# device item and in the process that compiled those kernels (PottsRTI.device_suite), not
-# when a setup is evaluated.
+# device item and in the process that compiled those kernels (the last pass of
+# test/runner/PottsTestRunner.jl), not when a setup is evaluated.
 @testitem "device IR: no double in any kernel this suite compiled (ROCm)" setup = [
     GpuSetup,
 ] tags = [

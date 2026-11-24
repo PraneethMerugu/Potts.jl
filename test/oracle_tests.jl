@@ -44,7 +44,7 @@ end
     end
     @kinds medium dark light
     @parameters begin
-        J[3, 3] = zeros(3, 3)
+        J[kind, kind] = zeros(3, 3)
         λ = 1.0
         V₀ = 2.0
         T = 4.0

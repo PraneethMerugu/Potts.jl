@@ -1,14 +1,14 @@
 # Generated FV kernels on a device (Metal or ROCm), Float32: the bit-exactness checks (fused
 # vs split on the device, device vs host executor, one-ulp negative control), and the owned
-# and ODE problems on device arrays against the host. Included by runtests.jl when
-# LATTICEFIELDS_GPU is set (device_backend.jl defines DEV).
+# and ODE problems on device arrays against the host. The items are `:gpu_only`: they run
+# only with a device selected (POTTS_GPU, or GROUP=gpu); device_backend.jl defines DEV.
 
 @testsetup module LF_problems_device
 using Test, LatticeFields
 # imports an earlier file made in the old single Main
 using ForwardDiff: Dual
 using ForwardDiff: ForwardDiff
-include("shared/lf_runner.jl")
+include("shared/preamble.jl")
 include("exec_helpers.jl")
 include("host_runner.jl")
 include("fixtures.jl")

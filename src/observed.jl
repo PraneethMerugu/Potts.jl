@@ -480,6 +480,64 @@ function observe(sol::CorePotts.PottsSolution, x)
     return map((u, s) -> f(u, sol.prob.p, s), sol.u, sol.t)
 end
 
+"""
+    kind_names(x)
+    kind_names(x, k)
+
+Return the kind names of a model in kind-number order, or the name of each kind number in
+`k`.
+
+Kinds are numbered from 0, the medium, in `@kinds` order. `sol[:kind]`, `cell_kinds(u)`
+and the operating point hold these numbers. `kind_names(x)[k + 1]` is the name of kind `k`.
+
+# Arguments
+- `x`: a model (`PottsSystem` or `CompiledPottsSystem`), or a `PottsProblem`,
+  `PottsIntegrator` or `PottsSolution` built from one.
+- `k`: a kind number, or an array of kind numbers. Nested arrays such as `sol[:kind]`
+  (one vector per saved state) work too. A number that is not a kind is an
+  `ArgumentError`.
+
+# Returns
+- `kind_names(x)::Vector{Symbol}`: the kind names, the medium first.
+- `kind_names(x, k)`: `k` with each number replaced by its kind's name, a `Symbol`.
+
+# Examples
+```julia
+sol = solve(prob, SequentialCPM())
+kind_names(sol)                     # [:medium, :dark, :light]
+kind_names(sol, sol[:kind][end])    # [:dark, :light, :light, …], one per cell
+```
+
+For a categorical vector, give the names to CategoricalArrays.jl:
+`categorical(kind_names(sol, k); levels = kind_names(sol))`.
+
+See also [`observe`](@ref), [`cell_kinds`](@ref).
+"""
+kind_names(sys::PottsSystem) = copy(_p(sys, :kinds))
+kind_names(c::CompiledPottsSystem) = kind_names(getfield(c, :sys))
+kind_names(m::PottsModelInfo) = kind_names(m.csys)
+function kind_names(x::Union{CorePotts.PottsProblem, CorePotts.PottsIntegrator})
+    x.f.sys isa PottsModelInfo || throw(
+        ArgumentError(
+            "kind_names: this $(nameof(typeof(x))) is not built from a model; its kinds \
+                have no names"
+        )
+    )
+    return kind_names(x.f.sys)
+end
+kind_names(sol::CorePotts.PottsSolution) = kind_names(sol.prob)
+kind_names(x, k::Union{Integer, AbstractArray}) = _kind_name_of(kind_names(x), k)
+_kind_name_of(names, k::AbstractArray) = map(y -> _kind_name_of(names, y), k)
+function _kind_name_of(names, k::Integer)
+    0 <= k < length(names) && return names[k + 1]
+    throw(
+        ArgumentError(
+            "kind_names: $k is not a kind number; the kinds are 0:$(length(names) - 1) " *
+                "($(join(names, ", ")))"
+        )
+    )
+end
+
 # `observe` by name: the model's quantity called `x` (variable, `@observed`, built-in,
 # parameter)
 _observe_quantity(::Any, x) = x

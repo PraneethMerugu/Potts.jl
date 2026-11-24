@@ -77,7 +77,12 @@ model of Graner and Glazier (1992), with the parameters of the paper:
         λ = 1.0
         V₀ = 40.0
         T = 10.0
-        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+        J[medium, medium] = 0
+        J[medium, dark] = 16
+        J[medium, light] = 16
+        J[dark, dark] = 2
+        J[dark, light] = 11
+        J[light, light] = 14
     end
     @lattice Lattice((72, 72); boundary = Periodic(), neighborhood = Moore(1))
     @relations proposal = Moore(1)
@@ -98,9 +103,12 @@ Line by line:
   - the temperature `T`;
   - the contact energies `J`.
 
-  `J[kind, kind]` is a table indexed by two kinds, in the order of `@kinds`. Row 2,
-  column 3 is the dark–light energy (11). Dark–dark contacts (2) are the cheapest, so dark
-  cells stick together most. Contacts with the medium (16) are the most expensive.
+  `J` is a table indexed by two kinds, written entry by entry with the kind names.
+  `J[dark, light] = 11` is the dark–light energy, and it also sets `J[light, dark]`,
+  because a contact table is symmetric. Dark–dark contacts (2) are the cheapest, so dark
+  cells stick together most. Contacts with the medium (16) are the most expensive. The
+  same table as a matrix, rows and columns in the order of `@kinds`, is
+  `J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]`.
 - `@lattice` declares a 72×72 lattice. `Periodic()` wraps the edges around.
   `Moore(1)` makes the 8 surrounding sites the neighbors of a site.
 - `@relations proposal = Moore(1)` lets the source site be any of these 8 neighbors, as in
@@ -224,12 +232,18 @@ kinds = sol[:kind][end]
 kinds[1:8]              # 1 = dark, 2 = light
 ```
 
+`kind_names` reads the numbers as kind names:
+
+```@example start
+kind_names(sol, kinds[1:8])
+```
+
 The results are ordinary Julia arrays, so any Julia code can analyze them. For example,
 compute the mean volume of the dark cells at the last saved time:
 
 ```@example start
 using Statistics: mean
-mean(volumes[end][kinds .== 1])
+mean(volumes[end][kind_names(sol, kinds) .== :dark])
 ```
 
 A saved state `u` also has accessors. `ownership(u)` is the matrix of cell numbers, and

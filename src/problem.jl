@@ -276,13 +276,7 @@ function CorePotts.PottsProblem(
         _computed_tag(_p(sys, :parameters))
     )
     _register_derivation!(_p(sys, :parameters), T, p)
-    for name in _contact_tables(c)
-        J = getproperty(p, name)
-        J == transpose(J) ||
-            throw(ArgumentError("kind table `$name` is used in a contact energy and must \
-                be symmetric"))
-    end
-    _check_kind_tables(sys, p)
+    _check_parameter_tables(c, p)
     expression isa Val{true} && throw(
         ArgumentError(
             "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; \
@@ -941,18 +935,14 @@ function _ode_layout(@nospecialize(st), c::CompiledPottsSystem, spec::SolverSpec
     return CorePotts.CPMState(st.ownership, cell, st.site, model, st.history)
 end
 
-# Kind tables are indexed by kind (medium first) along every axis.
+# Kind tables are indexed by kind (medium first) along every axis, and a two-kind table is
+# symmetric unless declared `[symmetric = false]` (`_check_kind_table`).
 function _check_kind_tables(sys::PottsSystem, p)
-    nk = length(_p(sys, :kinds))
     for x in _p(sys, :parameters)
         i = info(x)
         i.role === :kindtable || continue
-        v = getproperty(p, i.name)
-        all(==(nk), size(v)) || throw(
-            ArgumentError(
-                "kind table `$(i.name)` has size $(size(v)); the model has $nk kinds " *
-                    "($(join(_p(sys, :kinds), ", "))), so it needs $nk entries per axis"
-            )
+        _check_kind_table(
+            i.name, getproperty(p, i.name), _p(sys, :kinds), _is_symmetric_table(i)
         )
     end
     return nothing
@@ -1099,7 +1089,11 @@ function _parameter_values(c::CompiledPottsSystem, opd)
             haskey(opd, u) && throw(ArgumentError(_computed_message(ps, i)))
             continue
         end
-        v = haskey(opd, u) ? opd[u] : i.default
+        v = if haskey(opd, u)
+            _table_change(getfield(c, :sys), i, opd[u], i.default)
+        else
+            i.default
+        end
         v === nothing &&
             throw(ArgumentError("parameter `$(i.name)` has no default; give it in the \
                 operating point"))
@@ -1119,6 +1113,45 @@ function _derive_values!(values, ps)
         values[byname[n]] = v
     end
     return values
+end
+
+# A kind table changed in an operating point, `remake` or a setter: by its entries
+# (`:J => [(:dark, :light) => 14.0]`, `:V₀ => [:dark => 30.0]`, a `Dict` or one `Pair`),
+# the `current` table with those entries set (both sides of a symmetric table); by one
+# number (`:J => 5.0`), every entry. Both go through the model's one table path
+# (`_kind_table`); any other value is the whole table.
+function _table_change(sys::PottsSystem, i::Entity, v, current)
+    i.role === :kindtable || return v
+    return _table_value(
+        i.name, ndims(current), _p(sys, :kinds), v, current, _is_symmetric_table(i)
+    )
+end
+function _table_value(name::Symbol, nd::Integer, kinds, v, current, symmetric::Bool)
+    if _is_entry_change(v)
+        es = v isa Pair ? (v,) : v isa AbstractDict ? collect(pairs(v)) : v
+        return _kind_table(
+            name, nd, kinds, nothing, Pair{Any, Any}[e for e in es];
+            symmetric, base = current, by_name = true
+        )
+    end
+    v isa Number && return _kind_table(name, nd, kinds, v; symmetric)
+    return v
+end
+
+# The value of kind table `name` in a model built with the constructor keyword `kw`: the
+# keyword's entries (`Model(; J = [(:dark, :light) => 1.0])`) over the declared table, or
+# the keyword's table (an array or one number), which replaces the declared value and its
+# entry lines.
+function _keyword_table(
+        name::Symbol, nd::Integer, kinds, kw, value, entries; symmetric::Bool
+    )
+    _is_entry_change(kw) || return _kind_table(name, nd, kinds, kw; symmetric)
+    declared = _kind_table(name, nd, kinds, value, entries; symmetric)
+    return _table_value(name, nd, kinds, kw, declared, symmetric)
+end
+function _is_entry_change(v)
+    (v isa Pair || v isa AbstractDict) && return true
+    return (v isa AbstractVector || v isa Tuple) && !isempty(v) && all(x -> x isa Pair, v)
 end
 
 # a scalar expression, or a kind table (vector/matrix) with an expression among its entries
@@ -1268,8 +1301,8 @@ end
 # sweep `Model(; T = t)`) keeps one type, so nothing recompiles.
 _computed_params(ps) = [x for x in ps if _is_symbolic(info(x).default)]
 # the fingerprint's text of a default: numbers as Float64 (`0` and `0.0` are one derivation:
-# the Pairs and matrix forms of a kind table give one type), arrays element by element with
-# their size
+# the entry-line and matrix forms of a kind table give one type), arrays element by element
+# with their size
 function _canon_default(d::AbstractArray)
     return string(size(d)) * "[" * join(map(_canon_default, d), ", ") * "]"
 end
@@ -2106,6 +2139,7 @@ Base.@nospecializeinfer function _set_parameter_map(
                 _computed_message(_p(getfield(info.csys, :sys), :parameters), i)
             )
         )
+        v = _table_change(getfield(info.csys, :sys), i, v, getproperty(old, i.name))
         new[i.name] = _param_value(info.T, v, i)
     end
     out = _with_values(
@@ -2214,6 +2248,9 @@ Base.@nospecializeinfer function _finish_parameters(
         @nospecialize(mi::PottsModelInfo), @nospecialize(old), @nospecialize(out), _
     )
     c = mi.csys
+    # a table of the wrong size, named, before the type comparison below (the tables of the
+    # derived values are checked after it)
+    _check_kind_tables(getfield(c, :sys), out)
     out = _derive(_p(getfield(c, :sys), :parameters), mi.T, out)
     typeof(out) === typeof(old) || throw(
         ArgumentError(
@@ -2224,12 +2261,14 @@ Base.@nospecializeinfer function _finish_parameters(
     return _check_parameter_tables(c, out)
 end
 
-# the kind tables of a parameter object: their checks, and contact tables symmetric
+# the kind tables of a parameter object: their checks (size, and the symmetry of every
+# table not declared asymmetric, with a message naming the entries), then contact tables
+# symmetric (this catches a contact table declared `[symmetric = false]`)
 function _check_parameter_tables(c::CompiledPottsSystem, @nospecialize(out))
     _check_kind_tables(getfield(c, :sys), out)
     for name in _contact_tables(c)
         J = getproperty(out, name)
-        J == transpose(J) ||
+        all(((x, y),) -> x == y || isequal(x, y), zip(J, transpose(J))) ||
             throw(ArgumentError("kind table `$name` is used in a contact energy and must \
                 be symmetric"))
     end
@@ -2255,7 +2294,10 @@ function CorePotts.set_parameter(info::PottsModelInfo, p::PottsParameters, v, i:
             NamedTuple{(i,)}(
                 (
                     _param_value(
-                        info.T, v, Potts.info(_p(getfield(info.csys, :sys), :parameters)[x])
+                        info.T,
+                        _table_change(
+                            getfield(info.csys, :sys), e, v, getproperty(p, i)
+                        ), e
                     ),
                 )
             )
@@ -2292,6 +2334,7 @@ function CorePotts.set_parameters(info::PottsModelInfo, p::PottsParameters, vals
             throw(ArgumentError("`$i` is not a parameter of $(nameof(info.csys))"))
         e = Potts.info(params[x])
         _is_symbolic(e.default) && throw(ArgumentError(_computed_message(params, e)))
+        v = _table_change(getfield(info.csys, :sys), e, v, getproperty(p, i))
         new[i] = _param_value(info.T, v, e)
     end
     q = _with_values(p, NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(p))))

@@ -1,4 +1,4 @@
-# Solvers on a GPU (LATTICEFIELDS_GPU = metal | rocm): Float32 solves equal the host form
+# Solvers on a GPU (POTTS_GPU = metal | rocm): Float32 solves equal the host form
 # bitwise and repeat bitwise; the no-Float64 walk on the device argument types; the Float64
 # solver of unanchored weak-reaction groups (user ruling): `:done` at weak reaction where
 # the backend has Float64, the documented Float32 fallback (and the refusal) where it has
@@ -8,13 +8,13 @@
 using Test, LatticeFields
 # imports an earlier file made in the old single Main
 using LatticeFields.Solvers: solve_plan
-include("shared/lf_runner.jl")
+include("shared/preamble.jl")
 include("exec_helpers.jl")
 include("host_runner.jl")
 include("solvers_cases.jl")
 include("device_backend.jl")
 const KAd = LatticeFields.Schedule.KernelAbstractions
-# `DEV` and the GPU package come from device_backend.jl (loaded once by runtests.jl)
+# `DEV` and the GPU package come from device_backend.jl
 devconvert(x) = gpu == "metal" ? Metal.mtlconvert(x) : AMDGPU.rocconvert(x)
 
 """

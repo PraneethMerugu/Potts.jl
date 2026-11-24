@@ -17,7 +17,7 @@ using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
 # imports an earlier file made in the old single Main
 using LatticeFields.IR: HEX
-include("shared/lp_runner.jl")
+include("shared/preamble.jl")
 include("shared/discretize.jl")
 @parameters ldD = 0.3
 @variables ldc(..)

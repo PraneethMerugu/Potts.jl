@@ -14,7 +14,8 @@ Manifest or a nested `[workspace]` anywhere else.
 - `lib/MakiePotts` — plotting (renders CorePotts states and solutions)
 - `lib/PottsModels` — published models as `@potts_model` sources
 
-Tests: `julia --project=test test/runtests.jl` with `GROUP=All|CorePotts|MakiePotts|PottsModels|Potts` (and opt-in `GPU`),
+Tests: `julia --project=test test/runtests.jl` with `GROUP=All|CorePotts|MakiePotts|PottsModels|Potts` (and opt-in `GPU`)
+and the `POTTS_TEST_*` variables (`test/README.md`); a warm session is `test/runner/session.jl`,
 or run one group directly, e.g. `julia --project=lib/CorePotts/test lib/CorePotts/test/runtests.jl`.
 
 ## Code rules (INTERNALS §5)

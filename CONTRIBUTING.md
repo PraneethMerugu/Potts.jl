@@ -5,49 +5,43 @@ The workspace keeps one gitignored `Manifest.toml` at the repository root. Never
 
 ## Test suites and `test_groups.toml`
 
-Each test directory declares its groups in `test_groups.toml` (`test/test_groups.toml` and `lib/<Pkg>/test/test_groups.toml`).
-`test/runtests.jl` dispatches the `GROUP` environment variable against those tables and rejects unknown names with `ArgumentError`.
+Every package runs its tests with one runner, `test/runner/PottsTestRunner.jl`. Each test directory declares its groups in `test_groups.toml` (`test/test_groups.toml` and `lib/<Package>/test/test_groups.toml`).
+Environment variables choose what runs, with the same names in every package; an unknown `GROUP` throws an `ArgumentError`.
 
 ```sh
 GROUP=Potts julia --project=test test/runtests.jl
+POTTS_TEST_NAME="coarse field" GROUP=Potts julia --project=test test/runtests.jl
 ```
 
 | `GROUP` | Scope |
 |---|---|
-| `All` (default) | All `in_all = true` packages (`LatticeFields`, `LatticePDE`, `CorePotts`, `MakiePotts`, `Potts`, `PottsModels`) |
-| `Potts`, `CorePotts`, `LatticeFields`, `LatticePDE`, `MakiePotts`, `PottsModels` | All `in_all = true` groups of that package |
-| `<Sublib>_<group>` | One group in `Potts` or `lib/<Sublib>` |
-| `GPU` | Device suites across `LatticeFields_gpu`, `CorePotts_gpu`, `LatticePDE_gpu`, and `Potts_gpu` (`POTTS_GPU=metal\|rocm`); `PottsModels_gpu` is opt-in |
+| `All` (default) | `LatticeFields`, `LatticePDE`, `CorePotts`, `MakiePotts`, `Potts`, `PottsModels` |
+| `Potts` | Every item of `test/` |
+| `CorePotts`, `LatticeFields`, `LatticePDE`, `MakiePotts`, `PottsModels` | The `All` group of that package |
+| `<Package>_<group>` | One group of `lib/<Package>/test` (for example `CorePotts_qa`, `LatticeFields_solvers`, `PottsModels_acceptance`) |
+| `Potts_core`, `Potts_fields`, `Potts_symbolic`, `Potts_qa`, `Potts_gpu` | Parts of `Potts` |
+| `GPU` | `LatticeFields_gpu`, `LatticePDE_gpu`, `CorePotts_gpu` and `Potts_gpu` on one device (`POTTS_GPU=metal\|rocm`); `PottsModels_gpu` is opt-in |
 | `Multithreaded` | 4-thread checkerboard and `cell_sums` invariants (`julia -t 4`) |
 
-Common `GROUP=<Sublib>_<group>` selectors:
+The other variables are `POTTS_TEST_NAME`, `POTTS_TEST_TAGS`, `POTTS_TEST_QA`, `POTTS_TEST_WORKERS`, `POTTS_TEST_SHARD` and `POTTS_GPU`. [test/README.md](test/README.md) describes them, the groups of each package, and the `test_groups.toml` schema.
 
-- `Potts_*`: `Potts_core`, `Potts_fields`, `Potts_symbolic`, `Potts_qa`, `Potts_gpu`, `Potts_All`
-- `CorePotts_*`: `CorePotts_core`, `CorePotts_qa`, `CorePotts_gpu`, `CorePotts_All`
-- `LatticeFields_*`: `LatticeFields_exec`, `LatticeFields_ir`, `LatticeFields_compile`, `LatticeFields_schedule`, `LatticeFields_problems`, `LatticeFields_solvers`, `LatticeFields_qa`, `LatticeFields_solvers_gate`, `LatticeFields_gpu`, `LatticeFields_All`
-- `LatticePDE_*`: `LatticePDE_core`, `LatticePDE_qa`, `LatticePDE_gpu`, `LatticePDE_All`
-- `MakiePotts_*`: `MakiePotts_core`, `MakiePotts_qa`, `MakiePotts_acceptance`, `MakiePotts_adversarial`, `MakiePotts_allocations`, `MakiePotts_downstream_conformance`, `MakiePotts_saved_state_channels`, `MakiePotts_visual`, `MakiePotts_All`
-- `PottsModels_*`: `PottsModels_core`, `PottsModels_qa`, `PottsModels_acceptance`, `PottsModels_reproductions`, `PottsModels_guardrails`, `PottsModels_gpu` (opt-in), `PottsModels_All`
+## Fast local loop (`test/runner/session.jl`)
 
-See [test/README.md](test/README.md) for per-package environment variables (`POTTS_TEST_WORKERS`, `POTTS_QA`, `POTTSMODELS_SHARD`, `*_TEST_NAME`).
-
-## Fast local loop (`test/dev.jl`)
-
-Start an interactive `Revise` and `ReTestItems` session from the repository root to rerun individual `@testitem`s without restarting Julia. Test titles are plain descriptions, so select items by words in their titles, by a regex, or by tag:
+Start a warm session to rerun individual `@testitem`s without restarting Julia. Test titles are plain descriptions, so select items by words in their titles, by a regex, or by tag:
 
 ```sh
-julia --project=test -i test/dev.jl
+julia --project=test -i test/runner/session.jl
 ```
 
 ```julia
-ti("coarse field")             # items whose name contains "coarse field"
-ti(r"^a Coarse\(4\)")          # items whose name matches a regex
-ti(; tags = :fields_coarse)    # items carrying a tag
-ti("is_kind"; nworkers = 1)    # run in a fresh worker process
-tf("fields_short_tests.jl")    # all items in one file
+run_tests(name = "coarse field")             # items whose name matches "coarse field"
+run_tests(name = r"^a Coarse\(4\)")          # a regex
+run_tests(tags = :fields_coarse)             # the items with a tag
+run_tests(file = "fields_short_tests.jl")    # every item of one file
+run_tests(name = "is_kind", workers = 1)     # in a fresh worker process
 ```
 
-Re-run via `test/runtests.jl` before pushing; a long interactive session can retain mutated state.
+The same file starts a session for a package: `julia --project=lib/CorePotts/test -i test/runner/session.jl`. Revise picks up `src` edits when it is on the load path. Rerun through `runtests.jl` before you push: a long session can keep state that tests changed.
 
 ## Bounds checking (`--check-bounds`)
 

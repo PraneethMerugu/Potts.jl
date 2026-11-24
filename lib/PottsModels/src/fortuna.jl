@@ -150,18 +150,22 @@ See also [`fortuna_lattice`](@ref), [`fortuna_layout`](@ref).
         λ = 10.0                                   # volume constraint, every compartment
         λ_F = 150.0                                # F-actin drive (Eq 7)
         c = 0.1                                    # protrusion rate; the authors' constant
-        J[kind, kind] = Pairs(
-            default = 0.0,
-            (medium, substrate) => 20, (medium, cytoplasm) => 20,
-            (medium, lamellipodium) => 40 / 3, (medium, nucleus) => 100,
-            (substrate, cytoplasm) => 20, (substrate, lamellipodium) => 20 / 3,
-            (substrate, nucleus) => 100,
-            (cytoplasm, lamellipodium) => 20,      # Table 1 (the authors' code uses 10)
-            (cytoplasm, nucleus) => 20, (lamellipodium, nucleus) => 40,
-            # the lid row, from the authors' code
-            (medium, lid) => -20, (lid, cytoplasm) => 20,
-            (lid, lamellipodium) => 40 / 3, (lid, nucleus) => 100
-        )
+        J[kind, kind] = 0.0                        # every pair not listed
+        J[medium, substrate] = 20
+        J[medium, cytoplasm] = 20
+        J[medium, lamellipodium] = 40 / 3
+        J[medium, nucleus] = 100
+        J[substrate, cytoplasm] = 20
+        J[substrate, lamellipodium] = 20 / 3
+        J[substrate, nucleus] = 100
+        J[cytoplasm, lamellipodium] = 20           # Table 1 (the authors' code uses 10)
+        J[cytoplasm, nucleus] = 20
+        J[lamellipodium, nucleus] = 40
+        # the lid row, from the authors' code
+        J[medium, lid] = -20
+        J[lid, cytoplasm] = 20
+        J[lid, lamellipodium] = 40 / 3
+        J[lid, nucleus] = 100
     end
     @variables begin
         # fixed from t = 0; V = (4π/3)R³
