@@ -1,8 +1,8 @@
-# Number types (P5 role model). Bodies bake only a *value type* `V` (Float16, Float32,
-# Float64); the arrays and the parameter tuple carry the element type, which may wrap `V`
-# (a ForwardDiff `Dual{tag, V, N}`). Every conversion an emitted body makes goes through
-# `lanecast`, so the same body text runs on plain and Dual values. The ForwardDiff methods
-# live in the package extension `LatticeFieldsForwardDiffExt`.
+# Number types. Bodies bake only a *value type* `V` (Float16, Float32, Float64); the arrays
+# and the parameter tuple carry the element type, which may wrap `V` (a ForwardDiff
+# `Dual{tag, V, N}`). Every conversion an emitted body makes goes through `lanecast`, so the
+# same body text runs on plain and Dual values. The ForwardDiff methods live in the package
+# extension `LatticeFieldsForwardDiffExt`.
 
 """
     lanecast(T, x)

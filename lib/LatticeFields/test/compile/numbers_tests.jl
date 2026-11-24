@@ -38,8 +38,8 @@ end
         @test promote_dual(Float32, typeof(d)) == Dual{Nothing, Float32, 2}
         @test promote_dual(Float64, BigFloat) == Float64
         # raw IR: fixed
-        @test lanetype(F64, BigFloat) == Float64 && lanetype(F32, Float64) == Float32
-        @test lanetype(F64, BigFloat, :state) == BigFloat &&
+        @test lanetype(F64, Float32) == Float64 && lanetype(F32, Float64) == Float32
+        @test lanetype(F64, Float32, :state) == Float32 &&
             lanetype(F32, Float64, :state) == Float64 &&
             # problems: value classes
             lanetype(F16, Float64, :state) == Float16

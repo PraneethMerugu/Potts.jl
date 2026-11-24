@@ -1,8 +1,7 @@
-# Number types through problems (P5 role model, test matrix rows of C5/C6/C7a): Dual
-# derivatives against finite differences on the owned and ODE paths, Rodas5P (Jacobian and
-# time gradient through the right side), BigFloat as a host-side parameter type, promotion
-# and plan reuse,
-# and hoisted time. Each row has a negative control.
+# Number types through problems: Dual derivatives against finite differences on the owned
+# and ODE paths, Rodas5P (Jacobian and time gradient through the right side), BigFloat as a
+# host-side parameter type, promotion and plan reuse, and hoisted time. Each row has a
+# negative control.
 
 @testsetup module LP_numbers
 using Test, LatticePDE
