@@ -50,5 +50,5 @@ tok(ad, f) = isapprox(ad, f; rtol = 1.0e-7) && ad != 0
 # A group that declares Float64 on a backend without it (Metal) is
 # refused at the bind in words; a stub backend whose `supports_float64` is false stands in.
 # The D-157 registry of a store's generic bodies is keyed on a Float64 device array.
-struct NoF64Backend <: LatticeFields.Exec.KernelAbstractions.GPU end
+struct NoF64Backend <: LatticeFields.Exec.KernelAbstractions.Backend end
 LatticeFields.Exec.KernelAbstractions.supports_float64(::NoF64Backend) = false

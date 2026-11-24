@@ -16,6 +16,8 @@
 #   device_arraytype() MtlArray | ROCArray (for `isa` checks)
 #   device_package()   the loaded package module (Metal | AMDGPU), for backend-specific
 #                      instrumentation; `nothing` off the device
+#   device_kernels()   the `(F, tt)` pairs of the kernels compiled and loaded on the device
+#                      in this process (kernel_listing.jl)
 #
 # Off the device a test records the uniform skip
 #   @test_skip "device (POTTS_GPU=metal|rocm)"

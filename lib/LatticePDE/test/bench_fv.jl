@@ -35,14 +35,16 @@ else
     ["bandwidth", "fusion", "species", "compile", "build"]
 end
 const SMOKE = get(ENV, "SMOKE", "0") == "1"
+# the kernels compiled and loaded on the device so far (one listing for every suite)
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "kernel_listing.jl"))
 if WHICH == "rocm"
     using AMDGPU: AMDGPU
     const DEV = AMDGPU.ROCBackend()
-    ninstances() = length(AMDGPU.Compiler._kernel_instances)
+    ninstances() = length(compiled_kernels(AMDGPU))
 elseif WHICH == "metal"
     using Metal: Metal
     const DEV = Metal.MetalBackend()
-    ninstances() = length(Metal.kernel_instances)
+    ninstances() = length(compiled_kernels(Metal))
 else
     const DEV = KA.CPU()
     ninstances() = 0

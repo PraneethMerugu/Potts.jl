@@ -259,7 +259,7 @@ function fd_oldpath(c0, lat, D, n; h = 1.0, bc = nothing, lower = nothing)
 end
 
 struct FdNotANumber <: Real end
-struct FdFakeDevice <: Potts.KernelAbstractions.GPU end
+struct FdFakeDevice <: Potts.KernelAbstractions.Backend end
 
 @potts_model FdPeriodic begin
     @kinds medium A

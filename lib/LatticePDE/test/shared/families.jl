@@ -70,7 +70,7 @@ function fmsg(f)
 end
 
 # a backend that is not the problem's: an array type whose backend is a stand-in GPU
-struct FamFakeGPU <: KA.GPU end
+struct FamFakeGPU <: KA.Backend end
 struct FamDevVec <: AbstractVector{Float64}
     v::Vector{Float64}
 end

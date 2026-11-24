@@ -1,9 +1,9 @@
 # The full no-`double` scan (D-157; extends D-047), ROCm only. Included at the END of
 # `test/gpu.jl` and `lib/CorePotts/test/gpu.jl`, after every device test of that suite has
-# run: every kernel AMDGPU compiled in this process (`AMDGPU.Compiler._kernel_instances`,
-# filled by every `hipfunction`, including compile-only launches) is rebuilt as a
-# GPUCompiler job with the device's default config (what a KA launch uses) and its optimized
-# LLVM module is scanned for the LLVM type `double`. Metal refuses such kernels itself; ROCm
+# run: every kernel AMDGPU compiled and loaded in this process (`compiled_kernels`,
+# kernel_listing.jl; compile-only launches included) is rebuilt as a GPUCompiler job with
+# the device's default config (what a KA launch uses) and its optimized LLVM module is
+# scanned for the LLVM type `double`. Metal refuses such kernels itself; ROCm
 # would run them, so this stands in for Metal while Metal verification is deferred.
 #
 # Negative control in the same route: two Float64-touching kernels and their Float32 twin
@@ -22,6 +22,8 @@ const KA = Base.loaded_modules[
         Base.UUID("63c18a36-062a-441e-b654-da1e3ab1ce7c"), "KernelAbstractions"
     ),
 ]
+
+include(joinpath(@__DIR__, "kernel_listing.jl"))
 
 # the LLVM type token `double`, not part of a name (`%double`, `@julia_double_1`, `.double`)
 const DOUBLE = r"(?<![%@.\w\"])double(?![\w.\"])"
@@ -42,7 +44,7 @@ KA.@kernel function scan_f32!(a)
     @inbounds a[i] = a[i] * 1.000000001f0
 end
 
-"""Launch the three control kernels (so that they are in the kernel cache)."""
+"""Launch the three control kernels (so that the kernel listing holds them)."""
 function run_controls!()
     backend = AMDGPU.ROCBackend()
     for k in (scan_f64_literal!, scan_f64_convert!, scan_f32!)
@@ -52,12 +54,11 @@ function run_controls!()
     return nothing
 end
 
-"""`[(signature, lines with double)]` of every kernel in AMDGPU's kernel cache."""
+"""`[(signature, lines with double)]` of every kernel in the kernel listing."""
 function scan()
     config = AMDGPU.Compiler.compiler_config(AMDGPU.device())
     out = Tuple{String, Vector{SubString{String}}}[]
-    for k in collect(values(AMDGPU.Compiler._kernel_instances))
-        F, TT = typeof(k).parameters
+    for (F, TT) in compiled_kernels(AMDGPU)
         job = GPUCompiler.CompilerJob(GPUCompiler.methodinstance(F, TT), config)
         ir = sprint(io -> GPUCompiler.code_llvm(io, job; dump_module = true))
         push!(out, (string(Tuple{F, TT.parameters...}), doubles(ir)))

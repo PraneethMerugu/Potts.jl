@@ -64,15 +64,15 @@ function global_penalty_dH(st, p, prop, ctx)
     )
 end
 
-# ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
-# D-157); the scan lives with the monorepo's shared test helpers
+# ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel
+# listing, D-157); the scan lives with the monorepo's shared test helpers
 const DEVICE_IR_SCAN = joinpath(
     @__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl"
 )
 
 # Compile before enqueue: the staged lifecycle's compile set (`_CompileOnly`,
 # `Exec.compile!` with `n = 0`) compiles exactly the kernels the launches then run, on host
-# tasks, and writes nothing. Counted in the backend's kernel-instance cache.
+# tasks, and writes nothing. Counted in the device's kernel listing.
 @inline cp_compile_write!(i, a, v) = (@inbounds a[i] = v; nothing)      # i ≤ length(a)
 include("shared/export_all.jl")
 end

@@ -3,7 +3,7 @@ using CorePotts: CellReduce, reduce_scratch, REDUCE_STATUS, STATUS_SUM_RANGE
 
 # a stand-in for a backend without 64-bit atomics (Metal; `CorePotts._atomic64` is false
 # there)
-struct CS_NoAtomic64 <: CorePotts.KernelAbstractions.GPU end
+struct CS_NoAtomic64 <: CorePotts.KernelAbstractions.Backend end
 CorePotts._atomic64(::CS_NoAtomic64) = false
 
 # a state of `n` cells over `σ` with a site array `v` and a float column `x` of type `T`

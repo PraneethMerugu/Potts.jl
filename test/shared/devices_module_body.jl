@@ -20,6 +20,10 @@ device_name() = NAME
 on_device() = PKG !== nothing
 device_package() = PKG
 
+include(joinpath(@__DIR__, "kernel_listing.jl"))
+"""The `(F, tt)` pairs of the kernels compiled and loaded on the device in this process."""
+device_kernels() = on_device() ? compiled_kernels(PKG) : _off()
+
 _off() = error("no device backend requested (set POTTS_GPU=metal or rocm)")
 
 function device_backend()
