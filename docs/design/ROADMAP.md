@@ -17,6 +17,102 @@ Feature scope per milestone is extended by `research/legacy-spec-adjudication.md
 Each milestone: id, depends-on, deliverable, acceptance (commands that must exit 0 or
 numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
+## Remaining work before the remaining paper models
+
+This section lists the work left before the remaining paper models can be built. It was
+checked on 2026-11-24 against `origin/monorepo` at b1f8924b, the code, `git log` and
+DECISIONS. The rows further down keep their history. Where a row and this section differ,
+this section is current.
+
+The paper models and their rulings: Bauer 2009, Jiang 2005, Bauer 2007, FBCA (08a
+reproduced, 08b calibrated), Jafari Nivlouei 2021 as item 11 (Andasari 2012 only as an ODE
+conformance test), Zajac (a reconstruction), Starruß, and Fortuna 14c. D-332 rules that
+every mechanism is parallel-first: there are no sequential-only mechanisms. The gap ids
+G1–G12 come from the model-gap audit of 2026-11-22 (`~/lpwork/models-gap/audit.md` §2 on
+the PC) and were checked again against the code.
+
+### Paper models
+
+| Model | Spec | State on 2026-11-24 | Gaps it needs | Can start |
+|---|---|---|---|---|
+| Fortuna 2020 (14a) | 14 | Model, protocol and FULL runner merged with C11 (6dfca14a, D-327, D-328). No FULL record in `reproductions/data/14/` and no tutorial page in `reproductions/`. | none | now: FULL run and page |
+| Thomas 2022 (14b) | 14 | Merged as options of the 14a model (635c525a, D-331). No FULL record yet. | none | now: FULL run and page |
+| Dal-Castel 2025 (14c) | 14 | Not started (P6.7b). | G7; `var` from G11 (or two sums); `@terminate` from G1 (or a callback) | after G7 |
+| Bauer 2009 | 05 | Not started (P6.9). `Global`, `pieces` and `largest_piece` done (P6.9a). Fibers and skeleton analysis done (f3b22176). | G1 (`@create`, a site retired into a collective); G2 only if the §8b screen picks per-cell uptake | after G1 |
+| Jiang 2005 | 06 | Not started (P6.11). Fields, coarse grids, implicit steps, fractional sweeps and Boolean components exist. | G1 (`@transition`, `@retire … sites => ref`) | after G1 |
+| Bauer 2007 | 07 | Not started (P6.8). `Rod`, `Fibers`, the shape form of `InsertUntil` and jittered `Tiling` done (f3b22176). | G1; G3 (`UnlikeNeighbor`); G11 (the tip as an `argmax`); G2 only for per-cell uptake | after G3 and G11 |
+| FBCA (08a, 08b) | 08 | Not started (P6.12). The lineage helper is done (f3b22176). | G1 (`@retire`); G2 (the FBA operator); G8 (neighbor-site writes, 08b); G3 (`attempts = 4`, or `repeat` today); G11 (a plane drawn from a set) | after G2 and G8 |
+| Jafari Nivlouei 2021 (item 11) | 11a | Not started (P6.10). Pair tables (F5), Boolean components, periodic fields and `pieces` exist. | G1; G6 for the weighted contact fractions (D-332 Q4 is open) | after G1; the weighted form after G6 |
+| Zajac 2000/2003 | 12 | Not started (P6.7). Labelled a reconstruction. | G4; G6 for its observables | after G4 and G6 |
+| Starruß 2007 | 13 | Not started as a model (P6.6). Its mechanisms are merged: ordered relationships, angle terms and drive reads (4c9f8264, D-329, D-330), rods, chains and the cluster graph (f3b22176). Angle terms run only on `SequentialCPM` (`src/problem.jl:41`) until the D-332 read layer lands. | none on `SequentialCPM`; the read layer for `CheckerboardCPM` | now on `SequentialCPM` (see the conflict note below) |
+
+**Conflict, needs a ruling.** D-332 forbids sequential-only mechanisms, but the code still
+refuses angle terms on `CheckerboardCPM` (D-329). It is not ruled whether Starruß may ship
+on `SequentialCPM` before the read layer lands.
+
+### Feature gaps
+
+| Gap | What it is | Models | Carried by | Status on 2026-11-24 | Depends on |
+|---|---|---|---|---|---|
+| G1 | Symbolic lifecycle rules: `@transition` (cell and component state kept), `@retire` (sites to the medium, or `sites => ref` into a collective), `@create` at a site set, and `@discrete_events` and `@terminate` as MTK `SymbolicDiscreteCallback`s | 05, 06, 07, 08, 11a; 14c (`@terminate` only) | P6.4c, P6.9 (R8), P6.E4 | Open. The one KernelAbstractions lifecycle planner is merged (c92882dc), and the event precedence of D-332 (P1–P3) is ruled. No symbolic `@transition`, `@retire`, `@create`, `@discrete_events` or `@terminate` exists in `src/`. | the lifecycle efficiency merge (below) |
+| G2 | Per-cell operators in the `operators` phase (empty today, `docs/src/manual/sweep.md:59`); `uptake` and `secrete` helpers; an FBA operator as a COBREXA/JuMP extension; random-order FBA with write-back in priority rounds (D-332) | 08; 05 and 07 only for per-cell uptake. The audit also lists 06 and 11a, but its per-model tables show no need. | P6.8 (R15), P6.12 | Open. No per-cell operator or `uptake` in `src/` or CorePotts. | none; FBA solves stay on the host (D-332) |
+| G3 | Proposal laws: `UnlikeNeighbor`, Hastings acceptance, `attempts = k` | 07 (the law); 08 (`k = 4`) | P6.4b (R10), P6.E2 | Open. `UnlikeNeighbor` and `MetropolisHastings` are not in the code. The checkerboard notes of P6.4b predate D-271. Hastings with `skip_interior` is D-332 Q5. | none |
+| G4 | The moment tensor in energies and drives (`orientation`, `eccentricity`, `minor_length`, the polar moment), exact per copy; a contact-geometry energy over the interfaces of both cells (`interfaces(k, k)`) | 12 | P6.7 (R7, R11b) | Open. CorePotts computes the descriptors (`lib/CorePotts/src/geometry.jl:478`), but only `major_length` reaches the symbolic layer (`src/observed.jl:60`). | exact pair trackers (R11b); the D-332 running sums and per-pair contact store; the read layer for the checkerboard form |
+| G5 | Ordered relationships: `prev`, `next`, `rank`, three-member angle terms, linked-centroid reads in drives | 13 | P6.6 | Closed on `SequentialCPM`: 4c9f8264 2026-11-22 (D-329, D-330). The checkerboard form waits for the read layer. | none |
+| G6 | `neighbors(c)` with the interface length `contact(c, n)`, and its lag | 11a (weighted contact fractions); the Andasari conformance test; 12 (observables) | P6.7 (R11a), P6.4a | Open. Neither name exists in `src/`. | the D-332 per-pair contact store |
+| G7 | `Pre(x, k)` on cell variables, and windowed means | 14c | P6.7b (R12) | Open. Cell-variable lags are refused (`docs/src/manual/updates.md:58`). | none |
+| G8 | Copy-time writes into neighbor sites (an `@on_copy` neighbor-target form), the sequential and checkerboard forms in one item; the Eq 6 averaging as an aux-field map (not verified) | 08b | P6.12 | Open. | G2 for the full 08b loop; the checkerboard form widens `region` by the write radius (D-332) |
+| G9 | Layouts: fibers, rods and chains with links, the shape form of `InsertUntil` to a density, jittered `Tiling` | 05, 07, 13 | P6.4d, P6.6, P6.8 | Closed: f3b22176 2026-11-22 (`Bar`, `Rod`, `Fibers`, `Chains`, `InsertUntil(shape; density, occupied, collective)`, `Tiling(; jitter)`). A staggered `Tiling` (P6.4d) is still open; no model in this section needs it. | none |
+| G10 | Analysis: skeleton branches and loops, percolation, a cluster graph on a pair predicate, sprout length and thickness, lineage trees | 05, 07, 08, 13 | P6.4d, P6.9 (R16) | Closed: f3b22176 2026-11-22 (`skeleton_counts`, `percolates`, `pair_graph`, `sprout_length`, `sprout_thickness`, `lineage`, `clone_sizes` in `PottsModels.Analysis`). The device division log is P6.13. | none |
+| G11 | Small folds and selectors: `argmax`, `only`, `var`; a division plane drawn from a set; a division side and a `daughter` index | 07, 08, 14c | P6.4a, model-specs README §2.4 | Open. No symbolic `argmax`, `only` or `var`; `RandomSide` and `CanonicalSide` do not exist. A plane drawn from a set: not verified. | none |
+| G12 | SBML import or a Catalyst extension | the Andasari conformance test only (optional) | none | Not planned. The Catalyst extension was dropped (2026-10-17), and item 11 is Jafari Nivlouei. | none |
+
+### Infrastructure and approved items
+
+| Item | What it is | Status on 2026-11-24 | Depends on, or blocks |
+|---|---|---|---|
+| Lifecycle: one path (D-333) | Branch `lp/lc-eff`: the CPU runs the lifecycle's KernelAbstractions kernels; the CPU planner and the quiet-MCS early exit are deleted. | Not merged (10 commits). D-333 is only on the branch. | Blocks G1 and P6.13. |
+| Lifecycle: event-sized stages (D-337) | Branch `lp/lc-event` (contains `lp/lc-eff`): per-cell bounding boxes, delta trackers, launch sizes from a backend probe, longest-prefix capacity overflow. | Not merged. Held for the merge A/B; D-337's "Cost" line is pending. Multi-workgroup plan scans are deferred as an open item. | Blocks G1 and P6.13. |
+| Division log (P6.13) | An append-only device log of divisions, read by `lineage(sol)`. | Not started. | After the two lifecycle branches. |
+| One path: checkerboard inline cutoff | Remove `inline_max_blocks` (`lib/CorePotts/src/checkerboard.jl:365`): one threaded launch, and coloring phases always defer to `serial_pass!`. This also fixes a correctness divergence: with deferred copies (`Global()` without a window, cell-scope `pieces` or `largest_piece`) the inline and threaded paths decide differently, so results depend on the lattice size and the thread count. The docstrings (`checkerboard.jl:46`, `algorithms.jl:192`) and DECISIONS disagree on reproducibility. | Approved 2026-11-23 (`~/lpwork/one-path-audit/README.md`). Not started. The divergence was found by reading the code, not by a run. | A builder, a regression test (L = 190, threads 1 against 4) and an A/B. |
+| One path: host and kernel duplicates, KernelAbstractions on the CPU everywhere | One CPU executor, KernelAbstractions: delete the host twins (the serial pass and recenter in `checkerboard.jl`, the `::CPU` methods of `_device_copy!`, `_device_fill!` and `_quiet`), use one cell-reduce run length (`_CR_RUN_HOST`, `_CR_RUN_DEVICE`, `lib/CorePotts/src/spatial.jl:352`) and replace the LatticeFields host executor (`HOST_GRAIN`). | Approved 2026-11-23. Not started. | A builder and an A/B. Interacts with KernelAbstractions 0.10, whose CPU backend runs on PoCL (D-333). |
+| One path: two-word site pick | Always draw the site pick from two words; delete `PICK_ONE_WORD_MAX` (`lib/CorePotts/src/rng.jl:231`). | Approved 2026-11-23. Not started. | A builder and an A/B. |
+| One path: field fusion | Fuse whenever legal; the cost model is deleted. | Done: b1f8924b 2026-11-24 (D-335). | none |
+| One path: later rulings | The emit index strategy, `_hoistable`, `solver_type = :auto`. | Waiting for rulings. | none |
+| D-332 read layer | Read sets, `CheckerboardCPM(reads = :exact \| :snapshot \| :live)`, running sums, the per-pair contact store, kinetic tiers 0–2. | Not started: `CheckerboardCPM` has no `reads` keyword (`lib/CorePotts/src/algorithms.jl:168`). | Blocks the checkerboard forms of G4, G5 and G8, and protects the D-330 drive reads. |
+| Ergonomics E2–E10 | See the rows under "Ergonomics". E1 is done (4b91393a, D-334). | E2 is G3's `attempts`, and E4 is G1's `@terminate`. E3, E5, E6, E8, E9 and E10 are open; E7 is partial. | Docs-only rows (E6, E9, E10) need no A/B. |
+| KernelAbstractions 0.10 | The move from KernelAbstractions 0.9 (row under the field compiler). | Open. The PC's copy of the General registry (2026-11-23) has Metal.jl 1.12.1, which requires KernelAbstractions 0.10, so the stated Metal blocker looks gone. Whether the whole environment resolves is not verified. | The port must redo `Exec.launch_argument_bytes` (D-335), and, once D-333 merges, the PoCL CPU backend and the lifecycle allocation test. |
+
+### Suggested build order
+
+The maintainer's order is: merge the lifecycle branches, remove the checkerboard cutoff,
+then G1, G3 with G11, G2 with G8, G4 with G6, and G7. Each model starts once its gaps close.
+
+1. **Merge `lp/lc-event` (with `lp/lc-eff`) after its A/B.** Every G1 rule and P6.13 is
+   built inside the planner these branches change. Building on the old stages means a
+   second rewrite.
+2. **Remove the checkerboard inline cutoff.** It fixes a divergence that depends on lattice
+   size and thread count. New models with deferred copies would inherit it.
+3. **G1.** It unlocks five of the remaining models. Then Jiang 2005, Bauer 2009 (per-site
+   uptake) and item 11 (without the weighted contact fractions) can start.
+4. **G3 with G11.** Both are small. They unlock Bauer 2007 (per-site uptake), and the
+   attempts and plane draw of FBCA. E2 lands with G3.
+5. **G2 with G8.** They unlock FBCA 08a, then 08b. They also give per-cell uptake if a
+   Bauer §8b screen picks it.
+6. **G4 with G6.** They unlock Zajac and the weighted contact fractions of item 11.
+7. **G7.** It unlocks 14c. It is small, and D-332 builds lags when a model needs them.
+
+Alongside, with no order of their own:
+- the FULL runs and pages of 14a and 14b, and Starruß on `SequentialCPM` once its ruling is
+  made;
+- the other one-path removals, each with its own A/B window;
+- ergonomics E3 and E5–E10;
+- KernelAbstractions 0.10. Its order against "KernelAbstractions on the CPU everywhere"
+  is not ruled.
+
+The D-332 read layer is not in the maintainer's order. D-332 places it last. It blocks the
+checkerboard forms of Starruß, Zajac and FBCA 08b.
+
 ## Phase 1 — Skeleton
 
 - [x] 7b0a81b 2026-09-29 **M1.1** workspace skeleton — root `Project.toml` `[workspace]`, `lib/{CorePotts,LocalMath,MakiePotts,PottsModels}`, `[sources]`, `.gitignore` Manifest, `CLAUDE.md` (rules from INTERNALS §5), JuliaFormatter config.
@@ -64,7 +160,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
   Accept (D-048): per model, brute-force ΔH, independent drive/effect checks, invariants
   and mechanism tests with negative controls; TTFX table in docs.
 
-- [ ] (2026-11-16: Jiang 1999 foam ships provisional, P6.4r; OpenVT monolayer, Step 3b; Fortuna 14a in progress on the unmerged branch `feat/p6-5d1`; the other models not started) **M4.3** extended model library per `research/legacy-spec-adjudication.md` §3 "Models" (Mombach 3D, Shirinifard CNV, Wang 2025, OpenVT categories, Jiang 2005, Bauer 2007/2009, Zajac, Jafari Nivlouei, Starruß, Fortuna, Jiang 1999 foam, FBCA via COBREXA, hard-model set). Each: ordinary tests per D-048, plus the paper's qualitative results as mechanism tests.
+- [ ] (2026-11-16: Jiang 1999 foam ships provisional, P6.4r; OpenVT monolayer, Step 3b. 2026-11-24: Fortuna 14a merged with C11, 6dfca14a, and 14b as its options, 635c525a; neither has a FULL record or a page yet; the other models are not started, see "Remaining work before the remaining paper models") **M4.3** extended model library per `research/legacy-spec-adjudication.md` §3 "Models" (Mombach 3D, Shirinifard CNV, Wang 2025, OpenVT categories, Jiang 2005, Bauer 2007/2009, Zajac, Jafari Nivlouei, Starruß, Fortuna, Jiang 1999 foam, FBCA via COBREXA, hard-model set). Each: ordinary tests per D-048, plus the paper's qualitative results as mechanism tests.
   The 12 published models (Merks, Jiang 1999 foam, Bauer 2009, Jiang 2005, Bauer 2007, FBCA, sorting, Akeeb, item 11 = Jafari Nivlouei 2021, Zajac, Starruß, Fortuna/Thomas/Dal-Castel) are specified in `research/model-specs/` and built in the order of its README §6; each ships a reproduction tutorial per `research/model-specs/TUTORIAL_TEMPLATE.md` with ensemble validation against pre-registered tolerances.
 
 - [ ] (PIFF done 2026-09-29; MorpheusML pending) **M4.4** importers: PIFF (import/export) and MorpheusML (EzXML.jl → Symbolics); run the importable part of the Morpheus model repository as a regression corpus.
@@ -654,7 +750,7 @@ Full runs are offline (D-146).
 - [x] (merge, 2026-10-08; D-188) **P6.4a1** (D-186; foam stream 1) Copy-scope `direction`: the source→target lattice offset, minimum-image on periodic axes, readable in energies, so γ(y_i, t)·(x_i − x_j) can be written. Also `Metropolis(tie)` if the foam T → 0⁺ protocol needs it.
 - [x] **P6.4b2** (D-186; foam stream 2) Foam analysis functions in PottsModels (spec 04 §2.8): φ, neighbour lists and n, per-MCS T1 detection (A-15 counting unit), ρ(n), μ2(n), μ2(a), Eq. 9 spectra, N̄, yield strain. Merged 482e163a (D-187; power_spectrum on FFTW). For P6.4r: drop empty ids before topology_distribution; consider a log-binned spectral fit if α lands at the band edges.
 - [x] ed25ee94 2026-10-09 (test D-190, page d43383a9, first FULL record 22b70946; provisional under D-154 with the F1 gate open, see P6.4e; later screens D-230, D-236) **P6.4r** (D-186; foam streams 3–5) Reproduction 04 (Jiang et al. 1999): frozen test from spec §5.2 V1–V20; the no-shear page; FULL shear runs once P6.4a1 lands.
-- [ ] (partial: `direction` done in P6.4a1, D-188; an `at_init` phase exists, `src/problem.jl:443`; `time`, `mcs`, `Metropolis(tie)`, the small folds and the Akeeb expression defaults not checked) **P6.4a** R1: copy-scope `direction`, `time`, `mcs`; `Metropolis(tie)`.
+- [ ] (partial: `direction` done in P6.4a1, D-188; an `at_init` phase exists. 2026-11-24: `mcs` is read in the copy scope, `docs/src/manual/drive.md:18`; at T ≤ 0 a tie is accepted with probability ½, `lib/CorePotts/src/algorithms.jl:11`; the small folds `argmax`, `only` and `var` are open, G11; `time` and the Akeeb expression defaults not verified) **P6.4a** R1: copy-scope `direction`, `time`, `mcs`; `Metropolis(tie)`.
   - D-075: **R17** initialization, as the `at_init` host phase: `A(cell) = volume`,
     `remake(u0 = sol[end])`, and `at_init` re-run on `remake(p = …)`.
   - D-075: the small folds (`argmax`/`only`/`var`, `init`/`default`, `Pre(neighbors(c))`)
@@ -662,7 +758,7 @@ Full runs are offline (D-146).
   - D-075: Akeeb `cue`/`clock` become expression defaults from `Potts.init.<var>`
     streams. They get their own `papers.jl` re-baseline.
 - [x] **P6.4b1** (D-177; user ruling 2026-10-08; priority: P6.15g waits on it) `BoundarySiteCPM`: a separate sweep algorithm that draws only boundary sites and accounts the skipped interior (null) picks exactly, so it is statistically identical to `SequentialCPM`. `SequentialCPM` is unchanged. CPU first; incremental boundary set under copies, divisions and deaths.
-- [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, ~~`BoundarySite`~~ dropped by D-198);
+- [ ] (open 2026-11-24: no `UnlikeNeighbor` or `MetropolisHastings` in the code; gap G3) **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, ~~`BoundarySite`~~ dropped by D-198);
   all-site attempt counting; fractional attempts per MCS at zero cost when unused (D-051
   item 2). Hastings acceptance (D-052).
   - Accept: the enumeration oracle for `MetropolisHastings()`.
@@ -671,11 +767,11 @@ Full runs are offline (D-146).
     in `draw`/`_color_order!` for `attempts > 1`, bit-identical at 1; `@sweep
     MetropolisHastings` is an error.
   - (2026-11-16) The checkerboard items above name the colored, claiming checkerboard. D-271 replaced it with the lockless block scheme, and `_color_order!` no longer exists, so they need restating before work starts.
-- [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
+- [ ] (partial 2026-11-24: the one KernelAbstractions planner is merged, c92882dc 2026-11-22, and the host planner deleted; whether the §3 acceptance bar was checked at that merge is not verified. The lifecycle efficiency branches `lp/lc-eff`, D-333, and `lp/lc-event`, D-337, are not merged. No symbolic `@retire`, `@create`, `@transition`, `@discrete_events` or `@terminate` yet; gap G1) **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
   SciMLBase callbacks, `@terminate`.
   - (D-332; first in the parallel-first build order) One KernelAbstractions lifecycle planner on the CPU backend and the device replaces the host and device planners; every rule, `@create` and `@convert` included, is built once in it. Retire into a collective, create at a site set and state kept across a transition run on the device. The host planner is deleted only after the acceptance bar of `research/parallel-mechanisms.md` §3: the five host behaviors, transfer counters (a quiet device MCS at 0 syncs and 0 transfers), D-029 statistics and a CPU A/B. The new rules follow the user rulings P1–P3 of §3 (2026-11-22): the event precedence table with bounded resolution of retirement chains and cycles, collectives with target updates in cell order, and a staged form that always launches with no host fallback.
   - (D-162) `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as MTK `SymbolicDiscreteCallback`s from the start, so `ModelingToolkitBase.discrete_events(sys)` lists them. Per-cell, per-site, per-copy and structural rules are never listed as callbacks.
-- [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
+- [ ] (partial 2026-11-24: T1 counts and topology moments landed with the foam analysis, P6.4b2, 482e163a (`t1_events`, `topology_distribution`); a staggered `Tiling` is open, and no remaining paper model needs it) **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
 - [x] (2026-10-09; D-210: no κ_b fits, pinning cliff; stopped for F1) **P6.4r-kb** (D-203) Pre-registered κ_b scan on the ordered foam (test author freezes the protocol; PC free cores); decision rule (d); then re-freeze + re-run of 200 bulk jobs, or stop and go to the F1 gate.
 - [x] (first FULL record merged 2026-10-09, provisional: 18/42 rows, 4/4 controls; κ_b scan under D-203 open) **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
@@ -684,21 +780,21 @@ Full runs are offline (D-146).
 
 API changes here follow D-254: no back-compatibility shims before the paper, so a change is a plain rename or removal with every caller updated in the same change (D-286). There are no frozen verdicts (D-275). Priority: E1, E3, E7 and E8 first, then E2 and E4, then the rest.
 
-- [ ] **P6.E1** Named kind tables and symbolic kinds.
+- [x] 4b91393a 2026-11-23 (D-334: entry lines `J[k₁, k₂] = v`, symmetric by default, `kind_names`; `sol[:kind]` still returns numbers and a categorical is documented through CategoricalArrays; `Pairs` removed) **P6.E1** Named kind tables and symbolic kinds.
   - Write `J[dark, light] = 11`, symmetric unless declared otherwise, alongside the positional matrix.
   - Results can be read as kind symbols or as a categorical (`sol[:kind]` today returns integers in `@kinds` order, with the medium first).
   - Build errors for a table of the wrong size and for a forgotten medium.
-- [ ] **P6.E2** `attempts = k` (D-051 item 2), pulled forward from P6.4b: run in the paper's MCS (Graner–Glazier `attempts = 16`), then simplify getting_started's "3200 of our MCS are 200 of the paper's".
-- [ ] **P6.E3** `capacity`.
+- [ ] (open 2026-11-24: no `attempts` keyword; `repeat(n, sweep(fraction = 1//n))` is the workaround; carried with G3) **P6.E2** `attempts = k` (D-051 item 2), pulled forward from P6.4b: run in the paper's MCS (Graner–Glazier `attempts = 16`), then simplify getting_started's "3200 of our MCS are 200 of the paper's".
+- [ ] (open 2026-11-24: the default is twice the initial cells plus 64, `docs/src/manual/lifecycle.md:20`; the overflow warning says "Pass a larger `capacity`" without an N, `lib/CorePotts/src/lifecycle_planner.jl:1499`) **P6.E3** `capacity`.
   - Size it automatically, or let it grow, for growing populations (the OpenVT minimal run needs `capacity = 256` today).
   - At minimum, on overflow, say "raise capacity to ≥ N" with N.
-- [ ] **P6.E4** `@terminate` / a `stop =` keyword (P6.4c) for cell count, edge reached and time, replacing the `CallbackSet(edge_guard, stop_at_cells)` boilerplate.
-- [ ] **P6.E5** Plot shortcuts: `pottsplot(sol, i)` and `pottsplot(sol)`, alongside `pottsplot(renderframe(…))`.
-- [ ] **P6.E6** Time to first run for a fresh user-written model.
+- [ ] (open 2026-11-24; part of G1) **P6.E4** `@terminate` / a `stop =` keyword (P6.4c) for cell count, edge reached and time, replacing the `CallbackSet(edge_guard, stop_at_cells)` boilerplate.
+- [ ] (open 2026-11-24: no `pottsplot(sol, i)` method found in `lib/MakiePotts/src`) **P6.E5** Plot shortcuts: `pottsplot(sol, i)` and `pottsplot(sol)`, alongside `pottsplot(renderframe(…))`.
+- [ ] (open 2026-11-24: getting_started still says "about a minute", `docs/src/getting_started.md:162`; not measured) **P6.E6** Time to first run for a fresh user-written model.
   - Measure it on the PC. getting_started says "about a minute".
   - Update the sentence.
   - If it is still about 60 s, scope precompile or workload changes for un-shipped models.
-- [ ] **P6.E7** Error-message audit.
+- [ ] (partial 2026-11-24: typed errors and plain messages landed in conformance batch B5, D-292, and D-334 covers a table of the wrong size, a forgotten medium and an unknown kind name; the beginner-mistake list and its test are not done) **P6.E7** Error-message audit.
   - Write the ~10 most common beginner mistakes:
     - a wrong kind name;
     - a J of the wrong size;
@@ -713,14 +809,14 @@ API changes here follow D-254: no back-compatibility shims before the paper, so 
   - Record what each prints.
   - Fix every unclear message so it names the offending item and suggests the fix.
   - Add the cases to a (non-frozen) test.
-- [ ] **P6.E8** Getting started around built-in observables.
+- [ ] (open 2026-11-24: `mixed_contacts` is still hand-written, `docs/src/getting_started.md:254`) **P6.E8** Getting started around built-in observables.
   - Replace the hand-written `mixed_contacts` loop.
   - `count_contacts` is symbolic-only, so either declare it as an `@observed` in the model or add a public helper for use after a run (decide in the item).
   - Show an "everyday observables" set: contact fractions, cluster counts, MSD/displacement, volumes by kind.
-- [ ] **P6.E9** `coming_from.md`.
+- [ ] (open 2026-11-24: the Connectivity rows carry no D-191 note, `docs/src/coming_from.md:32`, `:90`) **P6.E9** `coming_from.md`.
   - Add the lab's common CC3D patterns that are still missing (mitosis steppable and others).
   - Add the D-191 note to the Connectivity row: Penalty honoured in 4.3.1–4.6.0, a hard-coded 64 from 4.7.0, the hard form as the T → 0 limit.
-- [ ] **P6.E10** Docs polish.
+- [ ] (open 2026-11-24: the home page has one video, `docs/src/index.md:93`; no CC3D speed FAQ and no "Start here" path found) **P6.E10** Docs polish.
   - A home page led by a strip of 4–6 videos (before the MTK term table).
   - Physical units (h, µm) next to MCS results on the paper pages.
   - A FAQ "how fast vs CC3D" with our own labelled numbers only, no head-to-head claim (D-154).
@@ -744,14 +840,24 @@ API changes here follow D-254: no back-compatibility shims before the paper, so 
 - [x] **P6.5a3** (merge, 2026-10-14) (maintainer, 2026-10-14: "lets do the birth skip") Skip the per-round `birth` serial pass when the compiled model never reads `birth`. Decided at compile time from symbol use: `sibling` (lowest-birth rule), `birth[…]`, ordering reads, analysis hooks. Kept whenever anything reads it. Contract: trajectories bitwise unchanged with and without the skip (birth is a serial, not an RNG input, D-066), on CPU and on the device; negative control: a `birth`-reading model keeps the pass. A/B (D-242): CPU and ROCm on the dividing models. Target: win back most of P6.5a's 2.5–3 % CPU cost.
 - [x] **P6.5c** (merge, 2026-10-14) (brief: `research/p6-5c-brief.md`, 2026-10-14) (A) `Interior(shape)` strict membership, `Fill(kind; region)`, `Objects`, `Group`, with the Fortuna geometry's exact site counts; (B) R5 predicate-sourced PDE source: tests (device included) and docs, no new syntax; (C) R16 MSD and the Fürth fit in `PottsModels.Analysis` (host only; no A/B under D-242). Also fix `AUTHORING.md` §planned layers (`Spheres`, `Plane`), which contradicts D-087.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Fill`, `Objects(Sphere…)` and `Group` (with `set_column!`) in place of `Plane`/`Spheres`; amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; the docs show `Plane`/`Spheres` recipes.
-- [ ] (in progress on the unmerged branch `feat/p6-5d1`, 11 commits ahead of `origin/monorepo`; D-251 is reserved for P6.5d1, 6a6dabf4, and not on `origin`) **P6.5d** reproduction 14a/14b (and 14c, D-156). C4 resolved from the CC3D source (D-155); no gate.
+- [ ] (2026-11-24: the old note is out of date. 14a is merged with C11, 6dfca14a (D-327, D-328): the model, the protocol and the FULL runner `reproductions/data/14/run_full.jl`. 14b is merged as options of the same model, 635c525a (D-331). Open: no FULL record in `reproductions/data/14/`, no tutorial page `reproductions/14_*.jl`, and 14c (P6.7b, gap G7). The branch `feat/p6-5d1` (11 commits of 2026-10-15) is superseded by C11 and stays unmerged; D-251, once reserved for it, is not used in DECISIONS) **P6.5d** reproduction 14a/14b (and 14c, D-156). C4 resolved from the CC3D source (D-155); no gate.
 
 ### Steps 6–12
 
 These are listed so that dependencies are visible. They are expanded into items when step 5
 merges (phase-end checkpoint).
 
-- **P6.6** myxobacteria:
+**Status 2026-11-24.** Step 5 is not closed: 14a and 14b are merged without FULL records,
+and 14c is open. The models below are no longer waiting for step 5. Each starts when its
+gaps close, in the order of "Remaining work before the remaining paper models" at the top.
+A first line in each item gives its state.
+
+- **P6.6** myxobacteria (Starruß):
+  - (2026-11-24) Merged: ordered chains, `prev`/`next`/`rank`/`linked` and `angles(rel)`
+    energies, 4c9f8264 (D-329); drive reads of referenced centroids, 4c9f8264 (D-330);
+    `Chain`-style layouts as `Chains` and `Rod(; link)`, f3b22176. Not built: the model,
+    angle terms on `CheckerboardCPM` (the D-332 read layer). `directed = true` is not built
+    (D-329). The Y1, Y2 gates ship provisional (D-155).
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Chain` with `add_link!`.
   - R9 3-body terms and ordered chains;
   - R7 unwrapped centroids and cluster moments;
@@ -760,6 +866,7 @@ merges (phase-end checkpoint).
   - D-075: `ordered = true`, `prev`/`next`/`rank`/`linked`, `angles(rel)` energies. Gate: Y1, Y2.
   - (D-332) Angle terms on `CheckerboardCPM` (CPU and device) on the one model path: read sets over linked cells and the algorithm's read policy (`research/parallel-mechanisms.md` §5); tiers 0–2 of §7 at the region the model's sweep picks. D-329's refusal is lifted when the read layer lands.
 - **P6.7** Zajac:
+  - (2026-11-24) Not started. Gaps G4 and G6.
   - R7 tensor ΔH;
   - R11a `neighbors`/`contact`;
   - R11b exact pair trackers (D-051 item 3);
@@ -769,8 +876,13 @@ merges (phase-end checkpoint).
     under `reads = :exact`; `:snapshot` and `:live` only as documented deviations after tier 2);
     `count = true`;
   - the 12a Eq 7 unit test. Labelled as a reconstruction.
-- **P6.7b** the 14c chemotaxis variant: R12 `Pre(x, k)` on cell variables.
+- **P6.7b** the 14c chemotaxis variant: R12 `Pre(x, k)` on cell variables. (2026-11-24: not
+  started; gap G7.)
 - **P6.8** Bauer 2007:
+  - (2026-11-24) Merged: `Rod`, `InsertUntil(shape; occupied, collective)` and `Fibers`,
+    f3b22176. Steady starts exist (`init = :steady`, the field solvers of F3). Open: G1
+    (`@transition`), G2 (`CellOperator`, `uptake`), G3 (`UnlikeNeighbor`) and G11 (tip
+    identity).
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Rod` and `InsertUntil(shape; occupied, collective)`.
   - R3 symbolic `@transition` with scope that survives it;
   - R14 steady init (SteadyStateDiffEq / NonlinearSolve);
@@ -783,7 +895,8 @@ merges (phase-end checkpoint).
     `solvers = [V => …]` for the steady/implicit field.
   - B2 resolved (D-235): 0.554 µm/px, 300 × 192 square lattice, Moore-8 proposals. Keep the PDE step per MCS and per-site vs per-cell uptake configurable: the 05/07 §8b screen picks between them (2007 Fig 4c rules out a 1 h-per-MCS PDE with real D and λ). Also a fixed tip identity and a matrix/fluid underlay (Fig 7B, 7C).
 - [x] (merge, 2026-10-09; D-197, D-201; PC A/B pending) **P6.9a** (D-189 rulings 4, 8, 9; split from P6.9 on 2026-10-09) `Global(; window, adjacency)` as a rule value ("does not increase" pieces for both cells, evaluated after acceptance, bitwise equal to pre-acceptance); window and conservative-rejection counter; cell-scope `pieces` and `largest_piece` with exact after-values in energies; the D-075 device BFS. Test author first.
-- **P6.9** Bauer 2009: (amended by D-189: `Global(; window, adjacency)` as a rule value with "does not increase" semantics for both cells, evaluated after acceptance; cell-scope `pieces` and `largest_piece`, ruling 9)
+- **P6.9** Bauer 2009 (2026-11-24: R4 done in P6.9a; R16 branch and loop detection done,
+  `skeleton_counts`, f3b22176; `@create` open, G1): (amended by D-189: `Global(; window, adjacency)` as a rule value with "does not increase" semantics for both cells, evaluated after acceptance; cell-scope `pieces` and `largest_piece`, ruling 9)
   - R4 `Global()` on both algorithms, with the D-075 device BFS (api-synthesis §8.1 Q6):
     - a deferred kernel over the compacted list of local-test failures, with an
       `MVector` stack and an AllocCheck proof on the CPU path;
@@ -799,6 +912,11 @@ merges (phase-end checkpoint).
   - R8 `@create`;
   - R16 branch and loop detection. B2 resolved (D-235); the §8b screens (about 45 min, 2D) run on the PC once P6.8 and P6.9 exist.
 - **P6.10** Jafari Nivlouei:
+  - (2026-11-24) Item 11 of the paper list (ruling of 2026-11-22). R13 tables exist as pair
+    tables (F5, D-301). Boolean networks as discrete components and periodic fields exist.
+    Open: G1, and G6 for the weighted contact fractions. `directed = true` and
+    `links(c, rel)` are not built (D-329); whether the model needs them is not verified. The
+    N1–N3 gate ships provisional (D-155).
   - R13 tables;
   - Boolean networks as MTK discrete (clocked, `Shift`) components lowered into the
     per-cell phases (D-065 Q9: no Potts helper; record MTK gaps and workarounds);
@@ -806,6 +924,8 @@ merges (phase-end checkpoint).
   - D-075: `directed = true`, `links(c, rel)`, integer-indexed tables;
   - the Andasari ODE conformance test. Gate: N1–N3.
 - **P6.11** Jiang 2005:
+  - (2026-11-24) 3D, fractional sweeps (`repeat`), `Coarse(k)` grids and implicit field
+    solvers exist. Open: G1 (`@transition`, `@retire … sites => ref`).
   - 3D;
   - fractional attempts;
   - coarse field grids (D-051 item 4);
@@ -813,6 +933,8 @@ merges (phase-end checkpoint).
   - `@retire … sites => ref`;
   - D-075: `Coarse(k; clamp = All())` default, with T10 run under `Any()` and `All()`. J3: Rb → E2F as drawn (D-234; a confirm-question, no longer a gate). Screens S1–S6 of 06 §8b (about 90 CPU-h) run on the PC after the build.
 - **P6.12** FBCA (X5 settled by D-067: published `mmc1.xls`, flagged):
+  - (2026-11-24) Not started. Gaps G1, G2, G8, G3 and G11. The lineage helper exists
+    (`lineage`, `clone_sizes`, f3b22176).
   - R15 FBA `CellOperator` (COBREXA/JuMP extension, warm start);
   - the Eq 6 averaging operator;
   - division plane by draw;
@@ -833,6 +955,9 @@ merges (phase-end checkpoint).
   pass (ROCm profile of quiet and event MCS: launches, syncs, kernel time per stage vs the
   sweep), with budgets set before the log lands and checked after; quiet MCS stays at 0
   syncs and 0 transfers.
+  (2026-11-24) Not started. The efficiency pass is the branches `lp/lc-eff` (D-333) and
+  `lp/lc-event` (D-337), not merged and held for an A/B. `lineage(records)` in
+  `PottsModels.Analysis` (f3b22176) reads host records, not this log.
 
 ## Field compiler: LatticeFields and LatticePDE (D-256 onward)
 
@@ -855,7 +980,7 @@ Open and deferred:
 - [x] D-286 2026-11-16 **Confirm the provisional entries.** D-256 to D-270 and the C8/C9 re-freeze entries still say "provisional, awaiting confirmation". The maintainer's OK of 2026-10-17 and 2026-10-19 is recorded only in the git-ignored `PottsWorktrees/lattice-pde/HANDOFF.md` §1. C10 was to write it into DECISIONS. Also give numbers to the placeholder ids (D-C*, D-F2-*, D-F3-*, D-F4-*, D-INT-1 (now D-322)).
 - [x] 4944e171, e3fbf0db 2026-11-21 **C10** Field-compiler docs: the Fields (LatticePDE) docs section, field plotting and live recipe attributes (D-302), then the convergence page from committed data, numbered decision ids and amended-by notes (D-325). The old local branch `lp/c10` is deleted.
 - [x] 4c6b0157 2026-11-21 **F5** The feature batch: pair tables, `sign`, `mod`, `rem` and `clamp` in field terms, and per-field periodicity (D-301).
-- [ ] **KernelAbstractions 0.10.** One commit with its own A/B once the upstream packages are registered (D-256 item 4). Do it as soon as it is possible (maintainer, 2026-11-22): with AMDGPU 2.9+, it also fixes the device libraries 7.0 doubles, so KA, AMDGPU and ROCmDeviceLibs_jll stay at their current versions until then. Status 2026-11-22 (General registry): KernelAbstractions 0.10.8 and AMDGPU 2.11+ (KA 0.10, no ROCmDeviceLibs_jll) are registered; Metal.jl, up to 1.11, still requires KA 0.9, so the move waits for a Metal release on KA 0.10. The compat is `0.9.42` today (`Project.toml:47`). The port must also redo `Exec.launch_argument_bytes` (`lib/LatticeFields/src/exec.jl`, D-335): it sizes a device launch from the KernelAbstractions 0.9 internals `argconvert`, `launch_config` and `mkcontext`.
+- [ ] **KernelAbstractions 0.10.** One commit with its own A/B once the upstream packages are registered (D-256 item 4). Do it as soon as it is possible (maintainer, 2026-11-22): with AMDGPU 2.9+, it also fixes the device libraries 7.0 doubles, so KA, AMDGPU and ROCmDeviceLibs_jll stay at their current versions until then. Status 2026-11-22 (General registry): KernelAbstractions 0.10.8 and AMDGPU 2.11+ (KA 0.10, no ROCmDeviceLibs_jll) are registered; Metal.jl, up to 1.11, still requires KA 0.9, so the move waits for a Metal release on KA 0.10. The compat is `0.9.42` today (`Project.toml:47`). The port must also redo `Exec.launch_argument_bytes` (`lib/LatticeFields/src/exec.jl`, D-335): it sizes a device launch from the KernelAbstractions 0.9 internals `argconvert`, `launch_config` and `mkcontext`. Status 2026-11-24: the PC's copy of the General registry (2026-11-23) has Metal.jl 1.12.1, which requires KernelAbstractions 0.10, so the Metal blocker above looks gone; whether the whole environment resolves is not verified. Once D-333 (`lp/lc-eff`) merges, the port also covers the PoCL CPU backend for the lifecycle kernels and the lifecycle allocation test.
 - [ ] **After the paper.** LBM in its own package (D-256 item 6). FEM, IMEX, split stepping of mixed rate and map systems, and Duals for field and ODE parameters in Potts (rulings Q4, Q8, Q9, Q10 of 2026-10-18, HANDOFF). A two-ring hexagonal Galerkin coarse operator (D-321).
 - [ ] **`DivKGrad(:harmonic)` fine-reading blending twin** (deferred, `_migration/HANDOFF-coordinator-2026-11-12-b.md:69`). The note says the twin needs front end A, which D-320 deleted. Its route needs a new decision.
 - [ ] **Upstream issues.** Drafted, not filed (D-257 item 9, `research/field-compiler/build/upstream-issues.md`). The Symbolics `∈ Set` hazard is filed as Symbolics.jl#2126 (D-318).
@@ -877,7 +1002,22 @@ Goal (maintainer, 2026-11-11 and 2026-11-12): a fast test harness at SciML quali
 - [x] 1db3d3bf 2026-11-20 **Asynchronous frame writer** A `PottsProblem` callback that writes state frames to segment files while the run continues (D-300). Writing every 10 MCS at 2016² on ROCm costs 7.2 % over `save_everystep = false`, and a killed run loses at most `checkpoint` + 2 frames.
 - [x] f8a0d07d, 3a1c54e1, 4109d2ab, abf0fcd2 2026-11-21 **Docstring batch** SciMLStyle template docstrings on every exported and public name, in three waves, and the public-surface rule: a public name nothing outside its package uses is unmarked (D-326).
 
-- [x] 2180d8e9..6dfca14a, 5ac79fe5 2026-11-22 **C11** (approved 2026-11-16, D-286; starts after F5 and C10) Move the paper models onto LatticePDE. Result: Fortuna respelled on LatticePDE with whole-field oracles (merge 6dfca14a, D-327, D-328); a field oracle for `MerksVasculogenesis` (5ac79fe5); Fortuna at R = 15, φ_l = 0.05 on the PC: whole MCS 24.3 ms on 1 thread and 17.7 ms on 8, field step 3.04 / 0.90 ms; the maintainer accepted it against the provisional 14 ms bar (2026-11-22). Models not built yet take LatticePDE natively when built. Port each published model to native LatticePDE use: `PDESystem` fields and the solver its paper states. One model per commit, each with fidelity tests.
+- [x] 2180d8e9..6dfca14a, 5ac79fe5 (merge 2ad635c3) 2026-11-22 **C11** (approved 2026-11-16, D-286; starts after F5 and C10) Move the paper models onto LatticePDE. Result: Fortuna respelled on LatticePDE with whole-field oracles (merge 6dfca14a, D-327, D-328); a field oracle for `MerksVasculogenesis` (5ac79fe5); Fortuna at R = 15, φ_l = 0.05 on the PC: whole MCS 24.3 ms on 1 thread and 17.7 ms on 8, field step 3.04 / 0.90 ms; the maintainer accepted it against the provisional 14 ms bar (2026-11-22). Models not built yet take LatticePDE natively when built. Port each published model to native LatticePDE use: `PDESystem` fields and the solver its paper states. One model per commit, each with fidelity tests.
   - Scope (maintainer, 2026-11-21): Merks is already native (D-319); C11 respells Fortuna (only on the old branch `feat/p6-5d1`) with whole-field oracle tests, adds a Merks field oracle, and times Fortuna. Models not built yet (Bauer 2009 and 2007, Jiang 2005, FBCA, Jafari Nivlouei 2021 as item 11, ruled 2026-11-22) are built natively when their turn comes. Audit: `~/lpwork/c11/audit.md` on the PC.
   - Accept: Fortuna 3D matches or beats 14 ms/step, measured provisionally as a whole MCS on the PC, one thread, R = 15, φ_l = 0.05 (the original meaning of the 14 ms); also report 8 threads and the field step alone. The maintainer may adjust the bar.
+- [x] 4c9f8264 2026-11-22 **Ordered relationships and angle terms** Chains with `prev`, `next`, `rank` and `linked`, `angles(rel)` energies with an exact three-member ΔH, and drive reads of referenced centroids (D-329, D-330). Angle terms still run only on `SequentialCPM`; D-332 lifts that when the read layer lands.
+- [x] 635c525a 2026-11-22 **Fortuna 14b** The Thomas 2022 polarization study as options of `FortunaMigration` (D-331).
+- [x] 2beb0f5e, e8efe10c 2026-11-22 **Parallel-first design** D-332 (2beb0f5e), amended before any code (merge e8efe10c): one model path, read policies, one lifecycle planner, tiered kinetic checks. Design record `research/parallel-mechanisms.md`.
+- [x] c92882dc 2026-11-22 **One lifecycle planner** One KernelAbstractions lifecycle planner for every backend and algorithm; the host planner is deleted (D-332).
+- [x] f3b22176 2026-11-22 **Layouts and analysis** `Bar`, `Rod`, `Fibers`, `Chains`, the shape form of `InsertUntil` and jittered `Tiling`; morphology and lineage analysis in `PottsModels.Analysis`. Closes gaps G9 and G10.
+- [x] 4b91393a 2026-11-23 **Named kind tables** (P6.E1, D-334).
+- [x] 29e5a661..c3775e89 2026-11-23 **One test runner** for every package, chosen by environment variables (D-336). It reached `monorepo` as a fast-forward, so it has no merge commit of its own.
+- [x] b1f8924b 2026-11-24 **Field fusion** Field kernels fuse whenever legal; the fusion cost model is deleted (D-335). The first of the four one-path removals.
+- [ ] **Lifecycle: one path** (D-333, branch `lp/lc-eff`, not merged) The CPU runs the lifecycle's KernelAbstractions kernels. Held for the A/B of `lp/lc-event`. D-333 exists only on the branch.
+- [ ] **Lifecycle: event-sized stages** (D-337, branch `lp/lc-event`, which contains `lp/lc-eff`; not merged) Per-cell bounding boxes, delta trackers, probed launch sizes, longest-prefix overflow. Its cost line waits for the merge A/B. Multi-workgroup plan scans are deferred (D-337 "Not done").
+- [ ] **One path: checkerboard inline cutoff** (ruling 2026-11-23) Remove `inline_max_blocks`; one threaded launch; coloring phases always defer to `serial_pass!`. Fixes the inline-against-threaded divergence for deferred copies, found by reading the code. Accept: a regression test (L = 190, `Global()` without a window, threads 1 against 4, `window = 2` as the control), both docstrings fixed, and an A/B.
+- [ ] **One path: KernelAbstractions on the CPU everywhere** (ruling 2026-11-23) Delete the host and kernel duplicates, use one cell-reduce run length, and replace the LatticeFields host executor. A/B.
+- [ ] **One path: two-word site pick** (ruling 2026-11-23) Delete `PICK_ONE_WORD_MAX`. A/B.
+- [ ] **One path: later rulings** The emit index strategy, `_hoistable` and `solver_type = :auto` wait for rulings (`~/lpwork/one-path-audit/README.md`).
+- [ ] **D-332 read layer** Read sets, `CheckerboardCPM(reads = :exact | :snapshot | :live)`, running sums and the per-pair contact store, with kinetic tiers 0–2. Not started.
 - [ ] (blocked upstream, 2026-11-22) **Device libraries 7.0 put doubles in Potts kernels.** The cause is a ROCm Device Libraries bug, not Potts code: in rocm-7.0.0 to rocm-7.2.0, `ocml/src/builtins.h` defines `BUILTIN_FREXP_EXP_F32` with the double `__builtin_frexp` (6.2.1 used `__builtin_amdgcn_frexp_expf`; the amd-staging branch has the fix, `__builtin_frexpf`, in no release yet). Every Float32 ocml function that reaches it (`log1p`, `pow`/`pown`, `hypot`, `asinh`, `acosh`, `atanh`, `ilogb`, `logb`, `gamma`) widens to double; results stay exact, only speed suffers. With the integer-power fix of 2026-11-19, the device IR scan fails on 6 kernels (the two `log1p` acceptance models). A Potts-side `log1p` alone would hide the rest, so the hold of ROCmDeviceLibs_jll at `~6.2.1` (user ruling 2026-11-19) stays until a ROCm release ships the fix or the AMDGPU 2.9+ port (with KernelAbstractions 0.10), which drops ROCmDeviceLibs_jll. Evidence and a plain-KernelAbstractions reproducer: `~/lpwork/devlibs7/` on the PC.

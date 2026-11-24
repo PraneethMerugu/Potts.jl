@@ -46,7 +46,6 @@ juxtacrine signaling and contact-dependent rules.
 
 ## Fields
 
-- Kind-dependent diffusion in flux form, `∇⋅(Dc[kind] * ∇(c))`, with harmonic-mean faces.
 - Secretion and uptake helpers (`secrete`, `uptake`, at rims, contacts or centroids).
 - Noise in cell and field equations (`@brownians`).
 
@@ -57,6 +56,5 @@ components (`JumpSystem`, Catalyst reaction networks, SBML import).
 
 ## Initial states and I/O
 
-- More layouts: Eden growth, `BrickWall`, chains, spheres, fibers, planes, and layouts from
-  an image or mask.
+- More layouts: a staggered (brick-wall) tiling, and layouts from an image or a mask.
 - A MorpheusML importer, and live parameter steering in MakiePotts.
