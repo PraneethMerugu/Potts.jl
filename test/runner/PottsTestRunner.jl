@@ -547,20 +547,22 @@ function selected(batch, item_tags; qa::Bool = true, tags = Symbol[], gpu = "")
     return isempty(tags) || any(in(item_tags), tags)
 end
 
-# Items that time code in-process (`:timing`) or start Julia subprocesses (`:subprocess`)
-# run after the others, one at a time, on uncontended cores. With a device selected, the
-# items that use it (`device_item`) run next, in this process: the scan of the device code
-# (`:device_scan`) reads the kernel cache of the process that compiled them, so it runs
-# last, in this process too.
+# With a device selected, the items that use it (`device_item`) run in this process, after
+# the host items. Items that time code in-process (`:timing`) or start Julia subprocesses
+# (`:subprocess`) run after the others of their kind (host or device), one at a time, on
+# uncontended cores. The scan of the device code (`:device_scan`) reads the kernel cache of
+# the process that compiled the device items, so it runs last, in this process too.
 serial(ti) = has_tag(ti, :timing) || has_tag(ti, :subprocess)
 scan(ti) = has_tag(ti, :device_scan)
 
 function run_passes(t::GroupTable, keep, on_device, workers, paths, sel::Selection)
     host(ti) = keep(ti) && !on_device(ti) && !scan(ti)
+    device(ti) = keep(ti) && on_device(ti) && !scan(ti)
     passes = (
         (ti -> host(ti) && !serial(ti), workers),
         (ti -> host(ti) && serial(ti), min(workers, 1)),
-        (ti -> keep(ti) && on_device(ti) && !scan(ti), 0),
+        (ti -> device(ti) && !serial(ti), 0),
+        (ti -> device(ti) && serial(ti), 0),
         (ti -> keep(ti) && scan(ti), 0),
     )
     errs = Tuple{Any, Any}[]                     # (exception, backtrace), in pass order

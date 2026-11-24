@@ -126,19 +126,20 @@ The items run on worker processes, one item at a time on each worker. The defaul
 `POTTS_TEST_WORKERS` replaces the number of workers in every package. A group that needs the
 calling process (`Multithreaded`) and a group with `device = true` use no workers. With
 `POTTS_GPU` set, the other groups keep their workers for the items that do not use the
-device; the items that do run in the calling process (pass 3 below).
+device; the items that do run in the calling process (passes 3 and 4 below).
 
 At the root, a worker restarts after an item when the memory in use is above 80 % of the
 limit. The runner does not retry a failed item.
 
-Each run has up to four passes, in this order:
+Each run has up to five passes, in this order:
 
 1. every selected item that is not in the next passes;
 2. the `:timing` items (they time code in the process) and the `:subprocess` items (they
    start Julia processes): one at a time, on at most one worker;
 3. with a device selected, the items that use it (`:gpu`, `:gpu_only`, `:device`): in the
    calling process;
-4. the `:device_scan` items: in the calling process, which compiled the device code of the
+4. the device items of pass 3 that are `:timing` or `:subprocess`: in the calling process;
+5. the `:device_scan` items: in the calling process, which compiled the device code of the
    earlier passes.
 
 A pass with no items is skipped. When a pass fails, the next passes still run, and the run
