@@ -56,6 +56,9 @@ end
 
 """`[(signature, lines with double)]` of every kernel in the kernel listing."""
 function scan()
+    # the IR is built with the default compiler configuration; under KernelAbstractions
+    # 0.10 a launch passes `maxthreads`, so the launched configuration (and its IR) may
+    # differ from the one scanned here
     config = AMDGPU.Compiler.compiler_config(AMDGPU.device())
     out = Tuple{String, Vector{SubString{String}}}[]
     for (F, TT) in compiled_kernels(AMDGPU)

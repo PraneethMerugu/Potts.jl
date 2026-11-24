@@ -12,8 +12,8 @@
 # configuration it made in `_compiler_configs`. A candidate counts when the package's
 # compile results for it under one of these configurations (GPUCompiler's
 # `cached_results`) hold a function or a pipeline loaded on the current device. A
-# specialization that was only inferred has none, so it does not count. This works on
-# AMDGPU 2.8 to 2.13 and on Metal 1.10 to 1.12. The per-package kernel dicts
+# specialization that was only inferred has none, so it does not count. Checked on AMDGPU
+# 2.8 (gates) and 2.13 (trial); Metal untested. The per-package kernel dicts
 # (`AMDGPU.Compiler._kernel_instances`, `Metal.kernel_instances`) are gone in the newer
 # versions.
 
@@ -49,9 +49,9 @@ function compiled_kernels(pkg::Module)
             TT = T.parameters[1]
             F isa DataType && isconcretetype(F) && TT isa DataType &&
                 isconcretetype(TT) || continue
-            mi = G.methodinstance(F, TT)
+            job_mi = G.methodinstance(F, TT)
             for config in configs
-                r = G.cached_results(R, G.CompilerJob(mi, config))
+                r = G.cached_results(R, G.CompilerJob(job_mi, config))
                 r !== nothing && loaded(r) && push!(pairs, (F, TT))
             end
         end
