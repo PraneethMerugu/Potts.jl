@@ -8,7 +8,18 @@ using Test, LatticeFields
 include("../host_runner.jl")
 include("../fixtures.jl")
 using LatticeFields.IR: IRError, ZERO, coord, constant
-using LatticeFields.Schedule: live_estimate
+using LatticeFields.Schedule: fusion_blocker
+using LatticeFields: Exec
+using LatticeFields.Problems: BoundStep
+using ForwardDiff: Dual
+
+# a stand-in device with the kernel-argument budget `SMALL_ARGS[]`: it binds host launches,
+# whose argument bytes are those of their argument tuple
+struct SmallArgs <: KernelAbstractions.GPU end
+struct MockArgsless <: KernelAbstractions.GPU end
+const SMALL_ARGS = Ref(0)
+Exec.ishost(::SmallArgs) = true
+Exec.kernel_argument_bytes(::SmallArgs) = SMALL_ARGS[]
 
 function regmsg(f)
     return try
@@ -222,32 +233,48 @@ end
     end
 end
 
-@testitem "fusion hard limits: array arguments and the register prefilter" setup = [
+@testitem "fusion stops at the backend's kernel-argument budget" setup = [
     LF_compile_regressions,
 ] tags = [
     :latticefields, :compile,
 ] begin
-    @testset "fusion hard limits: array arguments and the register prefilter" begin
+    @testset "fusion stops at the backend's kernel-argument budget" begin
         src = read(joinpath(@__DIR__, "..", "shared", "schedule_fusion.jl"), String)
         @isdefined(smoother) || include_string(@__MODULE__, split(src, "nlaunch(s) =")[1])
-        # η = 1 at this size: cost alone fuses all
-        s = smoother((42, 42, 42), 20)
+        # 2 smoothers with 3 parameters each
+        s = smoother((8, 8, 8), 2)
+        ids = collect(eachindex(s.kernels))
+        scc = Dict(i => i for i in ids)
+        @test fusion_blocker(s, ids[1:1], 2, scc) === nothing
+        # the CPU has no budget: one launch
+        @test Exec.kernel_argument_bytes(KernelAbstractions.CPU()) === nothing
         sp = plan(s)
-        @test length(sp.launches) > 1
-        @test any(d -> d.reason == :limit, sp.decisions)
-        @test all(
-            l -> length(Schedule.traffic(s, l.kernel.kernel).arrays) <= 32,
-            sp.launches
-        )
-        @test length(plan(smoother((42, 42, 42), 4)).launches) == 1
-        @test length(
-            plan(
-                s; cost = CostModel(;
-                    max_arrays = 1000, max_arg_bytes = 10^6,
-                    max_live = 10^6
-                )
-            ).launches
-        ) == 1                # negative control: without limits
-        @test live_estimate(s.kernels[1]) < 96
+        @test length(sp.launches) == 1
+        st = HostStore(s)
+        P = (0.5, 0.25, 0.75)
+        bytes(bs) = [Exec.launch_argument_bytes(x.launch) for x in bs.launches]
+        primal = only(bytes(BoundStep(KernelAbstractions.CPU(), s, sp, st, P)))
+        # a budget the primal launch fills: the primal binding keeps one launch
+        SMALL_ARGS[] = primal
+        @test bytes(BoundStep(SmallArgs(), s, sp, st, P)) == [primal]
+        # the Dual parameters make the fused launch larger: that binding splits
+        bs = BoundStep(SmallArgs(), s, sp, st, P; c = Dual(0.0, 1.0))
+        @test length(bs.launches) == 2
+        @test all(<=(primal), bytes(bs))
+        # the plans at the budget, one per argument types: primal one launch, Dual two
+        plans = collect(values(sp.bound))
+        @test sort([length(q.launches) for q in plans]) == [1, 2]
+        dp = only(filter(q -> length(q.launches) == 2, plans))
+        @test count(d -> d.reason == :limit, dp.decisions) == 1
+        @test occursin("budget of $primal B", sprint(Schedule.fusion_report, dp))
+        # the primal plan is still one launch
+        @test length(sp.launches) == 1
+        # a backend with no known budget is refused, naming the method to define
+        err = try
+            Exec.kernel_argument_bytes(MockArgsless())
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("kernel_argument_bytes", err.msg)
     end
 end

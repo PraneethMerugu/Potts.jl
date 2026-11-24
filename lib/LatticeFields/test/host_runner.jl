@@ -14,7 +14,7 @@ using LatticeFields.IR: Grid, Coef, FaceRule, ImmersedRule, NodeValueRule, Space
     F32, F16, F64, U8, I32, U32, MASKED, RESTRICTED
 using LatticeFields.Compile: CompileOptions, debug_options, semantic, compile_kernel,
     body_function, derive_function, fingerprint, LOWERING
-using LatticeFields.Schedule: plan, StepPlan, LaunchSpec, CostModel
+using LatticeFields.Schedule: plan, StepPlan, LaunchSpec
 
 const HOST = KernelAbstractions.CPU()
 using LatticeFields.Problems: FieldStore, array, current, launch_geometry,

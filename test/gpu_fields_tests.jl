@@ -56,6 +56,45 @@
     end
 end
 
+# A coupled model on ROCm runs the step plan made for the device: its field group binds the
+# plan at the device's kernel-argument budget, made for the argument types it binds, and
+# every launch fits that budget. The host run binds the plan with no budget.
+@testitem "a coupled model on ROCm runs the plan at the device's argument budget" setup = [
+    GpuSetup, FieldsSetup,
+] tags = [:potts, :gpu, :device] begin
+    if PottsDevices.device_name() == "rocm"
+        @testset "a coupled model on ROCm runs the plan at the device's argument \
+            budget" begin
+            Exec = Potts.LatticeFields.Exec
+            backend = PottsDevices.device_backend()
+            budget = Exec.kernel_argument_bytes(backend)
+            @test budget == 4096
+            σ = zeros(Int32, 12, 12)
+            σ[5:7, 5:7] .= 1
+            prob = PottsProblem(
+                FdMovingMask(; name = :m), [ownership => σ, kind => [:A]], (0, 4); backend,
+                seed = 5, field_solver = ExplicitEuler(substeps = 3)
+            )
+            ck = checkpoint(init(prob, CheckerboardCPM()))
+            dev = init(prob, CheckerboardCPM(); backend, checkpoint = ck)
+            host = init(prob, CheckerboardCPM(); checkpoint = ck)
+            rd = CorePotts._runtime(dev.ctx.__fields1)
+            rh = CorePotts._runtime(host.ctx.__fields1)
+            wait(rd.pending)
+            # the device binding planned at the budget; the host binds the plan as made
+            @test !isempty(rd.step.bound)
+            @test all(k -> k[1] == budget, keys(rd.step.bound))
+            @test all(bs -> length(bs.launches) == length(rh.step.launches), rh.steps)
+            # the bound launches are those of a plan at the budget, each within it
+            n = Set(length(sp.launches) for sp in values(rd.step.bound))
+            for bs in rd.steps
+                @test length(bs.launches) in n
+                @test all(x -> Exec.launch_argument_bytes(x.launch) <= budget, bs.launches)
+            end
+        end
+    end
+end
+
 # A Float32 problem with a Float64 field computed in
 # Float64 on ROCm equals the host run to 1e-12; its kernels hold `double` and are registered
 # in LatticeFields' Exec registry, which the full scan below skips (and, with the registry
@@ -223,8 +262,8 @@ end
 end
 
 # Cell averages are exact fixed-point sums, so two device runs
-# with the same seed are bitwise equal (σ and the averages), and a device average equals the
-# host's bitwise when both read the same site values. Models: test/cell_sums_models.jl.
+# with the same seed are bitwise equal (σ and the averages), and a device average equals
+# the host's bitwise when both read the same site values. Models: test/cell_sums_models.jl.
 # Negative control: `CorePotts._FLOAT_ATOMICS` (the float atomics of the code before the
 # fixed-point sums); the host and
 # the device then differ, and two device runs may differ (logged: an order race is not
@@ -363,7 +402,8 @@ end
             conv = [cs_conv_digests(backend) for _ in 1:5]
             same_conv_σ = all(c -> c[1] == conv[1][1], conv)
             same_conv_σ ||
-                @info "the five ROCm @convert runs left σ (lockless order)" σ = first.(conv)
+                @info "the five ROCm @convert runs left σ (lockless order)" σ =
+                first.(conv)
             same_conv_σ && @test allequal(conv)
             # the compartments in the staged device lifecycle too (its cluster-surface fold
             # launch), against a recount from `σ`; the bits are the fused form's where the

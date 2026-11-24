@@ -80,7 +80,8 @@ arguments and `Pre` are refused.
 - **Emission:** an `if`-guard kernel wrapper, interleaved stores, `Launch{K, WG, NP}`, static
   ndrange for single-ndrange bodies, a plan walk emitted per plan as a RuntimeGeneratedFunction
   (no `@generated`), and host-parallel compile.
-- **Fusion:** a cost model, `t_fused < Σ t_split`, with measured η(streams, working set).
+- **Fusion:** every kernel fuses with its neighbor in the step order whenever that is legal
+  (D-335; the cost model of the cutover design is deleted).
 - **Ordering:** topological over the cross-read graph, Jacobi inside cycles, `Sequential` for a
   stated paper sequence (D-257 item 2).
 - **Masked solves:** an eliminated SPD form; rule M and the Any fold in the hierarchy; PCG with

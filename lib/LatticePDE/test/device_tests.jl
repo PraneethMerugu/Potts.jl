@@ -1279,3 +1279,50 @@ end
         @test isapprox(Array(sd[we, length(sd.t)]), sh[we, length(sh.t)]; rtol = 1.0f-4)
     end
 end
+
+# Many masked fields with the same mask predicate: the mask launch clamps each field
+# (`_mask_fuse`), two arrays per field, so at 64 fields the fused mask launch passes the
+# device's kernel-argument budget and the bound mask plan splits it. The run equals the
+# host.
+@testitem "masked fields past the kernel-argument budget on pgpu equal the host" setup = [
+    LP_device,
+] tags = [
+    :latticepde, :device, :gpu_only,
+] begin
+    using .LP_device: fd, kron
+    using LatticeFields: Exec
+    @testset "masked fields past the kernel-argument budget on $pgpu equal the host" begin
+        K = 64
+        bq = only(@variables bq(..)::Int32 [input = true])
+        cs = [only(@variables $(Symbol("bm", k))(..)) for k in 1:K]
+        ce = [c(t, x, y) for c in cs]
+        sys = PDESystem(
+            [D(ce[k]) ~ -0.2 * ce[k] for k in 1:K],
+            vcat(
+                [cs[k](0, x, y) ~ x * y for k in 1:K],
+                [ce[k] ~ masked(bq(t, x, y) == 2, Float64(k)) for k in 1:K]
+            ),
+            [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+            [t, x, y], vcat(ce, [bq(t, x, y)]), Num[]; name = :bm
+        )
+        Q = Int32[(i + j) % 3 for i in 1:16, j in 1:16]
+        function mk(be)
+            d = LatticeDiscretization(Grid((16, 16)); T = Float32, backend = be)
+            return LFP.field_problem(discretize(sys, d; inputs = [bq(t, x, y) => Q]))
+        end
+        igd = init(mk(PDEV), ExplicitEuler(); dt = 0.05)
+        igh = init(mk(KernelAbstractions.CPU()), ExplicitEuler(); dt = 0.05)
+        for _ in 1:3
+            step!(igd)
+            step!(igh)
+        end
+        @test isapprox(Array(igd.u), igh.u; rtol = 1.0e-6)
+        # the mask launches as bound: split at the budget, each within it
+        rt = only(igd.runtimes)
+        budget = Exec.kernel_argument_bytes(PDEV)
+        bytes = [Exec.launch_argument_bytes(l.launch) for l in rt.masks[1].launches]
+        @test length(bytes) > 1 && all(<=(budget), bytes)
+        ds = [d for sp in values(rt.init.bound) for d in sp.decisions]
+        @test any(d -> d.reason == :limit, ds)
+    end
+end

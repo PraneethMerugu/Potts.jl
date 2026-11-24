@@ -15,7 +15,9 @@ resolved: `resolved` maps every integrated variable (each field and each cell or
 unknown) by name to its solver, and `canonical` is the canonical string of that map that the
 problem fingerprint hashes. `discretization` is `nothing` for the fused lattice fields (the
 default, and a `LatticeDiscretization` of the model's lattice), else the discretization
-whose problem steps the fields one MCS window per sweep (`_DiscretizedFields`).
+whose problem steps the fields one MCS window per sweep (`_DiscretizedFields`). `fuse` is
+the fused lattice fields' `LatticeDiscretization(…; fuse)`: whether a step's kernels fuse
+into one launch (the results are the same, so the fingerprint leaves it out).
 """
 struct SolverSpec
     # `nothing` or a field algorithm (`_is_field_solver`)
@@ -25,6 +27,7 @@ struct SolverSpec
     resolved::Dict{Symbol, Any}
     canonical::String
     discretization::Any
+    fuse::Bool
 end
 
 _solver_name(x) = info(x).name
@@ -107,9 +110,12 @@ An ODE's `ExplicitEuler(substeps = nothing)` is one step, the same as `substeps 
 function _resolve_solvers(
         c::CompiledPottsSystem; field_solver = nothing, ode_solver = ExplicitEuler(),
         solvers = (),
-        kept::Bool = false, discretization = nothing, T::Type = Float64
+        kept::Bool = false, discretization = nothing, T::Type = Float64,
+        fuse::Bool = true
     )
     sys = getfield(c, :sys)
+    # (a `LatticeDiscretization` of the lattice gives it; else the kept one, at `remake`)
+    discretization isa LatticePDE.LatticeDiscretization && (fuse = discretization.fuse)
     disc = _discretization(c, discretization, T)
     disc === nothing ||
         return _resolve_discretized(c, disc, field_solver, ode_solver, solvers)
@@ -343,7 +349,7 @@ function _resolve_solvers(
     return SolverSpec(
         field_solver isa LatticeFields.Problems.FieldGroups ? field_solver : fsolver,
         ode_solver, given, resolved,
-        canonical, nothing
+        canonical, nothing, fuse
     )
 end
 
@@ -514,7 +520,7 @@ function _resolve_discretized(
         ),
         ";"
     )
-    return SolverSpec(field_solver, ode_solver, given, resolved, canonical, disc)
+    return SolverSpec(field_solver, ode_solver, given, resolved, canonical, disc, true)
 end
 
 # As an ODE solver, explicit Euler with `substeps = nothing` is one step per MCS.

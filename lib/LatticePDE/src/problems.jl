@@ -2692,7 +2692,9 @@ function discretize(
     # Cartesian indexing on the host: the host loop hands each site its coordinates (a
     # linear launch decodes them with an integer division per site); the option is outside
     # the fingerprint
-    options = CompileOptions(; T, index = Exec.ishost(backend) ? :cartesian : :auto)
+    options = CompileOptions(;
+        T, index = Exec.ishost(backend) ? :cartesian : :auto, disc.fuse
+    )
     span = tspan === nothing ? _time_ends(sys) : _given_tspan(tspan)
     # the group, lowered once in rate form (the update is fused by the group, per algorithm)
     g = _lower_group(sys, disc; steady, timefree)

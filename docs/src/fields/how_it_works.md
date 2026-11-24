@@ -18,7 +18,11 @@ how a mask or a periodic field is read.
    program: one kernel per rate, map, aux field and mask, plus the face rules. The result
    is a [`CompiledField`](@ref).
 5. **Compile.** LatticeFields fuses the kernels into launches and compiles them with
-   KernelAbstractions for the backend, on the host or a GPU.
+   KernelAbstractions for the backend, on the host or a GPU. It fuses a kernel into the
+   current launch whenever that is legal. On a GPU, a launch also stays within the
+   backend's kernel-argument budget. `field_report` lists each fusion and split with its
+   reason. `LatticeDiscretization(…; fuse = false)` runs one launch per kernel, with the
+   same results. Use it where the fused launches are slower on your hardware.
 6. **Problem.** `discretize` wraps the program in an `ODEProblem` of the rates or a
    `DiscreteProblem` of the maps. Its `p` holds the parameters, the tables, the inputs and
    the step index of the clock.
@@ -176,8 +180,10 @@ Recorded on an AMD Ryzen AI Max+ 395 (Radeon 8060S, ROCm), Julia 1.13.4, 2026-11
 same problem with `T = Float32` on the host gives the same values to the last bit.
 
 - The state type on a GPU is `Float32` by default.
-- ROCm is tested. Other KernelAbstractions backends are not tested here.
-- A GPU with `Float64` (ROCm, CUDA) takes `compute_type = Float64` on a `Float32` problem.
+- ROCm is tested; Metal is supported but not tested here. Another KernelAbstractions backend
+  needs a method of `LatticeFields.Exec.kernel_argument_bytes` (its kernel-argument budget
+  in bytes) before a field program can be planned for it.
+- A GPU with `Float64` (ROCm) takes `compute_type = Float64` on a `Float32` problem.
 - Apple GPUs (Metal) have no `Float64`: give `T = Float32` or `Float16`, and leave
   `compute_type`, `solver_type` and `lattice_storage` at 32 bits or less.
 - `sparse = true` and `jac = true` work on the host only. On a GPU, an OrdinaryDiffEq solver

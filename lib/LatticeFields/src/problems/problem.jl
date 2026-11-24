@@ -213,7 +213,8 @@ function _state_options(o::CompileOptions, ::Type{E}) where {E}
         )
     )
     return CompileOptions(
-        nothing, o.I, o.float64_ok, o.debug, o.index, o.lanes, o.clock, o.S, o.declared
+        nothing, o.I, o.float64_ok, o.debug, o.index, o.lanes, o.clock, o.S, o.declared,
+        o.fuse
     )
 end
 
@@ -235,7 +236,7 @@ function _options(
         declared = o.declared || (
             wide && !(Exec.default_float(backend) <: Float64) &&
                 !(V <: Float64 && C <: Float64 && !f64)
-        )
+        ), fuse = o.fuse
     )
 end
 
@@ -251,10 +252,10 @@ end
 function _plans!(
         plans, s::Program, initkeys, o::CompileOptions, ::Type{V}, backend
     ) where {V}
-    return get!(plans, V) do
+    opts = _options(o, V, backend)
+    return get!(plans, (V, opts)) do
         keys = [k.key for k in s.kernels]
         initids = [i for (i, k) in enumerate(keys) if k in initkeys]
-        opts = _options(o, V, backend)
         (
             plan(s, initids; options = opts),
             plan(s, setdiff(eachindex(keys), initids); options = opts),

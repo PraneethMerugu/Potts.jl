@@ -1520,7 +1520,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     groups = _FieldGroup[]
     # aux fields only: one group with no state, stepped by the default
     # algorithm (no `field_solver` applies), with no substep
-    isempty(order) && return [_aux_group(c, T, dt)]
+    isempty(order) && return [_aux_group(c, T, dt; spec.fuse)]
     allnames = Symbol[info(x).name for (x, _) in _field_equations(sys)]
     # with several groups, the coupling between them (`Problems.check_coupling`): the bound
     # of the whole field system (the group of all fields, in rate form), and the partition
@@ -1543,7 +1543,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     # decodes them with an integer division per site, about 3x slower on the CPU)
     for (gi, (_, solver, names)) in enumerate(order)
         lg = _field_group_spec(c, names, T)
-        opts = _field_options(c, T, solver, lg.spec.rate)
+        opts = _field_options(c, T, solver, lg.spec.rate; spec.fuse)
         gspec = lg.spec
         fused = LatticeFields.Compile.fuse_update(
             gspec.rate,
@@ -1683,7 +1683,7 @@ end
 # registered as declared Float64 (the D-157 carve-out of the device scan). Cartesian
 # indexing: the host loop hands each site its coordinates (a linear launch decodes them with
 # an integer division per site, about 3x slower on the CPU)
-function _field_options(c::CompiledPottsSystem, T::Type, solver, rate)
+function _field_options(c::CompiledPottsSystem, T::Type, solver, rate; fuse::Bool)
     narrow = T <: Union{Float16, Float32}
     # the group's own program: its fields (its own and those it reads) declared Float64
     # (not every group of the model when one field declares it)
@@ -1691,18 +1691,18 @@ function _field_options(c::CompiledPottsSystem, T::Type, solver, rate)
         any(f -> f.fixed && f.storage == LatticeFields.IR.F64, rate.fields)
     return LatticeFields.Compile.CompileOptions(;
         T, float64_ok = !narrow || wide, lanes = :state, index = :cartesian,
-        declared = narrow && wide
+        declared = narrow && wide, fuse
     )
 end
 # an aux field that LatticePDE added for a spatial operator across `Coarse` grids
 # (`laplacian(c)`): no model variable holds it, so the binding allocates it and its `aux:`
 # kernel fills it every window
 _hidden_aux(k::AbstractString) = LatticePDE.is_crossgrid_key(k)
-function _aux_group(c::CompiledPottsSystem, T::Type, dt)
+function _aux_group(c::CompiledPottsSystem, T::Type, dt; fuse::Bool)
     solver = ExplicitEuler()
     lg = _field_group_spec(c, Symbol[], T)
     gspec = lg.spec
-    opts = _field_options(c, T, solver, gspec.rate)
+    opts = _field_options(c, T, solver, gspec.rate; fuse)
     fused = LatticeFields.Compile.fuse_update(
         gspec.rate,
         LatticeFields.Problems.update_rule(solver)

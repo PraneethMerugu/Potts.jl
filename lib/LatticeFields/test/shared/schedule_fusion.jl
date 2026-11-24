@@ -1,11 +1,9 @@
 # Definitions of schedule/fusion_tests.jl that other test files use.
-using LatticeFields.Schedule: traffic, modeled_time, working_set, merge_kernels, step_order,
-    fusion_report, CostModel
+using LatticeFields.Schedule: merge_kernels, step_order, fusion_report
 
 """
 K masked-Helmholtz smoother components sharing one byte mask (6 streams each: u stencil,
-u_prev, b, uⁿ, mask, out), the launch-bound and DRAM test family of the field-kernel
-benchmarks.
+u_prev, b, uⁿ, mask, out).
 """
 function smoother(dims, K)
     N = length(dims)
@@ -117,35 +115,16 @@ end
 nlaunch(s) = length(plan(s).launches)
 
 """
-Direct comparison of fusing all kernels against running them all split.
+Run one step of plan `sp` of program `s` from seeded inputs (parameters `P`, default 0.3
+each); returns the current values of every field, by key.
 """
-function all_vs_split(s, cost = CostModel())
-    ids = collect(eachindex(s.kernels))
-    N = length(s.periodic)
-    scc = Dict(i => i for i in ids)
-    ws = working_set(s, [traffic(s, k) for k in s.kernels])
-    tf = modeled_time(cost, N, traffic(s, merge_kernels(s, ids, scc)), ws)
-    ts = sum(modeled_time(cost, N, traffic(s, k), ws) for k in s.kernels)
-    return tf, ts
-end
-
-# Negative-control rules the cost model replaces.
-function shares_read(s)
-    (
-        rs = [Set((a.field, a.level) for a in k.accesses) for k in s.kernels];
-        !isempty(intersect(rs...))
+function step_fields(s, sp; P = ntuple(_ -> 0.3, s.nparams))
+    st = HostStore(
+        s;
+        init = (k, A) -> (A .= rand(Xoshiro(hash(k)), eltype(A), length(A)))
     )
-end
-function stream_cap_ok(s, cap)
-    return length(
-        traffic(
-            s,
-            merge_kernels(
-                s, collect(eachindex(s.kernels)),
-                Dict(i => i for i in eachindex(s.kernels))
-            )
-        ).arrays
-    ) <= cap
+    run_step!(s, sp, st, P)
+    return Dict(f.key => copy(current(st, s, f.key)) for f in s.fields)
 end
 
 """

@@ -209,14 +209,16 @@ serves them all.
 - `spec::GroupSpec`: the group's description.
 - `program::Program`: the program of `alg`.
 - `programs::Dict`: the programs made so far, by [`update_key`](@ref).
-- `plans::Dict`: the plans made so far, as `(init plan, step plan)`.
+- `plans::Dict`: the plans made so far, as `(init plan, step plan)`, by algorithm, number
+  types, kernels and compile options (which depend on the backend and hold `fuse`).
 """
 struct FieldGroup{N}
     spec::GroupSpec{N}
     program::Program{N}
     programs::Dict{Any, Program{N}}
     plans::Dict{
-        Tuple{Any, Type, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}},
+        Tuple{Any, Type, Type, Vector{Int}, Vector{Int}, CompileOptions},
+        Tuple{StepPlan{N}, StepPlan{N}},
     }
 end
 function FieldGroup(
@@ -227,9 +229,8 @@ function FieldGroup(
     return FieldGroup{N}(
         spec, s, Dict{Any, Program{N}}(update_key(alg) => s),
         Dict{
-            Tuple{Any, Type, Type, Vector{Int}, Vector{Int}}, Tuple{
-                StepPlan{N}, StepPlan{N},
-            },
+            Tuple{Any, Type, Type, Vector{Int}, Vector{Int}, CompileOptions},
+            Tuple{StepPlan{N}, StepPlan{N}},
         }()
     )
 end
@@ -342,11 +343,11 @@ function group_plans(
     ) where {V}
     s = group_program(g, alg)
     initids, stepids = kernels
+    # (the options depend on the backend: a host and a device binding plan apart)
+    opts = _options(o, V, backend; clock = clock_slot(g.spec), C = compute_type(alg, V), s)
     return lock(_PLANS_LOCK) do
-        get!(g.plans, (update_key(alg), V, compute_type(alg, V), initids, stepids)) do
-            opts = _options(
-                o, V, backend; clock = clock_slot(g.spec), C = compute_type(alg, V), s
-            )
+        key = (update_key(alg), V, compute_type(alg, V), initids, stepids, opts)
+        get!(g.plans, key) do
             (plan(s, initids; options = opts), plan(s, stepids; options = opts))
         end
     end
@@ -1710,7 +1711,12 @@ function bind_group(
     fused = if masks === nothing || Exec.ishost(backend)
         Int[]
     else
-        _fused_rules(prog, ip, st, ids)
+        # the mask launches as bound: the plan at the device's argument budget
+        mp = _at_budget(
+            backend, prog, ip, st, Tuple(p), _cur(st, swaps, 1, all_state), c,
+            _mask_fuse(prog, st, p, ids)
+        )
+        _fused_rules(prog, mp, st, ids)
     end
     stepclamps = Tuple(cl for (j, cl) in enumerate(clamps) if !(j in fused))
     copies = Tuple((st.bufs[f][1], st.bufs[f][2]) for f in swaps)
@@ -2619,38 +2625,46 @@ function _fused_rules(prog::Program, ip::StepPlan, st::FieldStore, ids)
 end
 # `fuse(spec, cur)` of `BoundStep` for the mask plan: the lane and the body wrapper of a
 # launch that writes fused masks, at the slots `cur` and the masked values at parameters `p`
-function _mask_fuse(prog::Program, st::FieldStore, p, ids)
-    return function (l, cur)
-        rs = [
-            r
-                for r in prog.rules
-                if r isa NodeValueRule && r.field in ids && r.vfield == 0 &&
-                prog.masks[r.mask].field in writes(l.kernel.kernel)
-        ]
-        isempty(rs) && return nothing
-        m1 = array(st, prog.masks[rs[1].mask].field, :cur)
-        prod(leveldims(prog, l.kernel.space.level)) == length(m1) || return nothing
-        function cell(r)
-            b = st.bufs[r.field]
-            return (
-                length(b) == 1 ? b[1] : b[cur[r.field]],
-                array(st, prog.masks[r.mask].field, :cur),
-            )
-        end
-        lane = Tuple(cell(r) for r in rs)
-        all(c -> typeof(c) == typeof(lane[1]), lane) || return nothing
-        vals = Tuple(
-            convert(
-                eltype(c[1]), if r.value.param == 0
-                    r.value.value
-                else
-                    r.value.value * p[r.value.param]
-                end
-            )
-                for (c, r) in zip(lane, rs)
+struct _MaskFuse{G, S, P}
+    prog::G
+    st::S
+    p::P
+    ids::Set{Int}
+end
+_mask_fuse(prog::Program, st::FieldStore, p, ids) = _MaskFuse(prog, st, p, Set{Int}(ids))
+# the masked fields decide which rules a launch fuses, so they key its plan at a budget
+fuse_key(f::_MaskFuse) = sort!(collect(f.ids))
+function (mf::_MaskFuse)(l, cur)
+    prog, st, p, ids = mf.prog, mf.st, mf.p, mf.ids
+    rs = [
+        r
+            for r in prog.rules
+            if r isa NodeValueRule && r.field in ids && r.vfield == 0 &&
+            prog.masks[r.mask].field in writes(l.kernel.kernel)
+    ]
+    isempty(rs) && return nothing
+    m1 = array(st, prog.masks[rs[1].mask].field, :cur)
+    prod(leveldims(prog, l.kernel.space.level)) == length(m1) || return nothing
+    function cell(r)
+        b = st.bufs[r.field]
+        return (
+            length(b) == 1 ? b[1] : b[cur[r.field]],
+            array(st, prog.masks[r.mask].field, :cur),
         )
-        return (lane, f -> _MaskClamp(f, vals))
     end
+    lane = Tuple(cell(r) for r in rs)
+    all(c -> typeof(c) == typeof(lane[1]), lane) || return nothing
+    vals = Tuple(
+        convert(
+            eltype(c[1]), if r.value.param == 0
+                r.value.value
+            else
+                r.value.value * p[r.value.param]
+            end
+        )
+            for (c, r) in zip(lane, rs)
+    )
+    return (lane, f -> _MaskClamp(f, vals))
 end
 
 # a device: one kernel per field (components: the mask holds for each one), compiled with

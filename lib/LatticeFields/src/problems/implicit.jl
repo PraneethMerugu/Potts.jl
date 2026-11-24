@@ -111,14 +111,11 @@ function _implicit_plan(
         o::CompileOptions;
         C::Type = V
     ) where {V}
+    opts = _options(o, V, backend; clock = clock_slot(g.spec), C, s)
     return lock(_PLANS_LOCK) do
         first(
-            get!(g.plans, (tag, V, C, Int[], ids)) do
-                p = plan(
-                    s, ids; options = _options(
-                        o, V, backend; clock = clock_slot(g.spec), C, s
-                    )
-                )
+            get!(g.plans, (tag, V, C, Int[], ids, opts)) do
+                p = plan(s, ids; options = opts)
                 (p, p)
             end
         )

@@ -8,7 +8,7 @@
 """
     CompileOptions(; T = nothing, I = Int32, float64_ok = true, debug = false,
                    index = :auto, lanes = :fixed, clock = 0, S = nothing,
-                   declared = false)
+                   declared = false, fuse = true)
 
 Compile options. `T`: compute value type; `I`: site index type (switched to Int64
 automatically when an array has more than 2³¹ − 1 elements);
@@ -22,7 +22,9 @@ written into the slot (`derive(Praw, c, t, k)`). `S`: the value type the state l
 under `lanes = :state` (`nothing`: `T`); a group's `compute_type` wider than its storage
 compiles in `T` and loads and stores through `lanecast`. `declared`: the group declared its
 Float64 (`compute_type`, `lattice_storage`): a kernel that computes in or touches Float64 is
-registered in Exec's Float64 registry ([`Exec.register_float64!`](@ref)).
+registered in Exec's Float64 registry ([`Exec.register_float64!`](@ref)). `fuse = false`
+plans one launch per kernel (no fusion), with the emission unchanged: the way out where a
+fused launch is slower than split ones.
 
 # Fields
 - `T::Union{Type, Nothing} = nothing`: the compute value type.
@@ -38,6 +40,8 @@ registered in Exec's Float64 registry ([`Exec.register_float64!`](@ref)).
 - `S::Union{Type, Nothing} = nothing`: the value type of the state lanes under
   `lanes = :state`.
 - `declared::Bool = false`: whether the group declared its Float64.
+- `fuse::Bool = true`: whether `LatticeFields.Schedule.plan` fuses kernels (it also does not
+  fuse under `debug`).
 """
 Base.@kwdef struct CompileOptions
     T::Union{Type, Nothing} = nothing
@@ -49,6 +53,7 @@ Base.@kwdef struct CompileOptions
     clock::Int = 0
     S::Union{Type, Nothing} = nothing
     declared::Bool = false
+    fuse::Bool = true
 end
 # the value type a float lane of field `f` holds under options `o`
 function _lane_holds(f, o::CompileOptions)

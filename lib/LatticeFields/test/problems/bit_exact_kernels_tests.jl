@@ -3,7 +3,7 @@
 # grid. On identical inputs, outputs are compared as bit patterns (`-0.0 ≠ 0.0`) across
 #   layout       K separate fields  vs  one K-component field (planes);
 #   store order  interleaved stores vs  every value first, stores last;
-#   fusion       the cost-model plan (fused) vs one launch per species (split);
+#   fusion       the planner's fused plan vs one launch per species (split);
 #   wrapper      Exec's host executor vs the padded oracle loop (every `run_step!`), and
 #                the device vs the host executor (problems_device.jl).
 # Negative control: one input element one ulp up changes the output.
