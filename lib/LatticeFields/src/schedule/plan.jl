@@ -221,7 +221,7 @@ end
 """
 A step: launches in queue order, then host slot swaps of the two-buffer fields written.
 `request` holds the arguments of the [`plan`](@ref) call, and `bound` the plans of the same
-request at a kernel-argument budget, one per argument signature ([`bound_plan`](@ref)).
+request at a kernel-argument budget, one per argument signature (`bound_plan`).
 """
 struct StepPlan{N}
     launches::Vector{LaunchSpec{N}}
@@ -290,7 +290,7 @@ measured as it is bound: static or dynamic.
 - A `StepPlan`: the launch descriptions in order, the double-buffered fields to swap after
   the step, and every fusion decision.
 
-See also [`fusion_report`](@ref), [`bound_plan`](@ref).
+See also [`fusion_report`](@ref), `bound_plan`.
 """
 function plan(
         p::Program{N}, ids::Vector{Int} = collect(eachindex(p.kernels));
