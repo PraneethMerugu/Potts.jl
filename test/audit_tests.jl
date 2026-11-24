@@ -232,7 +232,8 @@ end
         @test_throws ArgumentError PottsProblem(
             AuditDerived(; name = :d), [op; :J => [0 2; 5 1]], (0, 2)
         )
-        @test all(==(2), PottsProblem(AuditDerived(; name = :d), [op; :J => 2.0], (0, 2)).p.J)
+        filled = PottsProblem(AuditDerived(; name = :d), [op; :J => 2.0], (0, 2))
+        @test all(==(2), filled.p.J)
         # A-15: reinit! validates shapes, takes symbolic maps, reruns callback
         # initialization
         σ2 = zeros(Int32, 12, 12)

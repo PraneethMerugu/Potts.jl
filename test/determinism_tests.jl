@@ -120,8 +120,8 @@ end
         def_B = """
         @potts_model DetModelB begin
             @kinds medium alpha beta
-            @parameters J[kind, kind] = [0.0 4.0 6.0; 4.0 2.0 8.0; 6.0 8.0 2.0] λ = 1.0 V₀ = \
-        9.0 T = 1.0
+            @parameters J[kind, kind] = [0.0 4.0 6.0; 4.0 2.0 8.0; 6.0 8.0 2.0] \
+        λ = 1.0 V₀ = 9.0 T = 1.0
             @lattice Lattice((10, 10))
             @energy begin
                 contacts => J[kind, kind′]
