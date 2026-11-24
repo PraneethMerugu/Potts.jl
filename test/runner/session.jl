@@ -9,6 +9,8 @@
 #     run_tests(file = "fields_short_tests.jl")           # every item of one file
 #     run_tests(name = "is_kind", workers = 1)            # in a fresh worker process
 #
+# The package under test (Potts, CorePotts, …) is loaded into Main.
+#
 # In the session the items run in this process (POTTS_TEST_WORKERS=0), and at the root the
 # group is the Potts suite (GROUP=Potts), not every package; set either variable before
 # loading this file to choose otherwise. Revise picks up `src` edits when it is on the load
@@ -23,6 +25,12 @@ else
 end
 include(joinpath(@__DIR__, "PottsTestRunner.jl"))
 using .PottsTestRunner: run_tests
+
+# The package under test, loaded into Main so that `CorePotts.f` works at the prompt
+let toml = joinpath(dirname(dirname(Base.active_project())), "Project.toml")
+    name = isfile(toml) ? get(Base.parsed_toml(toml), "name", nothing) : nothing
+    name === nothing || @eval Main using $(Symbol(name))
+end
 
 get!(ENV, "POTTS_TEST_WORKERS", "0")
 get!(ENV, "GROUP", PottsTestRunner.session_group(dirname(Base.active_project())))
