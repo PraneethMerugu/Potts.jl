@@ -692,17 +692,6 @@ function _cv_writes!(ph::ConvertPass, st, p, ctx, key, mcs, sc, backend)
     n = length(st.ownership)
     cap = length(st.cell.kind)
     if !all(d -> _wfloat(eltype(d)) || eltype(d) <: Integer, dsts)
-        all(d -> isbitstype(eltype(d)), dsts) || throw(
-            ArgumentError(
-                string(
-                    "the `@convert` compound writes into ", join(
-                        unique(string.(eltype.(dsts))), ", "
-                    ),
-                    " columns need isbits number types: kernels take isbits values only; ",
-                    "use Float32 or Float64 columns"
-                )
-            )
-        )
         Exec.ishost(backend) || throw(
             ArgumentError(
                 string(

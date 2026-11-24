@@ -198,14 +198,6 @@ end
             )
             a = cs_run!(st)
             @test all(c -> a[c] == sum(vr[σ .== c]; init = 0 // 1), 1:n)
-            # a BigFloat column is refused on the host too: kernels take isbits values only
-            st = initial_state(
-                σ, ones(Int32, n); site = (; v = big.(v)), cell = (;
-                    x = zeros(BigFloat, n),
-                )
-            )
-            err = @test_throws ArgumentError cs_run!(st)
-            @test occursin("isbits", sprint(showerror, err.value))
             # integer columns keep their atomics (no scratch needed)
             st = initial_state(
                 σ, ones(Int32, n); site = (; v), cell = (;
