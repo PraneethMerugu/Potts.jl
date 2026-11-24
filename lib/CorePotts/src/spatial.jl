@@ -115,8 +115,9 @@ backend:
   beyond its column's number type is stored as ±Inf, and the integrator warns at its next
   read point. On a device without 64-bit atomics (Metal), the sum is held in a pair of
   32-bit words, with the same result.
-- Any other number type (a `BigFloat`, a `Dual`) is summed in site order on the host, and
-  is refused on a device.
+- Any other isbits number type (a `Dual`, a `Rational`) is summed in site order on the
+  host, and is refused on a device. A non-isbits type (`BigFloat`) is refused: kernels take
+  isbits values only, so BigFloat is for host-side setup.
 
 `f` must not read the destination column: it keeps its old values until the sum is
 written.
@@ -512,11 +513,21 @@ function _cell_reduce!(
     return 4
 end
 
-# any other number type (BigFloat, Dual, Rational): summed in site order on the host
+# any other isbits number type (Dual, Rational): summed in site order on the host
 function _cell_reduce!(
         ::typeof(+), f::F, dst::AbstractArray{T}, ::Type{D}, st, p, ctx, key, mcs,
         backend
     ) where {F, T, D}
+    isbitstype(T) || throw(
+        ArgumentError(
+            string(
+                "the cell sum into the ", T, " column `", _part_name(D),
+                "` (`CellReduce`) ",
+                "needs an isbits number type: kernels take isbits values only, so ", T,
+                " is for host-side setup; use a Float32 or Float64 column"
+            )
+        )
+    )
     Exec.ishost(backend) || throw(
         ArgumentError(
             string(

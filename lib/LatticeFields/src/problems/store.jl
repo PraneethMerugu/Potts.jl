@@ -12,8 +12,8 @@ table (set with [`settable!`](@ref)). `cur[f]` is the current slot of field `f` 
 `E` is the problem's element type: a float lane holds
 [`lanetype`](@ref LatticeFields.Compile.lanetype)`(lane, value_type(E), :state, fixed)`
 wrapped like `E` (a field with a declared storage, `fixed`, holds its own lane type) (a Dual
-of it when `E` is a Dual): the state lanes hold the problem's value type (BigFloat under
-`T = BigFloat`, Float64 after a Float64 `u0`), and Dual parameters give Dual fields. Integer
+of it when `E` is a Dual): the state lanes hold the problem's value type (Float64 after a
+Float64 `u0`), and Dual parameters give Dual fields. Integer
 lanes keep their type; tables take the value type, and a Dual of it only when the tables
 themselves carry derivative parts (`TE`, the element type of the problem's table values, is
 a Dual; then `E` is one too). `nothing`: each lane's own Julia type.

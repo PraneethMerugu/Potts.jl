@@ -29,9 +29,10 @@ fields differ is an error, as is a `domain` with such an axis.
 `methods` maps a field (`c`, `c(t, x, y)` or `u`; keys are normalized by operation) to its
 method; a field without an entry is `FiniteVolume()`.
 
-`T` is the state type (the only number-type keyword): `Float16`, `Float32`,
-`Float64`, or `BigFloat` on the host (stored in F64 lanes that hold BigFloat). `nothing`
-(the default) means Float64 on the host and Float32 on a device. Any other type is refused.
+`T` is the state type (the only number-type keyword): `Float16`, `Float32` or `Float64`.
+`nothing` (the default) means Float64 on the host and Float32 on a device. Any other type
+is refused, `BigFloat` included: kernels take isbits numbers only, so BigFloat stays in
+host-side setup (parameter defaults and values, rounded once to the compute type).
 After `discretize`, the eltype of `u0` (and Dual parameters) decide; see `remake`.
 
 A hexagonal grid (`Grid(dims; geometry = HEX)`, 2D, axial coordinates: the neighbors of
@@ -324,10 +325,9 @@ function _lane(st, T)
     T <: Float64 && return F64
     T <: Float32 && return F32
     T <: Float16 && return F16
-    # host only: an F64 lane holds BigFloat (`lanetype`)
-    T <: BigFloat && return F64
     return _dverr(
-        "T = $T is not a state type: use Float16, Float32, Float64 or BigFloat (host)"
+        "T = $T is not a state type: use Float16, Float32 or Float64 (kernels take isbits \
+        numbers only)"
     )
 end
 # the state type: `disc.T`, else Float64 on a host backend and Float32 on a device

@@ -63,8 +63,9 @@ ishost(backend) = false
 """
     supports(backend, ::Type{T}) -> Bool
 
-Capability: can kernels on `backend` compute in and store number type `T`? The host
-executor runs every type. A device runs `Float32`, and `Float64` where the hardware has it
+Capability: can kernels on `backend` compute in and store number type `T`? Kernels take
+isbits values only, so no backend runs a non-isbits type (`BigFloat`). The host executor
+runs every isbits type. A device runs `Float32`, and `Float64` where the hardware has it
 (`KernelAbstractions.supports_float64`: true on ROCm and CUDA, false on Metal). Callers ask
 only when a choice depends on the hardware (a Float64 solver group, an explicit Float64
 problem); the type device code gets by default is [`default_float`](@ref).
@@ -74,8 +75,8 @@ problem); the type device code gets by default is [`default_float`](@ref).
 - `T`: the number type to ask about.
 
 # Returns
-- `true` if `backend` is the host, or `T <: Float32`, or `T <: Float64` and the backend
-  supports Float64; `false` otherwise.
+- `true` if `T` is isbits and `backend` is the host, or `T <: Float32`, or `T <: Float64`
+  and the backend supports Float64; `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -88,6 +89,7 @@ true
 See also [`ishost`](@ref), [`default_float`](@ref).
 """
 function supports(backend, ::Type{T}) where {T}
+    isbitstype(T) || return false
     return ishost(backend) || T <: Float32 ||
         (T <: Float64 && KernelAbstractions.supports_float64(backend))
 end

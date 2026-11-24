@@ -189,14 +189,23 @@ end
 
         @testset "other number types; the missing scratch; backends without 64-bit \
             atomics" begin
-            # a BigFloat column: summed in site order on the host
+            # a Rational column (isbits, not a float): summed in site order on the host
+            vr = round.(Int64, 8 .* v) .// 8
+            st = initial_state(
+                σ, ones(Int32, n); site = (; v = vr), cell = (;
+                    x = zeros(Rational{Int64}, n),
+                )
+            )
+            a = cs_run!(st)
+            @test all(c -> a[c] == sum(vr[σ .== c]; init = 0 // 1), 1:n)
+            # a BigFloat column is refused on the host too: kernels take isbits values only
             st = initial_state(
                 σ, ones(Int32, n); site = (; v = big.(v)), cell = (;
                     x = zeros(BigFloat, n),
                 )
             )
-            a = cs_run!(st)
-            @test all(c -> a[c] == sum(big.(v)[σ .== c]; init = big(0.0)), 1:n)
+            err = @test_throws ArgumentError cs_run!(st)
+            @test occursin("isbits", sprint(showerror, err.value))
             # integer columns keep their atomics (no scratch needed)
             st = initial_state(
                 σ, ones(Int32, n); site = (; v), cell = (;
@@ -209,15 +218,16 @@ end
             st = initial_state(σ, ones(Int32, n); site = (; v), cell = (; x = zeros(n)))
             @test_throws ArgumentError cs_run!(st)
             # a backend without 64-bit atomics (Metal, which cannot be tested here) takes
-            # the paired form; a BigFloat sum is refused on any device
+            # the paired form; a Rational sum (site order) is refused on any device
             nob = CS_NoAtomic64()
             @test CorePotts._paired(nob) && !CorePotts._paired(CPU())
             st = initial_state(
-                σ, ones(Int32, n); site = (; v = big.(v)), cell = (;
-                    x = zeros(BigFloat, n),
+                σ, ones(Int32, n); site = (; v = vr), cell = (;
+                    x = zeros(Rational{Int64}, n),
                 )
             )
-            @test_throws ArgumentError cs_run!(st; backend = nob)
+            err = @test_throws ArgumentError cs_run!(st; backend = nob)
+            @test occursin("run on the CPU", sprint(showerror, err.value))
             # the scratch is not copied to a daughter, and is grown with the state
             @test CorePotts._is_scratch_column(Symbol("#cr_acc")) &&
                 !CorePotts._is_scratch_column(:x)

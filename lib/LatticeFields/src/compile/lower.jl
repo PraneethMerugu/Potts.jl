@@ -4,7 +4,7 @@
 A lowered kernel: the body expression plus everything Exec needs to launch it.
 `args[l]` lists `(field or table id, role)` for lane `lanes[l]`, in the order of `S[l]`;
 `levels` gives the order of `G.dims`. `T` is the value type the body is emitted for
-(Float32, Float64, BigFloat); Dual arrays and parameters of that value type run the same
+(Float16, Float32, Float64); Dual arrays and parameters of that value type run the same
 body. `derive(Praw, c, t, k)` maps the raw parameters (any `Real` eltype, kept as given) to
 `P` in the type of `c` (the compute element type): the raw values, then the hoisted ones,
 derived in at least Float64 and rounded once; with the options' clock slot, the step index

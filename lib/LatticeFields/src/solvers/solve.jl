@@ -630,7 +630,7 @@ function lowered_type(exec, S, role; op = nothing)
         if S <: AbstractFloat
             ""
         else
-            " (a Dual or BigFloat implicit solve is not supported yet)"
+            " (a Dual or BigFloat implicit solve is not supported)"
         end
     )
     S <: Float32 || supports(exec, S) || bad(

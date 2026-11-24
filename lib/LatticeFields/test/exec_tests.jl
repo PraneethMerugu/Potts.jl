@@ -12,8 +12,9 @@ end
 @testitem "Exec: capabilities" setup = [LF_exec] tags = [:latticefields, :exec] begin
     @testset "Exec: capabilities" begin
         @test Exec.ishost(KA.CPU()) && !Exec.ishost(MockDevice())
-        # capability: the host runs every type; a device Float32, Float64 where KA says so
-        @test Exec.supports(KA.CPU(), Float64) && Exec.supports(KA.CPU(), BigFloat)
+        # capability: the host runs every isbits type; a device Float32, Float64 where KA
+        # says so; kernels take isbits values only, so no backend runs BigFloat
+        @test Exec.supports(KA.CPU(), Float64) && !Exec.supports(KA.CPU(), BigFloat)
         @test Exec.supports(MockDevice(), Float32) && !Exec.supports(MockDevice(), BigFloat)
         @test Exec.supports(MockDevice(), Float64) == KA.supports_float64(MockDevice())
         # policy: Float64 on the host, Float32 on every device whatever the hardware has

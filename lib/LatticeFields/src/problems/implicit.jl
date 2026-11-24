@@ -729,8 +729,7 @@ function _implicit_eltype(u, key, alg, V)
             string(
                 _algname(alg), ": the field `", key, "` holds ", _typetext(T),
                 "; an implicit solve runs in ",
-                "Float32 or Float64 (BigFloat through the implicit solve is not supported \
-                    yet). ",
+                "Float32 or Float64. ",
                 "Give the field `lattice_storage = Float32` or Float64, or step it with \
                     `ExplicitEuler`"
             )

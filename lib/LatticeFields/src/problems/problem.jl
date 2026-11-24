@@ -46,11 +46,12 @@ A parameter that is NaN (no value) is an error at `init`.
 The element type `E` of the problem is `eltype(u0)`,
 promoted with the parameters only when they carry derivative parts (Dual `p` gives a Dual
 state; a plain Float64 `p` leaves a Float32 state Float32; a BigFloat `p` is kept as given
-and rounded once to the compute type). The bodies are emitted for the value type
+on the host and rounded once to the compute type). The bodies are emitted for the value type
 `value_type(E)` (`eltype(u0)` decides; an explicit `options.T` that differs is refused); a
 new value type plans and emits once per problem family, and a value-only change never
-recompiles. `tspan` stays Float64 on the host. A non-isbits `E` (BigFloat) runs on the host
-only; Float64 values on a backend without Float64 are refused. `p` is a plain vector, so it
+recompiles. `tspan` stays Float64 on the host. A non-isbits `E` (BigFloat) is refused on
+every backend, since kernels take isbits values only; Float64 values on a backend without
+Float64 are refused. `p` is a plain vector, so it
 is a SciMLStructures structure whose `Tunable` portion is every scalar parameter (`replace`
 promotes its eltype); kind tables are constants outside `p` (not tunable in this version).
 
@@ -267,12 +268,12 @@ function _check_eltype(::Type{E}, backend) where {E}
     V = value_type(E)
     V <: AbstractFloat ||
         throw(ArgumentError("the state value type must be a float type; got $V (from $E)"))
-    isbitstype(E) || Exec.ishost(backend) || throw(
+    isbitstype(E) || throw(
         ArgumentError(
             string(
-                "element type ", E,
-                " is not isbits: it runs on the host backend only (use T = Float32 or \
-                    Float64 on a device)"
+                "element type ", E, " is not isbits: kernels take isbits numbers only ",
+                "(use T = Float32 or Float64, or Duals of them; BigFloat is for host-side ",
+                "setup)"
             )
         )
     )
@@ -336,11 +337,11 @@ SII.current_time(p::FieldProblem) = p.tspan[1]
 A copy with new initial state, time span, parameters (`p` a vector, or `symbol => value`
 pairs looked up in the index; a table as `Dk => values`) or input values (`symbol => values`
 pairs; the others keep theirs). Element types are kept as given: a parameter vector keeps
-its element type (Dual parameters promote the state, BigFloat parameters stay BigFloat); a
-pair's plain value is written into the problem's parameter type, and a Dual value promotes
-it (so under `T = BigFloat` with Float64 defaults, `p = [k => big"0.1"]` rounds to Float64:
-declare BigFloat defaults or give a BigFloat vector); a table keeps its values' element type
-(a BigFloat table stays BigFloat, a Dual table promotes the state). The result's type
+its element type (Dual parameters promote the state; BigFloat parameters stay BigFloat on
+the host and are rounded once to the compute type); a pair's plain value is written into
+the problem's parameter type, and a Dual value promotes it (so with Float64 defaults,
+`p = [k => big"0.1"]` rounds to Float64); a table keeps its values' element type on the host
+(a Dual table promotes the state). The result's type
 follows from the argument types (a `Vector` of pairs with one value type infers). A new
 value type plans once (cached on the problem family); a value-only change reuses the plans.
 New parameters are checked again (degenerate Robin faces); the stability bound is a function
