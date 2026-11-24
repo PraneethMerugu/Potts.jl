@@ -255,9 +255,9 @@ function workgroup(N, strategy)
 end
 
 """
-    plan(p::Program, ids = eachindex(p.kernels); options = CompileOptions(), stages = LOWERING,
-         fuse = options.fuse && !options.debug, merge = merge_kernels, budget = nothing,
-         arguments = nothing) -> StepPlan
+    plan(p::Program, ids = eachindex(p.kernels); options = CompileOptions(),
+         stages = LOWERING, fuse = options.fuse && !options.debug, merge = merge_kernels,
+         budget = nothing, arguments = nothing) -> StepPlan
 
 Order the kernels of one step, fuse every kernel into the current group when that is
 legal (every split is reported), lower each launch and bind buffers. With
