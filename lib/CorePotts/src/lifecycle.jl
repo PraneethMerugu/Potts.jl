@@ -171,7 +171,7 @@ end
 
 Construct the lifecycle of a model: cell division, removal and kind transition.
 
-Potts generates one from `@divide`, `@remove` and `@transition` rules; it can also be
+Potts generates one from `@divide` rules. Removal and kind transition need a lifecycle
 written by hand. Division requires the moment trackers (`init_moments`) and a `commit!`
 that keeps them current ([`commit_moments!`](@ref)). The lifecycle updates every built-in
 tracker incrementally and does not recount it from `σ`. A hand-written model whose

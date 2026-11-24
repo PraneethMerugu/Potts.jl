@@ -51,8 +51,7 @@ juxtacrine signaling and contact-dependent rules.
 
 ## Intracellular models
 
-Kind-scoped equation blocks with their own solver and time step, and stochastic per-cell
-components (`JumpSystem`, Catalyst reaction networks, SBML import).
+Stochastic per-cell components (`JumpSystem`).
 
 ## Initial states and I/O
 
