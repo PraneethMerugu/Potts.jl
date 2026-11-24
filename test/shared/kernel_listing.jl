@@ -7,11 +7,13 @@
 # The method: every kernel lookup goes through `AMDGPU.hipfunction(f, tt; kw...)` or
 # `Metal.mtlfunction(f, tt; kw...)`, and both specialize on the kernel's function type `F`
 # and argument types `tt`. The specializations of these functions and of their keyword
-# bodies give the candidate signatures. A candidate counts when the package's compile
-# results for it (GPUCompiler's `cached_results`, with the device's default compiler
-# configuration, as a KernelAbstractions launch uses) hold a function or a pipeline loaded
-# on a device. A specialization that was only inferred has none, so it does not count.
-# This works on AMDGPU 2.8 to 2.13 and on Metal 1.10 to 1.12. The per-package kernel dicts
+# bodies give the candidate signatures. The keywords (KernelAbstractions 0.10 passes
+# `maxthreads`, for one) select a compiler configuration, and the package keeps every
+# configuration it made in `_compiler_configs`. A candidate counts when the package's
+# compile results for it under one of these configurations (GPUCompiler's
+# `cached_results`) hold a function or a pipeline loaded on the current device. A
+# specialization that was only inferred has none, so it does not count. This works on
+# AMDGPU 2.8 to 2.13 and on Metal 1.10 to 1.12. The per-package kernel dicts
 # (`AMDGPU.Compiler._kernel_instances`, `Metal.kernel_instances`) are gone in the newer
 # versions.
 
@@ -24,13 +26,13 @@ The `(F, tt)` pairs (kernel function type, argument tuple type) of every kernel 
 function compiled_kernels(pkg::Module)
     G = pkg.GPUCompiler
     if nameof(pkg) === :AMDGPU
-        lookup, R = pkg.Compiler.hipfunction, pkg.Compiler.HIPResults
-        config = pkg.Compiler.compiler_config(pkg.device())
-        loaded = r -> !isempty(r.functions)
+        lookup, R, dev = pkg.Compiler.hipfunction, pkg.Compiler.HIPResults, pkg.device()
+        configs = collect(values(pkg.Compiler._compiler_configs))
+        loaded = r -> any(f -> first(f) == dev, r.functions)
     elseif nameof(pkg) === :Metal
-        lookup, R = pkg.mtlfunction, pkg.MetalResults
-        config = pkg.compiler_config(pkg.device())
-        loaded = r -> !isempty(r.pipelines)
+        lookup, R, dev = pkg.mtlfunction, pkg.MetalResults, pkg.device()
+        configs = collect(values(pkg._compiler_configs))
+        loaded = r -> any(p -> first(p) == dev, r.pipelines)
     else
         throw(ArgumentError("no kernel listing for $pkg"))
     end
@@ -47,9 +49,11 @@ function compiled_kernels(pkg::Module)
             TT = T.parameters[1]
             F isa DataType && isconcretetype(F) && TT isa DataType &&
                 isconcretetype(TT) || continue
-            job = G.CompilerJob(G.methodinstance(F, TT), config)
-            r = G.cached_results(R, job)
-            r !== nothing && loaded(r) && push!(pairs, (F, TT))
+            mi = G.methodinstance(F, TT)
+            for config in configs
+                r = G.cached_results(R, G.CompilerJob(mi, config))
+                r !== nothing && loaded(r) && push!(pairs, (F, TT))
+            end
         end
     end
     return collect(pairs)
