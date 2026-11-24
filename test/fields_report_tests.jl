@@ -49,6 +49,18 @@ module FrPDE
             name = :loop
         )
     end
+    # two fields that read neither each other nor a neighbor of the other (one group whose
+    # two rate kernels fuse)
+    function pair()
+        return PDESystem(
+            [
+                Dt(C) ~ Du * laplacian(C) - 0.1 * C + sc * E,
+                Dt(U) ~ -kb * U + 0.1 * E,
+            ], [],
+            lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, U, E], [Du, kb, sc];
+            name = :pair
+        )
+    end
 end
 
 @potts_model FrMerks begin
@@ -66,6 +78,14 @@ end
     @lattice Lattice((24, 20); boundary = Closed())
     @energy cells(endothelial) => (volume - 16.0)^2
     @fields c, u = FrPDE.loop() (FrPDE.endo => kind == endothelial)
+    @sweep Metropolis(; temperature = 4.0)
+end
+
+@potts_model FrPair begin
+    @kinds medium endothelial
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(endothelial) => (volume - 16.0)^2
+    @fields c, u = FrPDE.pair() (FrPDE.endo => kind == endothelial)
     @sweep Metropolis(; temperature = 4.0)
 end
 
@@ -429,5 +449,31 @@ end
         )
         @test isfinite(total_energy(p_kw))
         @test remake(p_kw; u0 = fr_op()).u0.site.c == p_kw.u0.site.c
+    end
+end
+
+# `fuse = false` in a model's discretization: every kernel its own launch, reported as
+# `off`, on the problem and on its `remake`. Negative control: the default fuses the two
+# rate kernels into one launch.
+@testitem "a model's discretization with fuse = false splits every launch, also after \
+    remake" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
+    @testset "a model's discretization with fuse = false splits every launch, also \
+        after remake" begin
+        LP = Potts.LatticePDE
+        m = FrPair(; name = :m)
+        function report(p)
+            ig = init(p, SequentialCPM())
+            step!(ig)
+            return sprint(field_report, ig)
+        end
+        d = LP.LatticeDiscretization(LP.Grid((24, 20)); fuse = false)
+        ps = fr_prob(m; discretization = d)
+        for r in (report(ps), report(remake(ps; u0 = fr_op())))
+            @test fr_line(r, "launches") == "  launches   2 per substep"
+            @test occursin("split", r) && occursin("off: fusion off", r)
+        end
+        r = report(fr_prob(m))
+        @test fr_line(r, "launches") == "  launches   1 per substep"
+        @test !occursin("off: fusion off", r)
     end
 end

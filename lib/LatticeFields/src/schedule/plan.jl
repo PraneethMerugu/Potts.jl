@@ -311,30 +311,41 @@ function plan(
     # runs at several ndranges is dynamic, and the plan is made again with it measured so
     # (each launch is measured as it is bound)
     dynamic = Set{String}()
-    while true
+    specs, decisions, written = _fuse_greedy(
+        p, seq, scc, fuse, budget, arguments, dynamic, options, stages, merge
+    )
+    nd = _ndranges(specs)
+    while budget !== nothing && !issubset(_several(nd), dynamic)
+        union!(dynamic, _several(nd))
         specs, decisions, written = _fuse_greedy(
             p, seq, scc, fuse, budget, arguments, dynamic, options, stages, merge
         )
-        nd = Dict{String, Set{Tuple}}()
-        foreach(l -> push!(get!(nd, l.kernel.hash, Set{Tuple}()), l.ndrange), specs)
-        now = Set(h for (h, r) in nd if length(r) > 1)
-        if budget === nothing || issubset(now, dynamic)
-            launches = [
-                LaunchSpec{N}(
-                    l.kernel, l.members, l.bind, l.workgroup, l.ndrange,
-                    length(nd[l.kernel.hash]) == 1
-                ) for l in specs
-            ]
-            swaps = sort!([f for f in keys(written) if p.fields[f].buffers == 2])
-            request = (; program = p, ids, options, stages, fuse, merge)
-            return StepPlan{N}(
-                launches, swaps, decisions, request, Dict{Any, StepPlan{N}}()
-            )
-        end
-        union!(dynamic, now)
+        nd = _ndranges(specs)
     end
-    return
+    request = (; program = p, ids, options, stages, fuse, merge)
+    return _step_plan(p, specs, nd, decisions, written, request)
 end
+
+# the plan of the launches `specs`: static where a kernel runs at one ndrange (`nd`)
+function _step_plan(p::Program{N}, specs, nd, decisions, written, request) where {N}
+    launches = [
+        LaunchSpec{N}(
+            l.kernel, l.members, l.bind, l.workgroup, l.ndrange,
+            length(nd[l.kernel.hash]) == 1
+        ) for l in specs
+    ]
+    swaps = sort!([f for f in keys(written) if p.fields[f].buffers == 2])
+    return StepPlan{N}(launches, swaps, decisions, request, Dict{Any, StepPlan{N}}())
+end
+
+# the ndranges each kernel (by hash) runs at in the launches `specs`
+function _ndranges(specs)
+    nd = Dict{String, Set{Tuple}}()
+    foreach(l -> push!(get!(nd, l.kernel.hash, Set{Tuple}()), l.ndrange), specs)
+    return nd
+end
+# the kernels that run at more than one ndrange
+_several(nd) = Set(h for (h, r) in nd if length(r) > 1)
 
 # The launches of the kernels `seq` in step order, each fused into the current group unless
 # a blocker or the budget stops it, with the decisions and the step that writes each field.

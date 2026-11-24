@@ -702,5 +702,11 @@ end
         @test occursin("split rate:rc | rate:ro  off: fusion off", rline(reps, "fusion"))
         # (the two kernels read the state before the substep: fusion changes no value)
         @test igs.u == igf.u
+        # the ODE path reports its right side's plan, after an OrdinaryDiffEq solve
+        for (fuse, n) in ((true, 1), (false, 2))
+            d = LatticeDiscretization(Grid((8, 8)); fuse)
+            r = sprint(field_report, solve(discretize(rsys2(), d), Tsit5()))
+            @test rline(r, "launches") == "  launches   $n per substep"
+        end
     end
 end
