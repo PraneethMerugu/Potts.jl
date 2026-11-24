@@ -146,10 +146,10 @@ outside `0:length(kinds)` or a kind below 1 throws an `ArgumentError`.
 - `site = (;)`: per-site arrays.
 - `model = (;)`: model-level quantities, each a 1-element array.
 - `history = (;)`: ring buffers ([`history_buffer`](@ref)), not checked.
+- `shapes = (;)`: the size of each site quantity that is not on the lattice, by name.
 
 The `cell`, `site` and `model` arrays must have an isbits element type (no `BigFloat`):
 kernels take isbits values only.
-- `shapes = (;)`: the size of each site quantity that is not on the lattice, by name.
 
 # Returns
 - `CPMState`: `ownership` is an `Array{Int32}` copy of `σ`.
