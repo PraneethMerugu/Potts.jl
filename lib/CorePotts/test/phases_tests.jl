@@ -21,6 +21,11 @@ end
             @test_throws ArgumentError initial_state(σ, kinds; site = (; u = zeros(3, 3)))
             @test_throws ArgumentError initial_state(σ, kinds; cell = (; a = zeros(2)))
             @test_throws ArgumentError initial_state(σ, kinds; model = (; m = 1.0))
+            # kernels take isbits values only: a BigFloat column is refused by name
+            err = @test_throws ArgumentError initial_state(
+                σ, kinds; cell = (; w = zeros(BigFloat, length(kinds)))
+            )
+            @test occursin("`w`", sprint(showerror, err.value))
             @test initial_state(σ, kinds; cell = (; M = zeros(2, length(kinds)))) isa
                 CPMState
         end

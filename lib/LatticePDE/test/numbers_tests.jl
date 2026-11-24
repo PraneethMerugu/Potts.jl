@@ -1,7 +1,7 @@
-# Number types through problems (P5 role model, test matrix rows of C5/C6/C7a): Dual
-# derivatives against finite differences on the owned and ODE paths, Rodas5P (Jacobian and
-# time gradient through the right side), the BigFloat reference, promotion and plan reuse,
-# and hoisted time. Each row has a negative control.
+# Number types through problems: Dual derivatives against finite differences on the owned
+# and ODE paths, Rodas5P (Jacobian and time gradient through the right side), BigFloat as a
+# host-side parameter type, promotion and plan reuse, and hoisted time. Each row has a
+# negative control.
 
 @testsetup module LP_numbers
 using Test, LatticePDE
@@ -160,35 +160,25 @@ end
     end
 end
 
-@testitem "BigFloat reference (host)" setup = [LP_numbers] tags = [
-    :latticepde,
-    :numbers,
-] begin
+@testitem "BigFloat parameters on the host; BigFloat is not a state type" setup = [
+    LP_numbers,
+] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "BigFloat reference (host)" begin
+    @testset "BigFloat parameters on the host; BigFloat is not a state type" begin
         sys = nsys()
         alg = ExplicitEuler()
-        p64, pb, p32 = owned(sys, 8, 4), owned(sys, 8, 4; T = BigFloat),
-            owned(sys, 8, 4; T = Float32)
-        @test eltype(pb) == BigFloat && eltype(pb.u0) == BigFloat
-        ib = init(pb, alg; dt = 0.01)
-        @test all(a -> eltype(a) == BigFloat, ib.store.flat)
-        @test all(
-            b -> all(a -> !(eltype(a) <: AbstractFloat) || eltype(a) == BigFloat, b),
-            ib.store.bufs
-        )
-        sb, s64, s32 = solve!(ib), solve(p64, alg; dt = 0.01), solve(p32, alg; dt = 0.01)
-        @test eltype(sb.u[end]) == BigFloat
-        err(a) = maximum(abs, Float64.(a.u[end]) .- s64.u[end]) / maximum(abs, s64.u[end])
-        @test err(sb) <= 1.0e-12
-        # negative control: Float32 storage (the old F32 lane)
-        @test err(s32) >= 1.0e-9
+        p64 = owned(sys, 8, 4)
+        s64 = solve(p64, alg; dt = 0.01)
         # a BigFloat `p` is kept, not cut to Float64; it is rounded once to the compute type
         rb = remake(p64; p = big.(p64.p))
         @test eltype(rb.p) == BigFloat && eltype(rb) == Float64
         @test isapprox(solve(rb, alg; dt = 0.01).u[end], s64.u[end]; rtol = 1.0e-14)
-        # an unsupported state type is refused by name
-        @test_throws ArgumentError owned(sys, 8, 4; T = Int)
+        # kernels take isbits numbers only: BigFloat and other unsupported state types are
+        # refused by name
+        for T in (BigFloat, Int)
+            err = @test_throws ArgumentError owned(sys, 8, 4; T)
+            @test occursin("not a state type", sprint(showerror, err.value))
+        end
     end
 end
 
@@ -279,10 +269,10 @@ end
     end
 end
 
-# Number types per role. Tables keep their element type (a BigFloat
-# table stays BigFloat, a Dual table promotes the problem as a Dual `p` does), BigFloat
-# defaults are kept, a Bool input reads back as Bool, and a pair-keyed `remake` infers. The
-# comments give the base (c2583722) value of each.
+# Number types per role. Tables keep their element type (a BigFloat table stays BigFloat
+# on the host, a Dual table promotes the problem as a Dual `p` does), BigFloat defaults are
+# kept, a Bool input reads back as Bool, and a pair-keyed `remake` infers. The comments
+# give the base (c2583722) value of each.
 @testitem "number types per role" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
     @testset "number types per role" begin
@@ -308,18 +298,6 @@ end
                 solve(remake(p; p = [Dt => [1 / 3, 1.0]]), alg; dt = 0.1).u[end];
                 rtol = 1.0e-14
             )
-            # on a BigFloat state the store's table holds the value exactly (base:
-            # Float64(1/3))
-            pb = discretize(
-                tsys, LatticeDiscretization(Grid((4, 4)); T = BigFloat); inputs = [
-                    qe =>
-                        K,
-                ]
-            )
-            ib = init(remake(pb; p = [Dt => [third, big"1.0"]]), alg; dt = 0.1)
-            @test eltype(ib.store.tables[1]) == BigFloat && ib.store.tables[1][1] == third
-            # the integrator's own copy keeps it
-            @test ib.ps[Dt][1] == third
             # an integrator table write converts into the integrator's table type
             ig = init(p, alg; dt = 0.1)
             ig.ps[Dt] = [third, 1]
@@ -392,9 +370,10 @@ end
             # base: `_default` returned Float64(v): p = [0.3333333333333333]
             @parameters Db = big"1" / 3
             bsys = ssys([D(ce) ~ Db * laplacian(ce)], [c(0, x, y) ~ 1.0], [ce], [Db])
-            pbb = discretize(bsys, LatticeDiscretization(Grid((4, 4)); T = BigFloat))
+            pbb = discretize(bsys, LatticeDiscretization(Grid((4, 4))))
             @test eltype(pbb.p) == BigFloat && pbb.p.values[1] == big"1" / 3
-            @test eltype(solve(pbb, ExplicitEuler(); dt = 0.01).u[end]) == BigFloat
+            # rounded once to the compute type of the Float64 state
+            @test eltype(solve(pbb, ExplicitEuler(); dt = 0.01).u[end]) == Float64
             # Float64 defaults stay a Float64 vector
             @test eltype(sown(tsys; inputs = [qe => K]).p) == Float64
         end

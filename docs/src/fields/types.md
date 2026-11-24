@@ -6,7 +6,7 @@ dual numbers pass through.
 
 | Role | Set by | Default |
 |---|---|---|
-| state | `LatticeDiscretization(grid; T)`: `Float16`, `Float32`, `Float64`, or `BigFloat` on the host | `Float64` on the host, `Float32` on a GPU |
+| state | `LatticeDiscretization(grid; T)`: `Float16`, `Float32` or `Float64` | `Float64` on the host, `Float32` on a GPU |
 | storage of one field | `@variables c(..) [lattice_storage = Float16]` (`Float16`, `Float32` or `Float64`) | the state type |
 | computation | `compute_type` of a field algorithm (`Float32` or `Float64`) | the state type |
 | implicit solve | `solver_type` of an implicit algorithm (`Float32` or `Float64`) | the state type |

@@ -830,16 +830,7 @@ end
     @testset "compile-only launches compile what the launch runs, and write nothing \
         (device)" begin
         backend = PottsDevices.device_backend()
-        pkg = PottsDevices.device_package()
-        function ninst()
-            return length(
-                if PottsDevices.device_name() == "metal"
-                    pkg.kernel_instances
-                else
-                    pkg.Compiler._kernel_instances
-                end
-            )
-        end
+        ninst() = length(PottsDevices.device_kernels())
         a = PottsDevices.device_array(ones(Float32, 300))
         b = PottsDevices.device_array(ones(Int32, 40))
         m = CorePotts._CompileOnly()

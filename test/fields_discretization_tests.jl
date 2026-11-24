@@ -252,7 +252,7 @@ end
         @schedule repeat(2, sweep(fraction = 1 // 2), fields)
         @sweep Metropolis(; temperature = 4.0)
     end
-    struct DiscGPU <: Potts.KernelAbstractions.GPU end
+    struct DiscGPU <: Potts.KernelAbstractions.Backend end
     m = CpSame(; name = :m)
     d = RefFD((24, 20))
     build(model, op = cp_op(); kw...) = PottsProblem(model, op, (0, 1); kw...)

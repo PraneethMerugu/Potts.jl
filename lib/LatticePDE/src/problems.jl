@@ -2609,9 +2609,8 @@ by symbol (`sol[c(t, x, y)]`, `sol[:c]`) as grid-shaped arrays.
   with one value per site, or a number) that override the fields they name;
 - `p`: the parameter values, a vector of every parameter, or `parameter => value` pairs (a
   table as `Dk => values`, an input as `kind => K`), with `remake`'s rule (a plain value is
-  written into the parameter type, a Dual promotes it; under `T = BigFloat` with Float64
-  defaults a pair's BigFloat value rounds to Float64, so declare BigFloat defaults or give a
-  BigFloat vector); a computed parameter is refused, naming why;
+  written into the parameter type, a Dual promotes it; with Float64 defaults a pair's
+  BigFloat value rounds to Float64); a computed parameter is refused, naming why;
 - `tspan`: the time span `(t₀, t₁)`, over the domain of the first variable;
 - `inputs`: the input values (below);
 - `jvp = true`, `sparse = false`, `jac = false`: the Jacobian of the right side for implicit

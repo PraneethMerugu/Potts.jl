@@ -4,12 +4,15 @@
 if gpu == "metal"
     using Metal: Metal
     const DEV = Metal.MetalBackend()
-    instances() = length(Metal.kernel_instances)
+    const GPUPKG = Metal
     devarray(x) = Metal.MtlArray(x)
 else
     using AMDGPU: AMDGPU
     const DEV = AMDGPU.ROCBackend()
-    instances() = length(AMDGPU.Compiler._kernel_instances)
+    const GPUPKG = AMDGPU
     devarray(x) = AMDGPU.ROCArray(x)
 end
 devsync() = KA.synchronize(DEV)
+# the kernels compiled and loaded on the device so far (one listing for every suite)
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "kernel_listing.jl"))
+instances() = length(compiled_kernels(GPUPKG))

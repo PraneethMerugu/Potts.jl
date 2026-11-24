@@ -627,7 +627,7 @@ struct _WriteAtomic end
         w
     )
 end
-# host only (any other number type): the writes in site order
+# host only (any other isbits number type): the writes in site order
 struct _WriteSeq end
 @inline function cv_write!(::_WriteSeq, ::Val{j}, dst, idx, w) where {j}
     # bounds: 0 < idx ≤ length(dst), checked first

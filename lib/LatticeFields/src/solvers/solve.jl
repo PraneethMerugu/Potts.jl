@@ -627,10 +627,11 @@ function lowered_type(exec, S, role; op = nothing)
     S in LOWERED_TYPES || bad(
         "number type ", S, " (", role, ") is not lowered for this solver; ",
         "lowered: ", join(LOWERED_TYPES, ", "),
-        if S <: AbstractFloat
+        if S <: AbstractFloat && isbitstype(S)
             ""
         else
-            " (a Dual or BigFloat implicit solve is not supported yet)"
+            " (a BigFloat solver type is not supported: kernels take isbits numbers " *
+                "only; a Dual is solved in its value type)"
         end
     )
     S <: Float32 || supports(exec, S) || bad(

@@ -4,7 +4,7 @@
 # (`rt.pending`): the step and the mask launches, whose bodies clamp the sites they mark
 # (the clamp at the step start fused into the mask launch on a device: no separate clamp
 # launch), and the slot-1 copy. Once the task is done, the first MCS adds no LatticeFields
-# kernel to AMDGPU's kernel cache (counted), and the device run equals the host run.
+# kernel to the device's kernel listing (counted), and the device run equals the host run.
 @testitem "field kernels compile in the pending task, the clamp fused into the masks \
     (ROCm)" setup = [
     GpuSetup, FieldsSetup,
@@ -12,13 +12,12 @@
     if PottsDevices.device_name() == "rocm"
         @testset "field kernels compile in the pending task, the clamp fused into the \
             masks (ROCm)" begin
-            AM = PottsDevices.device_package()
             function lfkernels()
                 return Set(
                     s
                         for s in (
-                            string(typeof(k))
-                            for k in collect(values(AM.Compiler._kernel_instances))
+                            string(Tuple{F, TT.parameters...})
+                            for (F, TT) in PottsDevices.device_kernels()
                         )
                         if occursin("LatticeFields.Problems", s) ||
                         occursin("LatticeFields.Compile", s)
@@ -147,21 +146,20 @@ end
 # An implicit runtime's launches (the operator program, the residuals, the shift,
 # update, status and Newton-check bodies, the solver's rebuild, lift and solve plans)
 # compile in the field phase's pending task: once it is done, the first MCS adds no
-# LatticeFields kernel to AMDGPU's kernel cache, and the device run equals the host run to
-# the Newton and solver tolerances. Base f5641ce1: the task compiled the explicit step only
-# (the first MCS compiled the implicit kernels: the set grows).
+# LatticeFields kernel to the device's kernel listing, and the device run equals the host
+# run to the Newton and solver tolerances. Base f5641ce1: the task compiled the explicit
+# step only (the first MCS compiled the implicit kernels: the set grows).
 @testitem "the implicit kernels compile in the pending task (ROCm)" setup = [
     GpuSetup, PortsSetup,
 ] tags = [:potts, :gpu, :device] begin
     if PottsDevices.device_name() == "rocm"
         @testset "the implicit kernels compile in the pending task (ROCm)" begin
-            AM = PottsDevices.device_package()
             function lfkernels()
                 return Set(
                     s
                         for s in (
-                            string(typeof(k))
-                            for k in collect(values(AM.Compiler._kernel_instances))
+                            string(Tuple{F, TT.parameters...})
+                            for (F, TT) in PottsDevices.device_kernels()
                         )
                         if occursin("LatticeFields.", s)
                 )

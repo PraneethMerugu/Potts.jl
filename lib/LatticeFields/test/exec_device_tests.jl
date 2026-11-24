@@ -1,7 +1,7 @@
 # Exec on a device (Metal or ROCm): the `if` guard, compile-before-enqueue reuse, static and
 # dynamic ndranges (one compile per distinct static ndrange?), parallel compile, plan walk
-# overhead. Compiles are counted in the backend's kernel-instance cache: one entry per
-# compiled (function, argument types) pair.
+# overhead. Compiles are counted in the device's kernel listing (`compiled_kernels`): one
+# entry per compiled (function, argument types) pair.
 
 # fresh body types per testset, so no earlier compile is reused
 

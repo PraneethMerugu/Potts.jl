@@ -1094,13 +1094,10 @@ end
             ]
         end
         @test lanes(Float32) == [F32] && lanes(Float64) == [F64] && lanes(Float16) == [F16]
-        # host problems fill F64 lanes with BigFloat
-        @test lanes(BigFloat) == [F64]
         @test lanes(nothing) == [F64]                     # default on the host: Float64
-        # negative control of the old mapping: T = BigFloat must not give F32 storage
-        @test lanes(BigFloat) != [F32]
-        err = throws_with(() -> lanes(Int), "not a state type")
-        @test err
+        # kernels take isbits numbers only: BigFloat is not a state type, nor is Int
+        @test throws_with(() -> lanes(BigFloat), "not a state type")
+        @test throws_with(() -> lanes(Int), "not a state type")
     end
 end
 

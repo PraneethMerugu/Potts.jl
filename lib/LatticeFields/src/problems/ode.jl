@@ -892,7 +892,6 @@ function _clamp_masks!(U, m::LatticeMetadata, lp::LatticeParameters, t = m.probl
     _has_masks(fp) || return U
     any(x -> last(x) === nothing, lp.inputs) && return U
     E = eltype(U)
-    (isbitstype(E) || Exec.ishost(fp.backend)) || return U
     s = _sem(m)
     ip, _ = lock(
         () -> _plans!(m.plans, s, fp.initkeys, _rhs_options(fp), value_type(E), fp.backend),

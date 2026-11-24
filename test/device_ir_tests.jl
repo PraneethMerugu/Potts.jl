@@ -98,7 +98,7 @@ end
 # --- the staged lifecycle's compile-only launch (lifecycle_planner.jl, `_CompileOnly`) ---
 # `Exec.compile!`: a launch of the kernel `Exec.launch!` runs, with `n = 0` (no work item
 # passes the guard). On ROCm: the hook sees the kernel, the array is untouched, and the
-# launch that follows compiles nothing new (`_kernel_instances` does not grow).
+# launch that follows compiles nothing new (the kernel listing does not grow).
 @inline devir_write!(i, a) = (@inbounds a[i] = 2.0f0; nothing)
 # i ≤ length(a)
 @inline devir_write3!(i, a) = (@inbounds a[i] = 3.0f0; nothing)
@@ -148,9 +148,9 @@ end
         AMDGPU.synchronize()
         @test Array(a) == fill(2.0f0, 4)
         # without the hook (which recompiles at every launch): the compile adds one kernel
-        # instance, the launch that follows none
+        # to the listing, the launch that follows none
         b = AMDGPU.ROCArray(ones(Float32, 4))
-        ninst() = length(AMDGPU.Compiler._kernel_instances)
+        ninst() = length(PottsDevices.device_kernels())
         m2 = CorePotts._CompileOnly()
         CorePotts._stage!(m2, devir_write3!, backend, 4, (b,))
         n0 = ninst()

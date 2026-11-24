@@ -15,8 +15,8 @@ using ForwardDiff: Dual
 
 # a stand-in device with the kernel-argument budget `SMALL_ARGS[]`: it binds host launches,
 # whose argument bytes are those of their argument tuple
-struct SmallArgs <: KernelAbstractions.GPU end
-struct MockArgsless <: KernelAbstractions.GPU end
+struct SmallArgs <: KernelAbstractions.Backend end
+struct MockArgsless <: KernelAbstractions.Backend end
 const SMALL_ARGS = Ref(0)
 Exec.ishost(::SmallArgs) = true
 Exec.kernel_argument_bytes(::SmallArgs) = SMALL_ARGS[]

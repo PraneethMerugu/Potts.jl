@@ -176,8 +176,8 @@ end
 function _solver_type_note(solver_type)
     solver_type isa Type || return ""
     solver_type <: AbstractFloat && isbitstype(solver_type) && return ""
-    return " (a BigFloat implicit solve is not supported yet; a Dual state's derivative " *
-        "parts take tangent solves in its value type)"
+    return " (kernels take isbits numbers only, so BigFloat is not supported; a Dual " *
+        "state's derivative parts take tangent solves in its value type)"
 end
 # the route of a `dt` given to a field algorithm: the window is a keyword of `solve`
 function _dt_text(kw)

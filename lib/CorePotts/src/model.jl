@@ -148,6 +148,9 @@ outside `0:length(kinds)` or a kind below 1 throws an `ArgumentError`.
 - `history = (;)`: ring buffers ([`history_buffer`](@ref)), not checked.
 - `shapes = (;)`: the size of each site quantity that is not on the lattice, by name.
 
+The `cell`, `site` and `model` arrays must have an isbits element type (no `BigFloat`):
+kernels take isbits values only.
+
 # Returns
 - `CPMState`: `ownership` is an `Array{Int32}` copy of `σ`.
 
@@ -193,6 +196,18 @@ function initial_state(
     for (name, a) in pairs(model)
         a isa AbstractArray && length(a) == 1 ||
             throw(ArgumentError("model quantity `$name` must be a 1-element array"))
+    end
+    for (part, arrays) in ((:cell, cell), (:site, site), (:model, model))
+        for (name, a) in pairs(arrays)
+            T = eltype(a)
+            isbitstype(T) || throw(
+                ArgumentError(
+                    "$part quantity `$name` has element type $T, which is not isbits: \
+                    kernels take isbits values only, so use Float32 or Float64 and keep \
+                    $T for host-side setup"
+                )
+            )
+        end
     end
     return CPMState(Array{Int32}(σ), merge(base, cell), site, model, history)
 end

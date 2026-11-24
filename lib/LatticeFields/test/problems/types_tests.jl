@@ -224,8 +224,8 @@ end
     end
 end
 
-@testitem "generic float types (Float16, Float32, Float64, BigFloat) through \
-    FieldProblem" setup = [LF_problems_types] tags = [
+@testitem "generic float types (Float16, Float32, Float64) through FieldProblem; \
+    BigFloat is refused" setup = [LF_problems_types] tags = [
     :latticefields, :problems,
 ] begin
     @testset "generic float types through FieldProblem" begin
@@ -248,14 +248,14 @@ end
             )
         end
         s64 = run_T(Float64)
-        sbig = run_T(BigFloat)
         s32 = run_T(Float32)
         s16 = run_T(Float16)
         @test eltype(s64.u[end]) == Float64
-        @test eltype(sbig.u[end]) == BigFloat
         @test eltype(s32.u[end]) == Float32
         @test eltype(s16.u[end]) == Float16
-        @test maximum(abs, Float64.(sbig.u[end]) .- s64.u[end]) < 1.0e-12
+        # kernels take isbits values only: a BigFloat state is refused on the host too
+        err = @test_throws ArgumentError run_T(BigFloat)
+        @test occursin("not isbits", sprint(showerror, err.value))
         @test maximum(abs, Float64.(s32.u[end]) .- s64.u[end]) < 1.0e-5
         @test maximum(abs, Float64.(s16.u[end]) .- s64.u[end]) < 2.0e-2
     end
