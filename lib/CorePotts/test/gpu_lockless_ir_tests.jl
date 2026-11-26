@@ -823,7 +823,9 @@ end
     end
 end
 
-@testitem "device IR: the minimum image divides by no lattice length" setup = [CP_gpu] tags = [
+@testitem "device IR: the minimum image divides by no lattice length" setup = [
+    CP_gpu,
+] tags = [
     :corepotts, :gpu, :device, :gpu_only,
 ] begin
     # The device LLVM of `min_image` holds no 64-bit division or remainder by a runtime
