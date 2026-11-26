@@ -224,21 +224,23 @@ end
     return nothing
 end
 
-# One work item's stay (the block at `bc`) with the sweep's launch arguments `a` (a
-# `_LaunchArgs`: the cache's run-constant `args` with the round's `p`, `mcs`, `off` and `q`).
-# The kernel and the inline CPU path both enter here. The copy functions see the number of
-# completed MCS as `ctx.mcs` (`sweep_ctx`).
-function _block_stay!(bc, a, serial::Val)
-    return block_stay!(
-        bc, a.st, a.f, a.p, sweep_ctx(a.ctx, a.mcs), a.law, a.key, a.mcs, a.layout,
-        a.off, a.s, a.q, a.tk, a.cnt, a.status, a.sl, serial
+# The arguments of a work item's stay (`block_stay!` after the block coordinates) from the
+# sweep's launch arguments `a` (a `_LaunchArgs`: the cache's run-constant `args` with the
+# round's `p`, `mcs`, `off` and `q`). The copy functions see the number of completed MCS as
+# `ctx.mcs` (`sweep_ctx`). The kernel unpacks them in its body and the inline CPU path once
+# per phase, so a work item's loop reads no field of `a`: a call per work item that unpacks
+# them costs about 10% of a CPU sweep.
+function _stay_args(a)
+    return (
+        a.st, a.f, a.p, sweep_ctx(a.ctx, a.mcs), a.law, a.key, a.mcs, a.layout, a.off, a.s,
+        a.q, a.tk, a.cnt, a.status, a.sl,
     )
 end
 
 # one work item per block over the N-d grid of blocks (no index division per work item)
 @kernel function block_kernel!(a)
     I = @index(Global, NTuple)
-    _block_stay!(map(i -> i - 1, I), a, Val(false))
+    block_stay!(map(i -> i - 1, I), _stay_args(a)..., Val(false))
 end
 
 # the phase's listed copies in list order, then the list is emptied (one work item, or the
@@ -256,7 +258,7 @@ function serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status
     @inbounds sl.count[1] = UInt32(0)
     return nothing
 end
-# the serial pass with the sweep's launch arguments `a` (as `_block_stay!`)
+# the serial pass with the sweep's launch arguments `a` (as `_stay_args`)
 function _serial_pass!(a)
     return serial_pass!(
         a.st, a.f, a.p, sweep_ctx(a.ctx, a.mcs), a.law, a.key, a.mcs, a.layout, a.off,
@@ -539,8 +541,9 @@ function checkerboard_mcs!(
             # one work item after another, so each decision sees what the item before it
             # left: exact (the ΔH sum reconciles with the trajectory) and independent of the
             # thread count
+            sa = _stay_args(a)
             for I in CartesianIndices(l.nblocks)
-                _block_stay!(Tuple(I) .- 1, a, Val(true))
+                block_stay!(Tuple(I) .- 1, sa..., Val(true))
             end
             continue
         end

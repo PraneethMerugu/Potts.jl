@@ -91,13 +91,13 @@ end
                 )
             )
         )
-        # a work item's stay with the launch arguments (the kernel's and the inline entry)
+        # a work item's stay with the arguments unpacked from the launch arguments
         largs = CorePotts._with_round(
             cinteg.cache.args, (; cinteg.p, mcs = 0, off = (0, 0), q = 1)
         )
         for serial_flag in (Val(true), Val(false))
-            bs_args = ((0, 0), largs, serial_flag)
-            @test isempty(check_allocs(CorePotts._block_stay!, typeof.(bs_args)))
+            bs_args = ((0, 0), CorePotts._stay_args(largs)..., serial_flag)
+            @test isempty(check_allocs(CorePotts.block_stay!, typeof.(bs_args)))
         end
         # `AllocCheck` collapses shared runtime callees (`sync_end`, `wait`, `enq_work`,
         # locks, channels) at `multiple call sites @ unknown`, so every reported allocation
