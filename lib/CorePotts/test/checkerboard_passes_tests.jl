@@ -411,12 +411,17 @@ end
     @testset "checkerboard: launch arguments follow the integrator" begin
         lat = Lattice((30, 30))
         σ, kinds = blocks((30, 30), 5)
-        prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 6), gg_params(); seed = 2)
+        u0 = initial_state(σ, kinds)
+        prob = PottsProblem(GG, u0, lat, (0, 6), gg_params(); seed = 2)
         alg = CheckerboardCPM(; threads = false)            # reproducible
         run(integ, n) = (foreach(_ -> step!(integ), 1:n); copy(integ.state.ownership))
         # the converted arguments are the integrator's own state and context
         integ = init(prob, alg)
         @test integ.cache.args.st === integ.state && integ.cache.args.ctx === integ.ctx
+        # a copy steps its own arrays, as the original does
+        c = deepcopy(integ)
+        @test c.cache.args.st === c.state && c.cache.args.st !== integ.state
+        @test run(c, 3) == run(init(prob, alg), 3)
         # a parameter write replaces `p`: the next sweep uses the new value
         cold = merge(gg_params(), (; T = 0.5))
         ref = run(init(remake(prob; p = cold), alg), 3)
@@ -431,5 +436,19 @@ end
         ref = run(init(remake(prob; u0 = u2), alg), 3)
         reinit!(integ, u2)
         @test run(integ, 3) == ref
+        # a state write (`set_state!`) is seen by the next sweep
+        flip = [k == 1 ? 2 : 1 for k in kinds]
+        ref = run(init(remake(prob; u0 = initial_state(σ, flip)), alg), 3)
+        integ = init(prob, alg)
+        kind = integ.state.cell.kind
+        CorePotts.SymbolicIndexingInterface.set_state!(
+            integ, convert(Vector{eltype(kind)}, flip), StateIndex(:cell, :kind)
+        )
+        @test run(integ, 3) == ref
+        # a run restored from a checkpoint continues as the original does
+        integ = init(prob, alg)
+        run(integ, 2)
+        rest = init(prob, alg; checkpoint = checkpoint(integ))
+        @test run(rest, 3) == run(integ, 3)
     end
 end

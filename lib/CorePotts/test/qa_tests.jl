@@ -73,6 +73,11 @@ end
 
         cinteg = init(prob, CheckerboardCPM(); save_start = false)
         cargs = (cinteg.cache, cinteg.p, 0)
+        # the per-MCS identity check of the converted launch arguments: no allocation
+        sync_bytes(c, o) = @allocated CorePotts.sync_launch!(c, o)
+        sync = (cinteg.cache, CorePotts._sweep_objects(cinteg))
+        sync_bytes(sync...)
+        @test sync_bytes(sync...) == 0
         @test_opt target_modules = (CorePotts,) CorePotts.checkerboard_mcs!(cargs...)
         @test_opt target_modules = (CorePotts,) step!(cinteg)
         # `checkerboard_mcs!` branches on the runtime `Bool` `cache.inline`, so `AllocCheck`
