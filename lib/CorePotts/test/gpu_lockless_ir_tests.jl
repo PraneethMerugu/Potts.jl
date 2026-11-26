@@ -823,6 +823,40 @@ end
     end
 end
 
+@testitem "device IR: the minimum image divides by no lattice length" setup = [
+    CP_gpu,
+] tags = [
+    :corepotts, :gpu, :device, :gpu_only,
+] begin
+    # The device LLVM of `min_image` holds no 64-bit division or remainder by a runtime
+    # value (a division by the constant 2 is a shift). Negative control: the floor-division
+    # wrap it replaced is flagged. ROCm only: the module comes from GPUCompiler's job.
+    if PottsDevices.device_name() == "rocm"
+        AMDGPU = PottsDevices.device_package()
+        GPUCompiler = AMDGPU.GPUCompiler
+        function device_ir(f, TT)
+            config = AMDGPU.Compiler.compiler_config(AMDGPU.device(); kernel = false)
+            mi = GPUCompiler.methodinstance(typeof(f), Base.to_tuple_type(TT))
+            job = GPUCompiler.CompilerJob(mi, config)
+            return sprint(io -> GPUCompiler.code_llvm(io, job; dump_module = true))
+        end
+        runtime_div = r"\b[su](?:div|rem) i64 [^,]+, %"
+        ndiv(ir) = count(l -> occursin(runtime_div, l), split(ir, '\n'))
+        floor_wrap(l::Lattice{N}, x, a) where {N} = ntuple(Val(N)) do d
+            δ = x[d] - a[d]
+            n = l.dims[d]
+            l.periodic[d] ? δ - n * fld(δ + cld(n, 2) - 1, n) : δ
+        end
+        @testset "$(N)-D" for N in (2, 3)
+            TT = (typeof(Lattice(ntuple(_ -> 8, N))), NTuple{N, Int}, NTuple{N, Int})
+            @test ndiv(device_ir(min_image, TT)) == 0
+            @test ndiv(device_ir(floor_wrap, TT)) >= N
+        end
+    else
+        @test_skip "the device LLVM scan runs on ROCm"
+    end
+end
+
 @testitem "compile-only launches compile what the launch runs, and write nothing \
     (device)" setup = [CP_gpu] tags = [
     :corepotts, :gpu, :device, :gpu_only,

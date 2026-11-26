@@ -23,6 +23,29 @@ end
             @test min_image(c, (10, 1), (1, 1)) == (9, 0)         # closed axes never wrap
         end
 
+        @testset "minimum image equals the floor-division wrap ($(length(dims))-D, \
+            $(boundary))" for dims in ((10, 7), (64, 33), (8, 9, 1), (2, 31, 16)),
+                boundary in (Periodic(), Closed(), :mixed)
+            # oracle: the wrap by floor division, for any offset
+            wrap(δ, n, p) = p ? δ - n * fld(δ + cld(n, 2) - 1, n) : δ
+            N = length(dims)
+            b = boundary === :mixed ? ntuple(d -> isodd(d) ? Periodic() : Closed(), N) :
+                boundary
+            l = Lattice(dims; boundary = b)
+            rng = Xoshiro(17)
+            site() = ntuple(d -> rand(rng, 1:dims[d]), N)
+            # random sites; the corners give the offsets ±(n - 1), and the anchor 0 of a
+            # padded, empty cell slot gives ±n
+            o, z = ntuple(_ -> 1, N), ntuple(_ -> 0, N)
+            pairs = [(site(), site()) for _ in 1:2000]
+            push!(pairs, (dims, o), (o, dims), (dims, z), (z, dims))
+            @test all(pairs) do (x, a)
+                δ = min_image(l, x, a)
+                δ == ntuple(d -> wrap(x[d] - a[d], dims[d], l.periodic[d]), N) &&
+                    all(d -> !l.periodic[d] || -dims[d] < 2δ[d] <= dims[d], 1:N)
+            end
+        end
+
         @testset "trackers match brute force after runs \
             ($(length(dims))-D, $(nameof(typeof(alg))))" for (
                 dims, alg,
