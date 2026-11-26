@@ -39,6 +39,10 @@ const COREPOTTS_NONPUBLIC_QUALIFIED = (
     # Base.@nospecializeinfer (documented, not declared public): the host setup of `init`,
     # `remake` and `PottsProblem` inferred once for every model
     Symbol("@nospecializeinfer"),
+    # KernelAbstractions.argconvert: the launch-time argument conversion that backends
+    # extend; the checkerboard sweep converts its run-constant arguments once at setup
+    # instead of at every launch. KA declares no public API
+    :argconvert,
 )
 include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")
