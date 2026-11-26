@@ -39,6 +39,10 @@ const COREPOTTS_NONPUBLIC_QUALIFIED = (
     # Base.@nospecializeinfer (documented, not declared public): the host setup of `init`,
     # `remake` and `PottsProblem` inferred once for every model
     Symbol("@nospecializeinfer"),
+    # KernelAbstractions.argconvert: the launch-time argument conversion that backends
+    # extend; the checkerboard sweep converts its run-constant arguments once at setup
+    # instead of at every launch. KA declares no public API
+    :argconvert,
 )
 include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")
@@ -68,10 +72,12 @@ end
         @test isempty(check_allocs(CorePotts.boundary_site_mcs!, typeof.(bargs)))
 
         cinteg = init(prob, CheckerboardCPM(); save_start = false)
-        cargs = (
-            cinteg.state, cinteg.cache, cinteg.kf, cinteg.p, cinteg.ctx, cinteg.law,
-            cinteg.key, 0,
-        )
+        cargs = (cinteg.cache, cinteg.p, 0)
+        # the per-MCS identity check of the converted launch arguments: no allocation
+        sync_bytes(c, o) = @allocated CorePotts.sync_launch!(c, o)
+        sync = (cinteg.cache, CorePotts._sweep_objects(cinteg))
+        sync_bytes(sync...)
+        @test sync_bytes(sync...) == 0
         @test_opt target_modules = (CorePotts,) CorePotts.checkerboard_mcs!(cargs...)
         @test_opt target_modules = (CorePotts,) step!(cinteg)
         # `checkerboard_mcs!` branches on the runtime `Bool` `cache.inline`, so `AllocCheck`
@@ -90,14 +96,12 @@ end
                 )
             )
         )
+        # a work item's stay with the arguments unpacked from the launch arguments
+        largs = CorePotts._with_round(
+            cinteg.cache.args, (; cinteg.p, mcs = 0, off = (0, 0), q = 1)
+        )
         for serial_flag in (Val(true), Val(false))
-            bs_args = (
-                (0, 0), cinteg.state, cinteg.kf, cinteg.p, cinteg.ctx, cinteg.law,
-                cinteg.key,
-                0, cinteg.cache.layout, (0, 0), cinteg.cache.switches, 1,
-                cinteg.cache.track,
-                cinteg.cache.cnt, cinteg.cache.status, cinteg.cache.serial, serial_flag,
-            )
+            bs_args = ((0, 0), CorePotts._stay_args(largs)..., serial_flag)
             @test isempty(check_allocs(CorePotts.block_stay!, typeof.(bs_args)))
         end
         # `AllocCheck` collapses shared runtime callees (`sync_end`, `wait`, `enq_work`,

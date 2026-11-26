@@ -101,6 +101,7 @@ const MODEL_COMPILER_INTERFACE = (
 eval(Expr(:public, MODEL_COMPILER_INTERFACE...))
 
 include("rng.jl")
+include("launch_args.jl")
 include("lattice.jl")
 include("piff.jl")
 include("model.jl")

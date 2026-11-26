@@ -224,15 +224,23 @@ end
     return nothing
 end
 
+# The arguments of a work item's stay (`block_stay!` after the block coordinates) from the
+# sweep's launch arguments `a` (a `_LaunchArgs`: the cache's run-constant `args` with the
+# round's `p`, `mcs`, `off` and `q`). The copy functions see the number of completed MCS as
+# `ctx.mcs` (`sweep_ctx`). The kernel unpacks them in its body and the inline CPU path once
+# per phase, so a work item's loop reads no field of `a`: a call per work item that unpacks
+# them costs about 10% of a CPU sweep.
+function _stay_args(a)
+    return (
+        a.st, a.f, a.p, sweep_ctx(a.ctx, a.mcs), a.law, a.key, a.mcs, a.layout, a.off, a.s,
+        a.q, a.tk, a.cnt, a.status, a.sl,
+    )
+end
+
 # one work item per block over the N-d grid of blocks (no index division per work item)
-@kernel function block_kernel!(
-        st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl
-    )
+@kernel function block_kernel!(a)
     I = @index(Global, NTuple)
-    block_stay!(
-        map(i -> i - 1, I), st, f, p, ctx, law, key, mcs,
-        layout, off, s, q, tk, cnt, status, sl, Val(false)
-    )
+    block_stay!(map(i -> i - 1, I), _stay_args(a)..., Val(false))
 end
 
 # the phase's listed copies in list order, then the list is emptied (one work item, or the
@@ -250,41 +258,106 @@ function serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status
     @inbounds sl.count[1] = UInt32(0)
     return nothing
 end
-
-@kernel function serial_kernel!(
-        st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl
+# the serial pass with the sweep's launch arguments `a` (as `_stay_args`)
+function _serial_pass!(a)
+    return serial_pass!(
+        a.st, a.f, a.p, sweep_ctx(a.ctx, a.mcs), a.law, a.key, a.mcs, a.layout, a.off,
+        a.tk, a.cnt, a.status, a.sl
     )
+end
+
+@kernel function serial_kernel!(a)
     _ = @index(Global, Linear)
-    serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
+    _serial_pass!(a)
 end
 
 # moments re-center once per MCS (the commits only accumulate, `lockless`); c ≤ capacity
-@kernel function recenter_kernel!(cell, lat)
+@kernel function recenter_kernel!(a)
     c = @index(Global, Linear)
+    cell = a.st.cell
     # bounds: launched over 1:capacity, the length of the cell columns
-    _recenter!(cell, lat, c, @inbounds cell.volume[c])
+    _recenter!(cell, a.ctx.lattice, c, @inbounds cell.volume[c])
 end
 
-struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS}
-    layout::BlockLayout{N}
-    switches::Int                     # a stay makes n / switches attempts (n sites)
-    order::Vector{Int}                # the MCS's phase offsets (1:k^N), P of them
-    status::B
-    track::TK                         # `nothing`, or `(; track, acc)` (acc per site)
+# an empty launch with the sweep's plain arguments `a` (see `sync_launch!`)
+@kernel function handoff_kernel!(a)
+    _ = @index(Global, Linear)
+end
+
+mutable struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS, L, A}
+    const layout::BlockLayout{N}
+    const switches::Int               # a stay makes n / switches attempts (n sites)
+    const order::Vector{Int}          # the MCS's phase offsets (1:k^N), P of them
+    const status::B
+    const track::TK                   # `nothing`, or `(; track, acc)` (acc per site)
     # committed copies per block (Int32), folded at the read points
-    cnt::CN
-    serial::SL                        # `nothing`, or the serial list (see `_push_serial!`)
+    const cnt::CN
+    const serial::SL                  # `nothing`, or the serial list (see `_push_serial!`)
     # the lattice distance a copy reads and writes around its target
-    reach::Int
+    const reach::Int
     # `nothing`, or the per-cell claim stamps of `_phase_conflict!` (CPU)
-    claim::CK
-    kernel::K1
-    serial!::K2
-    recenter!::K3
+    const claim::CK
+    const kernel::K1
+    const serial!::K2
+    const recenter!::K3
     # the phase launch's workgroup size (`nothing`: the backend's choice)
-    groupsize::GS
-    inline::Bool                      # CPU: the work items of a phase run one after another
-    host::Bool                        # the CPU backend
+    const groupsize::GS
+    const inline::Bool                # CPU: the work items of a phase run one after another
+    const host::Bool                  # the CPU backend
+    # The run-constant launch arguments: `launch`, the host objects (the state, the device
+    # functions, the context, the law, the key, the layout and the arrays above), and
+    # `args`, the same converted once (`_LaunchArgs`) in the task `task`. `p` is a round
+    # value, converted per launch, since a parameter write replaces it. `sync_launch!`
+    # converts them again when the integrator's objects are no longer the ones in `launch`,
+    # or when another task steps the integrator.
+    launch::L
+    args::A
+    task::Task
+end
+
+# the sweep's run-constant arguments: `launch` (`(; st, f, ctx, law, key)`, the
+# integrator's) with the cache's own layout and arrays
+function _sweep_launch(launch, layout, switches, tk, cnt, status, sl)
+    return merge(launch, (; layout, s = switches, tk, cnt, status, sl))
+end
+function _sweep_launch(c::CheckerboardCache, launch)
+    return _sweep_launch(launch, c.layout, c.switches, c.track, c.cnt, c.status, c.serial)
+end
+
+# The converted arguments follow the integrator, as a field phase's binding does
+# (`FieldPhase`): before each MCS the host objects they were converted from, and the task
+# that converted them, are compared by identity with the integrator's current ones and the
+# current task, and a difference converts them again (cold, past an inference barrier).
+# The objects have concrete types, so `===` compiles to one compare per leaf: a pointer
+# compare per array or other mutable object, a value compare per bits field, with no
+# `jl_egal` call and no allocation.
+#
+# The state's and the context's arrays are written in place (`set_state!`, `reinit!`,
+# checkpoint restore, the frozen refresh), so a run in one task converts once. A
+# `deepcopy` of an integrator makes them differ on a device: GPUArrays copies a device
+# array at each reference (its `deepcopy_internal` ignores the `IdDict`), so the copy's
+# stored arguments hold arrays other than its state's.
+#
+# A device queue is per task (AMDGPU), and a backend orders its queues through the launches
+# that pass its arrays: a launch takes them over on its task's queue, after the queue that
+# last wrote them (AMDGPU: `take_ownership!`). The converted arguments skip that, and so
+# does their conversion. So a reconversion first launches an empty kernel with the plain
+# arguments, which hands them over to the current task's queue.
+sync_launch!(cache, launch) = nothing
+function sync_launch!(c::CheckerboardCache, launch)
+    c.task === current_task() && c.launch === _sweep_launch(c, launch) ||
+        Base.invokelatest(_relaunch!, c, launch)
+    return nothing
+end
+function _relaunch!(c::CheckerboardCache, launch)
+    full = _sweep_launch(c, launch)
+    handoff_kernel!(KernelAbstractions.get_backend(c.status))(
+        full; ndrange = 1, workgroupsize = 1
+    )
+    c.args = _launch_args(c.kernel, full)
+    c.launch = full
+    c.task = current_task()
+    return nothing
 end
 
 # Whether a phase is a proper colouring: whether two of its work items touch one cell. The
@@ -400,11 +473,14 @@ The default `parts` of a `d`-dimensional lattice: about 64 phases per MCS (8 in 
 """
 default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 
+# `launch`: the sweep's run-constant kernel arguments `(; st, f, ctx, law, key)` (the
+# integrator's state, device functions, context, law and key), converted once with the
+# cache's own into `args`
 function CheckerboardCache(
         backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing,
         parts = nothing,
         switches = 1, threads = :auto, inline_max_blocks = _INLINE_MAX_BLOCKS,
-        min_read = 0, cell
+        min_read = 0, cell, launch
     ) where {N}
     r, w = reach(f.footprint, proposal)
     r = max(r, min_read, _window(f.connectivity))
@@ -459,15 +535,19 @@ function CheckerboardCache(
             (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small \
                 runs as fast or faster on the CPU" maxlog = 1
     claims = _claim_columns(backend, cell)
+    status = z(UInt32, 1)
+    kernel = block_kernel!(backend)
+    full = _sweep_launch(launch, layout, switches, tk, cnt, status, sl)
     c = CheckerboardCache(
-        layout, switches, zeros(Int, P), z(UInt32, 1), tk,
-        cnt, sl, need, claims, block_kernel!(backend),
+        layout, switches, zeros(Int, P), status, tk,
+        cnt, sl, need, claims, kernel,
         serial_kernel!(backend), recenter_kernel!(backend),
         _block_groupsize(backend, layout.nblocks),
         _block_inline(backend, n, threads, inline_max_blocks),
-        backend isa KernelAbstractions.CPU
+        backend isa KernelAbstractions.CPU, full, _launch_args(kernel, full),
+        current_task()
     )
-    # fifteen positional fields are easy to permute (two defects of that shape on this
+    # eighteen positional fields are easy to permute (two defects of that shape on this
     # branch): read back the ones a swap would corrupt, once per `init`
     @assert c.layout === layout && c.switches == switches && c.reach == need &&
         c.serial === sl &&
@@ -484,68 +564,59 @@ _window(h::ConnectivityHooks) = h.window
 _serial_pass(::Nothing, f) = false
 _serial_pass(sl, f) = has_defer(f) || (has_post(f) && sl.exact)
 
-# `part = (j, n)`: pass `j` of `n` of a sub-MCS `Repeat`, the phases `(j-1)·P÷n+1 : j·P÷n`
-# of the MCS's `P` (the whole MCS is `(1, 1)`); each pass ends with the moments re-centered
+# The sweep of MCS `mcs + 1` with parameters `p`. `part = (j, n)`: pass `j` of `n` of a
+# sub-MCS `Repeat`, the phases `(j-1)·P÷n+1 : j·P÷n` of the MCS's `P` (the whole MCS is
+# `(1, 1)`); each pass ends with the moments re-centered. Every launch passes the cache's
+# converted `args` with the round values `p`, `mcs`, `off` and `q`, and so does the inline
+# CPU path.
 function checkerboard_mcs!(
-        st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L, key::RNGKey,
-        mcs::Integer, part::NTuple{2, Int} = (1, 1)
-    ) where {N, F, L}
+        cache::CheckerboardCache{N}, p, mcs::Integer, part::NTuple{2, Int} = (1, 1)
+    ) where {N}
+    a0 = cache.args
     order = cache.order
     for q in eachindex(order)
-        r, _, _, _ = draw(key, mcs, q, STREAM_COLOR_ORDER, 2)
+        r, _, _, _ = draw(a0.key, mcs, q, STREAM_COLOR_ORDER, 2)
         order[q] = bounded(r, cache.layout.k^N) + 1
     end
-    l, s, sl = cache.layout, cache.switches, cache.serial
-    serial = _serial_pass(sl, f)
+    l = cache.layout
+    serial = _serial_pass(cache.serial, a0.f)
     launches = 0
     j, np = part
     P = length(order)
     for q in ((j - 1) * P ÷ np + 1):(j * P ÷ np)
         ph = @inbounds order[q]                      # q ∈ 1:P (the range above)
         off = phase_offset(l, ph)
+        a = _with_round(a0, (; p, mcs = Int(mcs), off, q))
         # an inline phase counts as one, like a one-workgroup launch
         launches += 1
-        if cache.inline || _phase_conflict!(st, cache, ctx.lattice, l, off)
+        if cache.inline || _phase_conflict!(a0.st, cache, a0.ctx.lattice, l, off)
             # one work item after another, so each decision sees what the item before it
             # left: exact (the ΔH sum reconciles with the trajectory) and independent of the
             # thread count
+            sa = _stay_args(a)
             for I in CartesianIndices(l.nblocks)
-                block_stay!(
-                    Tuple(I) .- 1, st, f, p, ctx, law, key, mcs, l, off, s,
-                    q, cache.track, cache.cnt, cache.status,
-                    sl, Val(true)
-                )
+                block_stay!(Tuple(I) .- 1, sa..., Val(true))
             end
             continue
         end
-        cache.kernel(
-            st, f, p, ctx, law, key, mcs, l, off, s, q,
-            cache.track, cache.cnt, cache.status, sl;
-            ndrange = l.nblocks, workgroupsize = cache.groupsize
-        )
+        cache.kernel(a; ndrange = l.nblocks, workgroupsize = cache.groupsize)
         serial || continue
         if cache.host
-            serial_pass!(
-                st, f, p, ctx, law, key, mcs, l, off,
-                cache.track, cache.cnt, cache.status, sl
-            )
+            _serial_pass!(a)
         else
-            cache.serial!(
-                st, f, p, ctx, law, key, mcs, l, off, cache.track,
-                cache.cnt, cache.status, sl; ndrange = 1,
-                workgroupsize = 1
-            )
+            cache.serial!(a; ndrange = 1, workgroupsize = 1)
             launches += 1
         end
     end
-    if hasproperty(st.cell, :anchor)                 # the moments re-center
-        ncell = length(st.cell.volume)
+    cell = a0.st.cell
+    if hasproperty(cell, :anchor)                    # the moments re-center
+        ncell = length(cell.volume)
         if cache.host
             for c in 1:ncell
-                _recenter!(st.cell, ctx.lattice, c, st.cell.volume[c])
+                _recenter!(cell, a0.ctx.lattice, c, cell.volume[c])
             end
         else
-            cache.recenter!(st.cell, ctx.lattice; ndrange = ncell)
+            cache.recenter!(a0; ndrange = ncell)
             launches += 1
         end
     end
