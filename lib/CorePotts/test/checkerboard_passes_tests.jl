@@ -404,3 +404,32 @@ end
         end
     end
 end
+
+@testitem "checkerboard: launch arguments follow the integrator" setup = [
+    CP_checkerboard_passes,
+] tags = [:corepotts, :checkerboard_passes] begin
+    @testset "checkerboard: launch arguments follow the integrator" begin
+        lat = Lattice((30, 30))
+        σ, kinds = blocks((30, 30), 5)
+        prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 6), gg_params(); seed = 2)
+        alg = CheckerboardCPM(; threads = false)            # reproducible
+        run(integ, n) = (foreach(_ -> step!(integ), 1:n); copy(integ.state.ownership))
+        # the converted arguments are the integrator's own state and context
+        integ = init(prob, alg)
+        @test integ.cache.args.st === integ.state && integ.cache.args.ctx === integ.ctx
+        # a parameter write replaces `p`: the next sweep uses the new value
+        cold = merge(gg_params(), (; T = 0.5))
+        ref = run(init(remake(prob; p = cold), alg), 3)
+        integ.p = cold
+        @test run(integ, 3) == ref
+        @test ref != run(init(prob, alg), 3)
+        # `reinit!` with another state continues as a fresh run from it
+        integ = init(prob, alg)
+        other = init(remake(prob; seed = 9), alg)
+        run(other, 2)
+        u2 = current_state(other)
+        ref = run(init(remake(prob; u0 = u2), alg), 3)
+        reinit!(integ, u2)
+        @test run(integ, 3) == ref
+    end
+end

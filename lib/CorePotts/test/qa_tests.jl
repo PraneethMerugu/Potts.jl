@@ -72,10 +72,7 @@ end
         @test isempty(check_allocs(CorePotts.boundary_site_mcs!, typeof.(bargs)))
 
         cinteg = init(prob, CheckerboardCPM(); save_start = false)
-        cargs = (
-            cinteg.state, cinteg.cache, cinteg.kf, cinteg.p, cinteg.ctx, cinteg.law,
-            cinteg.key, 0,
-        )
+        cargs = (cinteg.cache, cinteg.p, 0)
         @test_opt target_modules = (CorePotts,) CorePotts.checkerboard_mcs!(cargs...)
         @test_opt target_modules = (CorePotts,) step!(cinteg)
         # `checkerboard_mcs!` branches on the runtime `Bool` `cache.inline`, so `AllocCheck`
@@ -94,15 +91,13 @@ end
                 )
             )
         )
+        # a work item's stay with the launch arguments (the kernel's and the inline entry)
+        largs = CorePotts._with_round(
+            cinteg.cache.args, (; cinteg.p, mcs = 0, off = (0, 0), q = 1)
+        )
         for serial_flag in (Val(true), Val(false))
-            bs_args = (
-                (0, 0), cinteg.state, cinteg.kf, cinteg.p, cinteg.ctx, cinteg.law,
-                cinteg.key,
-                0, cinteg.cache.layout, (0, 0), cinteg.cache.switches, 1,
-                cinteg.cache.track,
-                cinteg.cache.cnt, cinteg.cache.status, cinteg.cache.serial, serial_flag,
-            )
-            @test isempty(check_allocs(CorePotts.block_stay!, typeof.(bs_args)))
+            bs_args = ((0, 0), largs, serial_flag)
+            @test isempty(check_allocs(CorePotts._block_stay!, typeof.(bs_args)))
         end
         # `AllocCheck` collapses shared runtime callees (`sync_end`, `wait`, `enq_work`,
         # locks, channels) at `multiple call sites @ unknown`, so every reported allocation
