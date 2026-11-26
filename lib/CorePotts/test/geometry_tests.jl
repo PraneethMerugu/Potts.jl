@@ -34,9 +34,11 @@ end
             l = Lattice(dims; boundary = b)
             rng = Xoshiro(17)
             site() = ntuple(d -> rand(rng, 1:dims[d]), N)
-            # random sites, and the corners, which give the extreme offsets ±(n - 1)
+            # random sites; the corners give the offsets ±(n - 1), and the anchor 0 of a
+            # padded, empty cell slot gives ±n
+            o, z = ntuple(_ -> 1, N), ntuple(_ -> 0, N)
             pairs = [(site(), site()) for _ in 1:2000]
-            push!(pairs, (dims, ntuple(_ -> 1, N)), (ntuple(_ -> 1, N), dims))
+            push!(pairs, (dims, o), (o, dims), (dims, z), (z, dims))
             @test all(pairs) do (x, a)
                 δ = min_image(l, x, a)
                 δ == ntuple(d -> wrap(x[d] - a[d], dims[d], l.periodic[d]), N) &&
