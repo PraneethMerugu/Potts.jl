@@ -302,8 +302,8 @@ struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS, A}
     # The run-constant launch arguments, converted once (`_LaunchArgs`): the state, the
     # device functions, the context, the law, the key, the layout and the arrays above. They
     # stay valid for the run: the state's and context's arrays are written in place
-    # (`set_state!`, `reinit!`, the frozen refresh) and never replaced. `p` is a round value,
-    # converted per launch, since a parameter write replaces it.
+    # (`set_state!`, `reinit!`, the frozen refresh) and never replaced. `p` is a round
+    # value, converted per launch, since a parameter write replaces it.
     args::A
 end
 
