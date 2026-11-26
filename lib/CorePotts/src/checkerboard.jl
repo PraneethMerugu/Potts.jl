@@ -301,11 +301,13 @@ mutable struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS, L, A}
     const host::Bool                  # the CPU backend
     # The run-constant launch arguments: `launch`, the host objects (the state, the device
     # functions, the context, the law, the key, the layout and the arrays above), and
-    # `args`, the same converted once (`_LaunchArgs`). `p` is a round value, converted per
-    # launch, since a parameter write replaces it. `sync_launch!` converts them again when
-    # the integrator's objects are no longer the ones in `launch`.
+    # `args`, the same converted once (`_LaunchArgs`) in the task `task`. `p` is a round
+    # value, converted per launch, since a parameter write replaces it. `sync_launch!`
+    # converts them again when the integrator's objects are no longer the ones in `launch`,
+    # or when another task steps the integrator.
     launch::L
     args::A
+    task::Task
 end
 
 # the sweep's run-constant arguments: `launch` (`(; st, f, ctx, law, key)`, the
@@ -318,22 +320,31 @@ function _sweep_launch(c::CheckerboardCache, launch)
 end
 
 # The converted arguments follow the integrator, as a field phase's binding does
-# (`FieldPhase`): before each MCS the host objects they were converted from are compared by
-# identity with the integrator's current ones (a few pointer compares, no allocation), and
-# a difference converts them again (cold, past an inference barrier). The state's and the
-# context's arrays are written in place (`set_state!`, `reinit!`, checkpoint restore, the
-# frozen refresh), so a run converts once. A `deepcopy` of an integrator makes them differ
-# on a device: GPUArrays copies a device array at each reference (its `deepcopy_internal`
-# ignores the `IdDict`), so the copy's stored arguments hold arrays other than its state's.
+# (`FieldPhase`): before each MCS the host objects they were converted from, and the task
+# that converted them, are compared by identity with the integrator's current ones and the
+# current task, and a difference converts them again (cold, past an inference barrier).
+# The objects have concrete types, so `===` compiles to one compare per leaf: a pointer
+# compare per array or other mutable object, a value compare per bits field, with no
+# `jl_egal` call and no allocation.
+#
+# The state's and the context's arrays are written in place (`set_state!`, `reinit!`,
+# checkpoint restore, the frozen refresh), so a run in one task converts once. A
+# `deepcopy` of an integrator makes them differ on a device: GPUArrays copies a device
+# array at each reference (its `deepcopy_internal` ignores the `IdDict`), so the copy's
+# stored arguments hold arrays other than its state's. A device queue is per task (AMDGPU),
+# so a step from another task synchronizes the backend before it converts again.
 sync_launch!(cache, launch) = nothing
 function sync_launch!(c::CheckerboardCache, launch)
-    c.launch === _sweep_launch(c, launch) || Base.invokelatest(_relaunch!, c, launch)
+    c.task === current_task() && c.launch === _sweep_launch(c, launch) ||
+        Base.invokelatest(_relaunch!, c, launch)
     return nothing
 end
 function _relaunch!(c::CheckerboardCache, launch)
+    KernelAbstractions.synchronize(KernelAbstractions.get_backend(c.status))
     full = _sweep_launch(c, launch)
     c.args = _launch_args(c.kernel, full)
     c.launch = full
+    c.task = current_task()
     return nothing
 end
 
@@ -521,9 +532,10 @@ function CheckerboardCache(
         serial_kernel!(backend), recenter_kernel!(backend),
         _block_groupsize(backend, layout.nblocks),
         _block_inline(backend, n, threads, inline_max_blocks),
-        backend isa KernelAbstractions.CPU, full, _launch_args(kernel, full)
+        backend isa KernelAbstractions.CPU, full, _launch_args(kernel, full),
+        current_task()
     )
-    # fifteen positional fields are easy to permute (two defects of that shape on this
+    # eighteen positional fields are easy to permute (two defects of that shape on this
     # branch): read back the ones a swap would corrupt, once per `init`
     @assert c.layout === layout && c.switches == switches && c.reach == need &&
         c.serial === sl &&
