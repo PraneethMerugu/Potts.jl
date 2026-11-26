@@ -14,6 +14,8 @@ using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordin
 using CorePotts: global_gains
 using CorePotts: global_keeps
 include("shared/gg_model.jl")
+# PottsDevices: the device of the GPU group (test/shared/devices.jl)
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl"))
 include("shared/export_all.jl")
 end
 
@@ -445,10 +447,69 @@ end
             integ, convert(Vector{eltype(kind)}, flip), StateIndex(:cell, :kind)
         )
         @test run(integ, 3) == ref
+        @test ref != run(init(prob, alg), 3)                # the flip changes the run
         # a run restored from a checkpoint continues as the original does
         integ = init(prob, alg)
         run(integ, 2)
         rest = init(prob, alg; checkpoint = checkpoint(integ))
         @test run(rest, 3) == run(integ, 3)
+    end
+end
+
+@testitem "checkerboard: a reconversion moves the sweep to other arrays" setup = [
+    CP_checkerboard_passes,
+] tags = [:corepotts, :checkerboard_passes] begin
+    @testset "checkerboard: a reconversion moves the sweep to other arrays" begin
+        lat = Lattice((30, 30))
+        σ, kinds = blocks((30, 30), 5)
+        prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 6), gg_params(); seed = 2)
+        alg = CheckerboardCPM(; threads = false)            # reproducible
+        # a state with arrays of its own (on the CPU a conversion keeps the arrays, so only
+        # the identity check makes the sweep write these)
+        function other_state()
+            o = init(remake(prob; seed = 9), alg)
+            foreach(_ -> step!(o), 1:2)
+            return deepcopy(o.state)
+        end
+        sweep!(integ) = CorePotts.checkerboard_mcs!(integ.cache, integ.p, integ.t)
+        integ = init(prob, alg)
+        st = other_state()
+        old, new = copy(integ.state.ownership), copy(st.ownership)
+        CorePotts.sync_launch!(
+            integ.cache, merge(CorePotts._sweep_objects(integ), (; st))
+        )
+        @test integ.cache.args.st === st && integ.cache.launch.st === st
+        sweep!(integ)
+        @test st.ownership != new                           # the sweep wrote the new arrays
+        @test integ.state.ownership == old                  # and left the old ones
+        # negative control: with no reconversion the sweep writes the stale arrays
+        integ = init(prob, alg)
+        st = other_state()
+        old, new = copy(integ.state.ownership), copy(st.ownership)
+        sweep!(integ)
+        @test st.ownership == new && integ.state.ownership != old
+    end
+end
+
+@testitem "checkerboard: a step from another task" setup = [
+    CP_checkerboard_passes,
+] tags = [:corepotts, :checkerboard_passes, :device] begin
+    @testset "checkerboard: a step from another task" begin
+        backend = PottsDevices.on_device() ? PottsDevices.device_backend() :
+            CorePotts.KernelAbstractions.CPU()
+        σ, kinds = blocks((48, 48), 6)
+        # no volume term: the energy change reads no value another work item of the phase
+        # writes, so the lockless device run is reproducible
+        p = merge(gg_params(Float32), (; λ = 0.0f0))
+        prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((48, 48)), (0, 6), p)
+        alg = CheckerboardCPM()
+        run!(integ) = (foreach(_ -> step!(integ), 1:6); Array(integ.state.ownership))
+        ref = run!(init(prob, alg; backend))
+        # `init` in one task, the steps in another
+        integ = fetch(Threads.@spawn init(prob, alg; backend))
+        task = integ.cache.task
+        @test task !== current_task()
+        @test run!(integ) == ref && ref != σ
+        @test integ.cache.task === current_task()           # converted again in this task
     end
 end
