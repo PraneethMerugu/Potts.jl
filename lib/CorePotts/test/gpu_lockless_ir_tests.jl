@@ -852,6 +852,8 @@ end
             @test ndiv(device_ir(min_image, TT)) == 0
             @test ndiv(device_ir(floor_wrap, TT)) >= N
         end
+    else
+        @test_skip "the device LLVM scan runs on ROCm"
     end
 end
 
