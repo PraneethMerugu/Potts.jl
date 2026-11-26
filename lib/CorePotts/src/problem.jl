@@ -1672,6 +1672,11 @@ function _sequential_sweep!(integ::PottsIntegrator, ctx, part::NTuple{2, Int})
     return nothing
 end
 
+# the integrator's objects the checkerboard sweep converts once (`CheckerboardCache`)
+function _sweep_objects(integ)
+    return (; st = integ.state, f = integ.kf, integ.ctx, integ.law, integ.key)
+end
+
 # One entry of the MCS order: a tuple of phases, the sweep, the lifecycle or a `Repeat`.
 function _run_entry!(integ::PottsIntegrator, phases::Tuple, part::NTuple{2, Int} = (1, 1))
     _stats(integ).launches += run_phases(
@@ -1695,6 +1700,7 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase, part::NTuple{2, Int} 
             _sequential_sweep!(integ, ctx, part)
         end
     else
+        sync_launch!(integ.cache, _sweep_objects(integ))
         _stats(integ).launches += checkerboard_mcs!(integ.cache, integ.p, integ.t, part)
     end
     return nothing

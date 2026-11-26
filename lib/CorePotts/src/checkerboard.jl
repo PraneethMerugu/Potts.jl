@@ -279,32 +279,62 @@ end
     _recenter!(cell, a.ctx.lattice, c, @inbounds cell.volume[c])
 end
 
-struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS, A}
-    layout::BlockLayout{N}
-    switches::Int                     # a stay makes n / switches attempts (n sites)
-    order::Vector{Int}                # the MCS's phase offsets (1:k^N), P of them
-    status::B
-    track::TK                         # `nothing`, or `(; track, acc)` (acc per site)
+mutable struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS, L, A}
+    const layout::BlockLayout{N}
+    const switches::Int               # a stay makes n / switches attempts (n sites)
+    const order::Vector{Int}          # the MCS's phase offsets (1:k^N), P of them
+    const status::B
+    const track::TK                   # `nothing`, or `(; track, acc)` (acc per site)
     # committed copies per block (Int32), folded at the read points
-    cnt::CN
-    serial::SL                        # `nothing`, or the serial list (see `_push_serial!`)
+    const cnt::CN
+    const serial::SL                  # `nothing`, or the serial list (see `_push_serial!`)
     # the lattice distance a copy reads and writes around its target
-    reach::Int
+    const reach::Int
     # `nothing`, or the per-cell claim stamps of `_phase_conflict!` (CPU)
-    claim::CK
-    kernel::K1
-    serial!::K2
-    recenter!::K3
+    const claim::CK
+    const kernel::K1
+    const serial!::K2
+    const recenter!::K3
     # the phase launch's workgroup size (`nothing`: the backend's choice)
-    groupsize::GS
-    inline::Bool                      # CPU: the work items of a phase run one after another
-    host::Bool                        # the CPU backend
-    # The run-constant launch arguments, converted once (`_LaunchArgs`): the state, the
-    # device functions, the context, the law, the key, the layout and the arrays above. They
-    # stay valid for the run: the state's and context's arrays are written in place
-    # (`set_state!`, `reinit!`, the frozen refresh) and never replaced. `p` is a round
-    # value, converted per launch, since a parameter write replaces it.
+    const groupsize::GS
+    const inline::Bool                # CPU: the work items of a phase run one after another
+    const host::Bool                  # the CPU backend
+    # The run-constant launch arguments: `launch`, the host objects (the state, the device
+    # functions, the context, the law, the key, the layout and the arrays above), and
+    # `args`, the same converted once (`_LaunchArgs`). `p` is a round value, converted per
+    # launch, since a parameter write replaces it. `sync_launch!` converts them again when
+    # the integrator's objects are no longer the ones in `launch`.
+    launch::L
     args::A
+end
+
+# the sweep's run-constant arguments: `launch` (`(; st, f, ctx, law, key)`, the
+# integrator's) with the cache's own layout and arrays
+function _sweep_launch(launch, layout, switches, tk, cnt, status, sl)
+    return merge(launch, (; layout, s = switches, tk, cnt, status, sl))
+end
+function _sweep_launch(c::CheckerboardCache, launch)
+    return _sweep_launch(launch, c.layout, c.switches, c.track, c.cnt, c.status, c.serial)
+end
+
+# The converted arguments follow the integrator, as a field phase's binding does
+# (`FieldPhase`): before each MCS the host objects they were converted from are compared by
+# identity with the integrator's current ones (a few pointer compares, no allocation), and
+# a difference converts them again (cold, past an inference barrier). The state's and the
+# context's arrays are written in place (`set_state!`, `reinit!`, checkpoint restore, the
+# frozen refresh), so a run converts once. A `deepcopy` of an integrator makes them differ
+# on a device: GPUArrays copies a device array at each reference (its `deepcopy_internal`
+# ignores the `IdDict`), so the copy's stored arguments hold arrays other than its state's.
+sync_launch!(cache, launch) = nothing
+function sync_launch!(c::CheckerboardCache, launch)
+    c.launch === _sweep_launch(c, launch) || Base.invokelatest(_relaunch!, c, launch)
+    return nothing
+end
+function _relaunch!(c::CheckerboardCache, launch)
+    full = _sweep_launch(c, launch)
+    c.args = _launch_args(c.kernel, full)
+    c.launch = full
+    return nothing
 end
 
 # Whether a phase is a proper colouring: whether two of its work items touch one cell. The
@@ -484,16 +514,14 @@ function CheckerboardCache(
     claims = _claim_columns(backend, cell)
     status = z(UInt32, 1)
     kernel = block_kernel!(backend)
-    args = _launch_args(
-        kernel, merge(launch, (; layout, s = switches, tk, cnt, status, sl))
-    )
+    full = _sweep_launch(launch, layout, switches, tk, cnt, status, sl)
     c = CheckerboardCache(
         layout, switches, zeros(Int, P), status, tk,
         cnt, sl, need, claims, kernel,
         serial_kernel!(backend), recenter_kernel!(backend),
         _block_groupsize(backend, layout.nblocks),
         _block_inline(backend, n, threads, inline_max_blocks),
-        backend isa KernelAbstractions.CPU, args
+        backend isa KernelAbstractions.CPU, full, _launch_args(kernel, full)
     )
     # fifteen positional fields are easy to permute (two defects of that shape on this
     # branch): read back the ones a swap would corrupt, once per `init`
