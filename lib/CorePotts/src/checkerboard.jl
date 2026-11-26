@@ -279,6 +279,11 @@ end
     _recenter!(cell, a.ctx.lattice, c, @inbounds cell.volume[c])
 end
 
+# an empty launch with the sweep's plain arguments `a` (see `sync_launch!`)
+@kernel function handoff_kernel!(a)
+    _ = @index(Global, Linear)
+end
+
 mutable struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS, L, A}
     const layout::BlockLayout{N}
     const switches::Int               # a stay makes n / switches attempts (n sites)
@@ -331,8 +336,13 @@ end
 # checkpoint restore, the frozen refresh), so a run in one task converts once. A
 # `deepcopy` of an integrator makes them differ on a device: GPUArrays copies a device
 # array at each reference (its `deepcopy_internal` ignores the `IdDict`), so the copy's
-# stored arguments hold arrays other than its state's. A device queue is per task (AMDGPU),
-# so a step from another task synchronizes the backend before it converts again.
+# stored arguments hold arrays other than its state's.
+#
+# A device queue is per task (AMDGPU), and a backend orders its queues through the launches
+# that pass its arrays: a launch takes them over on its task's queue, after the queue that
+# last wrote them (AMDGPU: `take_ownership!`). The converted arguments skip that, and so
+# does their conversion. So a reconversion first launches an empty kernel with the plain
+# arguments, which hands them over to the current task's queue.
 sync_launch!(cache, launch) = nothing
 function sync_launch!(c::CheckerboardCache, launch)
     c.task === current_task() && c.launch === _sweep_launch(c, launch) ||
@@ -340,8 +350,10 @@ function sync_launch!(c::CheckerboardCache, launch)
     return nothing
 end
 function _relaunch!(c::CheckerboardCache, launch)
-    KernelAbstractions.synchronize(KernelAbstractions.get_backend(c.status))
     full = _sweep_launch(c, launch)
+    handoff_kernel!(KernelAbstractions.get_backend(c.status))(
+        full; ndrange = 1, workgroupsize = 1
+    )
     c.args = _launch_args(c.kernel, full)
     c.launch = full
     c.task = current_task()
