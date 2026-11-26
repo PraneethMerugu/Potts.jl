@@ -1689,8 +1689,8 @@ end
 function _run_entry!(integ::PottsIntegrator, ::SweepPhase, part::NTuple{2, Int} = (1, 1))
     if integ.alg isa SequentialCPM
         # the copy functions see the number of completed MCS as `ctx.mcs` (the copy-scope
-        # `mcs`, D-188): n − 1 during the n-th MCS, as the phases' `mcs` (the checkerboard
-        # merges it in its kernels)
+        # `mcs`): n − 1 during the n-th MCS, as the phases' `mcs` (the checkerboard merges
+        # it in its kernels)
         ctx = sweep_ctx(integ.ctx, integ.t)
         # the site-pick regime is fixed per sweep in the context's type (D-247): two static
         # calls, so the one-word sweep compiles exactly as before
