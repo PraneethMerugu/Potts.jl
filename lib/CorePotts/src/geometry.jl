@@ -21,9 +21,14 @@ Return the minimum-image offset of site `x` from site `a`.
 On a periodic axis of length `n` the offset is wrapped into `(-n/2, n/2]`, so a tie at
 half the axis resolves to the positive side. On a closed axis it is `x - a`.
 
+The wrap is a single shift by `n`, so on a periodic axis `x` and `a` must be sites of the
+lattice (`1 ≤ x[d], a[d] ≤ n`). For other coordinates (`|x[d] - a[d]| ≥ n`) the result can
+lie outside `(-n/2, n/2]`.
+
 # Arguments
 - `lattice::Lattice{N}`: the lattice.
-- `x::NTuple{N, Int}`, `a::NTuple{N, Int}`: lattice coordinates.
+- `x::NTuple{N, Int}`, `a::NTuple{N, Int}`: lattice coordinates, in `1:n` on a periodic
+  axis.
 
 # Returns
 - `NTuple{N, Int}`: the offset.
@@ -39,11 +44,18 @@ julia> min_image(l, (9,), (1,)), min_image(l, (6,), (1,))
 ```
 """
 @inline function min_image(l::Lattice{N}, x::NTuple{N, Int}, a::NTuple{N, Int}) where {N}
-    return ntuple(Val(N)) do d
-        δ = x[d] - a[d]
-        n = l.dims[d]
-        l.periodic[d] ? δ - n * fld(δ + cld(n, 2) - 1, n) : δ
-    end
+    return ntuple(d -> _wrap(x[d] - a[d], l.dims[d], l.periodic[d]), Val(N))
+end
+
+# The offset δ of two coordinates of an axis of length n (so |δ| < n), wrapped into
+# (-n/2, n/2] on a periodic axis. One wrap is enough, so there is no division. A closed
+# axis returns δ at once: computing the wrap there and selecting doubled the CPU site walk
+# on closed lattices. The flag is the same for every work item, so the branch does not
+# diverge on a device.
+@inline function _wrap(δ::Int, n::Int, periodic::Bool)
+    periodic || return δ
+    h = δ + cld(n, 2) - 1
+    return ifelse(h < 0, δ + n, ifelse(h >= n, δ - n, δ))
 end
 
 # bounds: c ≤ capacity and d ≤ N, the rows of anchor
