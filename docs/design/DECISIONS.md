@@ -5894,7 +5894,7 @@ Thomas et al. (2022, Physica A 587:126511) restate the Fortuna model. Each diffe
 Amended by D-343 (2026-11-27): one read path on the CPU, no cost threshold; `:exact` is the default for every model after a fresh A/B; `:snapshot` and `:live` are deferred.
 Amended by D-344 and D-345 (2026-11-27): P1 gains a moment pre-stage for a retire into a dividing `ref`, and `@create` takes sites from any owner not in an event, in its own round.
 Amended by D-351 and D-352 (2026-11-27): the one planner is the staged lifecycle pipeline, with no host hooks in the lifecycle.
-Amended by D-346 (2026-11-27): Q4 waits for item 11's reverse engineering.
+Amended by D-346 (2026-11-27): Q4 is closed; item 11's contact fractions are count trackers read before the sweep, with no neighbor loop at copy time.
 
 - **Design record.** `docs/design/research/parallel-mechanisms.md`.
 - **One model path.** Every model has one generated code path, and it runs under every algorithm: `SequentialCPM` (CPU only) and `CheckerboardCPM` on the CPU and a device. Nothing is refused per algorithm. This replaces D-051 item 5's exception list and reverses the earlier 2026-11-22 rulings that allowed sequential-only forms for the Zajac tensor energy, the FBCA neighbor-site writes and the Starruß angle terms. D-329's refusal of non-sequential algorithms for angle terms is lifted when the read layer lands.
@@ -5985,18 +5985,24 @@ Amended by D-346 (2026-11-27): Q4 waits for item 11's reverse engineering.
 - **Donors.** A donor cell loses the volume it gives up. Its targets are unchanged.
 - **Scope.** Only Bauer 2009 (spec 05) needs a true `@create`: the new cell paints over the fluid and matrix collectives (`docs/design/research/model-specs/sketches/05_bauer2009_ecm.md`, about lines 233-241). In specs 06, 07, 08 and 11, "@create for division" means `@divide`, which exists.
 
-## D-346 Item 11 (Jafari Nivlouei 2021): reverse engineering before any code (2026-11-27; user ruling 5 on the roadmap review; relates to D-332 Q4)
+## D-346 Item 11 (Jafari Nivlouei 2021): reproduction assumptions from reverse engineering; no G6 (2026-11-27; user ruling 5 on the roadmap review, then the user's adoption of the findings the same day; closes D-332 Q4)
 
-- **First step, no code.** Reverse-engineer the integrin mapping (spec 11, `model-specs/11_multiscale.md:126-131`), the contact-inhibition rule (spec 11:141) and the units of β (spec 11:456).
-- **Then.** Choose between the count-based contact fraction, which the exact count trackers give today (`docs/src/manual/updates.md:76-85`), and the weighted form of gap G6 that sketch 11 uses (`sketches/11_multiscale.md:116`). Until then, whether item 11 needs G6 and the read layer is undecided, and D-332 Q4 stays open.
-- **Uptake.** Uptake in item 11 is per site (spec 11 §G6, line 412). The sketch's `per = :cell` is corrected to match.
+- **Reverse engineering first.** The integrin mapping (spec 11:126-131), the contact-inhibition rule (spec 11:141) and the units of β (spec 11:456) were resolved before any code, from the paper's text and tables, without simulations or author contact. Findings: `~/lpwork/item11-re/README.md` on the PC, outside the repo. The model descends from the CompuCell3D VascularTumor demo and Shirinifard et al. 2009 (ref [8] of the paper), CONFIRMED by matching values (1 MCS = 1 min, about 32 voxels per cell, the J values, S_n, S0).
+- **Adopted assumptions.** The user adopted the INFERRED-strong readings as documented reproduction assumptions:
+  - The integrin and contact fractions are CC3D first-order pixel-pair counts over cell area. The existing count trackers compute them (`count(pred for _ in contacts(rel))`, `docs/src/manual/updates.md:76-85`); G6 is not needed.
+  - Cadherin comes from cell-cell contact over area directly, not from `1 - ecm`.
+  - β is a per-voxel uptake cap per MCS, β × 60 / 32: β_P ≈ 0.097 and β_Q ≈ 0.045 from Table 2. Table 4 prints β_Q = β_P / 2; Table 2 is used and the discrepancy is noted. Concentrations are in the demo's units (INFERRED-weak).
+- **Needs.** Item 11 needs only G1a and those trackers. It no longer depends on G6 or the read layer.
+- **D-332 Q4 closed.** Q4 asked whether the paper's neighbor loops run at copy time. They do not: the fractions are trackers read before the sweep.
+- **Screens at build time.** UNRESOLVED points are settled by simulation screens when the model is built, and documented: how interior cells survive ITG-off apoptosis (two readings), the Wnt form, the derivation of T_RTK, the J neighbor order (4 or 5), and the effective D and substeps.
+- **Uptake.** Uptake is per site (spec 11 §G6, line 412). The sketch's `per = :cell` is corrected to match.
 
-## D-347 The Fortuna 14a and 14b FULL runs go now, on `SequentialCPM` (2026-11-27; user ruling 6 on the roadmap review)
+## D-347 The Fortuna 14a and 14b FULL runs wait until the lifecycle pipeline is finished (2026-11-27; user ruling 6 on the roadmap review, revised the same day: "lets skip it in favor of getting lifecycle and features done first")
 
-- **Rule.** Run the 14a and 14b FULL runs now, not after the lifecycle pipeline. The FULL runner uses `SequentialCPM` (`lib/PottsModels/reproductions/data/14/run_full.jl:629`; protocol at `protocol.jl:328`, `:440-443`; record at `record.jl:223`).
-- **Record.** The commit and the Manifest are stored with the data. The runner already records the commit, a dirty flag and the Manifest's sha256 per job, and refuses a dirty tree.
-- **Rerun.** Only if `SequentialCPM` changes.
-- **Open.** Fortuna's `@convert` over clusters runs through the lifecycle planner, which the pipeline replaces. Whether that replacement counts as a change for this rule is not ruled; it is asked at the pipeline's A/B.
+- **Rule.** The 14a and 14b FULL runs come only after the lifecycle pipeline is completely finished, `@convert` moved into it included. They then run at that commit, recording the commit and the Manifest with the data. The runner records the commit, a dirty flag and the Manifest's sha256 per job, and refuses a dirty tree. It uses `SequentialCPM` (`lib/PottsModels/reproductions/data/14/run_full.jl:629`; protocol at `protocol.jl:328`, `:440-443`; record at `record.jl:223`).
+- **Stage 1, informational (2026-11-27 at e25bdf59).** The tier check passed with c = 0.1, all 13 checks; the mean displacement was 20.56 against a bound of 20, a thin margin. A 14b trial ran end to end. Both are redone at the later commit.
+- **Cost.** The runner's own estimate (19.4 h for 14a) is 4-5 times too low, because the runs are memory-bandwidth bound. Measured under contention on 24 threads (CPUs 0-11, 16-27): 14a takes 3.2-4.2 days and 14b 1.8-2.3 days. SMT adds nothing. Peak memory is about 18 GiB with no saveat. Evidence and wrappers: `~/lpwork/full-14/` on the PC, outside the repo.
+- **Machine time.** A separate pueue group `full14`. No full gates during the run (OOM risk next to the 55G gate slice). The run pauses around each A/B. Both stages are resumable.
 
 ## D-348 Kind-scoped component state stays dormant across `@transition` (2026-11-27; user ruling 7 on the roadmap review; part of gap G1a)
 

@@ -4,6 +4,24 @@ User's handwritten spec for item 11: *"2D multiscale: intracellular (ODEs / Bool
 extracellular (ECM / PDE)"*. Two candidate papers are specified below, then compared (§8).
 Every claim cites a PDF in `docs/references/`. Page numbers are the printed page numbers, which equal the PDF page numbers for both files.
 
+**Reverse engineering of 11a (2026-11-27, D-346).** Findings: `~/lpwork/item11-re/README.md`
+on the PC, outside the repo. Source of the unstated details: the CompuCell3D VascularTumor
+demo and Shirinifard et al. 2009 (ref [8] of 11a). The lineage is CONFIRMED by matching
+values: 1 MCS = 1 min (p.13), about 32 voxels per cell (Table 2 footnote, p.14), the J
+values, S_n and S0. Adopted as documented reproduction assumptions:
+
+| Assumption | Confidence |
+|---|---|
+| Integrin and contact fractions are first-order pixel-pair counts over cell area (p.12; "size" is area, p.9), from the existing count trackers, not G6 | INFERRED-strong |
+| Cadherin comes from cell-cell contact over area (p.12, p.19, p.26-27), not `1 - ecm` | INFERRED-strong |
+| β is a per-voxel uptake cap per MCS, β × 60 / 32: β_P ≈ 0.097, β_Q ≈ 0.045 from Table 2 (p.14). Table 4 (p.17) prints β_Q = β_P / 2; Table 2 is used and the discrepancy noted | INFERRED-strong |
+| Concentrations are in the demo's units (S0 = 4.6), not pg/voxel as printed (p.10) | INFERRED-weak |
+
+UNRESOLVED, screened by simulation at build time: how interior cells survive ITG-off
+apoptosis (two readings: exempt cells without ECM contact, or exempt quiescent and hypoxic
+cells; Fig 6, p.18); the Wnt form; the derivation of T_RTK; the J neighbor order (4 as in the
+demo, or 5 as in Shirinifard 2009); the effective D and substeps.
+
 ## 1. Header
 
 | Tag | Citation | DOI | File |

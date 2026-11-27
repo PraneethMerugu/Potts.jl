@@ -61,14 +61,14 @@ sorting, 10 Akeeb and 15 OpenVT (reproduction pages in `lib/PottsModels/reproduc
 
 | Model | Spec | State (verified 2026-11-27, read) | Needs | Wave |
 |---|---|---|---|---|
-| Fortuna 2020 (14a) | 14 | Model, protocol and FULL runner merged with C11 (6dfca14a, D-327, D-328). The model page `docs/models/fortuna.jl` exists and includes the polarization study. No FULL record in `reproductions/data/14/` (runner scripts only) and no reproduction page. | W0.1 | 0 |
-| Thomas 2022 (14b) | 14 | Merged as options of the 14a model (635c525a, D-331). No FULL record. | W0.1 | 0 |
+| Fortuna 2020 (14a) | 14 | Model, protocol and FULL runner merged with C11 (6dfca14a, D-327, D-328). The model page `docs/models/fortuna.jl` exists and includes the polarization study. No FULL record in `reproductions/data/14/` (runner scripts only) and no reproduction page. | W1.11, after the whole pipeline (D-347) | after 1 |
+| Thomas 2022 (14b) | 14 | Merged as options of the 14a model (635c525a, D-331). No FULL record. | W1.11, after the whole pipeline (D-347) | after 1 |
 | Dal-Castel 2025 (14c) | 14 | Not started (P6.7b). | G7 (W0.3); `var` from G11a (W0.5), or two sums; `@terminate` from G1d, or a callback | 0 |
 | Bauer 2009 | 05 | Not started (P6.9). `Global`, `pieces` and `largest_piece` done (P6.9a). Fibers and skeleton analysis done (f3b22176). | the pipeline (W1); G1a; G1c (`@create`, D-345); G1b (a site retired into a collective); G2 only if the §8b screen picks per-cell uptake | 2 |
 | Jiang 2005 | 06 | Not started (P6.11). Fields, coarse grids, implicit steps, fractional sweeps and Boolean components exist. | the pipeline (W1); G1a (`@transition`); G1b (`@retire … sites => ref`) | 2 |
 | Bauer 2007 | 07 | Not started (P6.8). `Rod`, `Fibers`, the shape form of `InsertUntil` and jittered `Tiling` done (f3b22176). | the pipeline (W1); G1a; G3 (W0.4, `UnlikeNeighbor`); G11a (the tip as an `argmax`); G11b; G2 only for per-cell uptake | 2 |
 | FBCA (08a reproduced, 08b calibrated) | 08 | Not started (P6.12). The lineage helper is done (f3b22176). | G1a (`@retire`); G2 (the FBA operator); G8 (neighbor-site writes, 08b); G3 (`attempts = 4`, or `repeat` today); G11b (a plane drawn from a set) | 3 |
-| Jafari Nivlouei 2021 (item 11) | 11a | Not started (P6.10). Pair tables (F5), Boolean components, periodic fields and `pieces` exist. Andasari 2012 only as an ODE conformance test. | W0.6 reverse engineering first (D-346); G1 (at least G1a); G6 and the read layer only if the weighted contact fractions are chosen | after W0.6 and wave 2 |
+| Jafari Nivlouei 2021 (item 11) | 11a | Not started (P6.10). Pair tables (F5), Boolean components, periodic fields and `pieces` exist. Andasari 2012 only as an ODE conformance test. Reverse engineering done 2026-11-27; assumptions adopted (D-346). | G1a; the existing count trackers for the contact fractions (no G6, no read layer, D-346) | 2 |
 | Zajac 2000/2003 | 12 | Not started (P6.7). A reconstruction. | RL1-RL3; G4; G6 for its observables | 5 |
 | Starruß 2007 | 13 | Not started as a model (P6.6). Its mechanisms are merged: ordered relationships, angle terms and drive reads (4c9f8264, D-329, D-330), rods, chains and the cluster graph (f3b22176). Angle terms run only on `SequentialCPM` (`src/problem.jl:41`). | RL1 for `CheckerboardCPM` on the CPU; RL2 for the device | 4 (CPU), 5 (device) |
 
@@ -92,7 +92,7 @@ The gaps and the items that carry them. State lives in the items below.
 | G3 | Proposal laws: `UnlikeNeighbor`, Hastings acceptance, `attempts = k` (E2) | 07 (the law); 08 (`k = 4`) | P6.4b (R10), P6.E2 | W0.4 |
 | G4 | The moment tensor in energies and drives (`orientation`, `eccentricity`, `minor_length`, the polar moment), exact per copy; a contact-geometry energy over the interfaces of both cells (`interfaces(k, k)`) | 12 | P6.7 (R7, R11b) | W5.3 |
 | G5 | Ordered relationships: `prev`, `next`, `rank`, three-member angle terms, linked-centroid reads in drives | 13 | P6.6 | closed on `SequentialCPM` (4c9f8264, D-329, D-330); the checkerboard form is RL1/RL2 |
-| G6 | `neighbors(c)` with the interface length `contact(c, n)`, and its lag | 12 (observables); 11a and the Andasari test only if the weighted form is chosen (D-346) | P6.7 (R11a), P6.4a | W5.3 |
+| G6 | `neighbors(c)` with the interface length `contact(c, n)`, and its lag | 12 (observables); the Andasari conformance test. Not 11a (D-346). | P6.7 (R11a), P6.4a | W5.3 |
 | G7 | `Pre(x, k)` on cell variables, and windowed means | 14c | P6.7b (R12) | W0.3 |
 | G8 | Copy-time writes into neighbor sites (an `@on_copy` neighbor-target form), the sequential and checkerboard forms in one item; the Eq 6 averaging as an aux-field map (not verified) | 08b | P6.12 | W3.2 |
 | G9 | Layouts: fibers, rods and chains with links, the shape form of `InsertUntil` to a density, jittered `Tiling` | 05, 07, 13 | P6.4d, P6.6, P6.8 | closed: f3b22176 2026-11-22 (`Bar`, `Rod`, `Fibers`, `Chains`, `InsertUntil(shape; density, occupied, collective)`, `Tiling(; jitter)`). A staggered `Tiling` (P6.4d) is off path; no model here needs it. |
@@ -103,16 +103,14 @@ The gaps and the items that carry them. State lives in the items below.
 
 ### Wave 0: independent of the lifecycle pipeline
 
-**W0.1 Fortuna 14a and 14b: FULL runs and reproduction page.**
-- State: ruled (D-347). Verified 2026-11-27, read: pueue shows no 14a or 14b task, and
-  `reproductions/data/14/` holds only the runner scripts.
-- Unlocks: 14a and 14b shipped. Needs: nothing. Rulings: D-347 (run now on `SequentialCPM`;
-  rerun only if `SequentialCPM` changes). Open: whether the lifecycle pipeline, which runs
-  Fortuna's `@convert` over clusters, counts as such a change.
-- Done when: the FULL record with commit and Manifest is in `reproductions/data/14/`, the
-  videos are in a release, and `reproductions/14_fortuna.jl` (page) and its tests pass.
-- Size: 1 build cycle for the page; FULL machine time not measured (700 runs × 10⁵ MCS per
-  the protocol). Risk: machine time against A/B windows.
+**W0.1 FULL runner cost estimate.**
+- What: fix the cost estimate of `lib/PottsModels/reproductions/data/14/run_full.jl` to
+  include the recorder and memory-bandwidth contention. It gives 19.4 h for 14a, 4-5 times
+  too low (D-347).
+- State: ruled 2026-11-27 (D-347). Not started.
+- Unlocks: honest machine-time plans for W1.11 and later FULL runs. Done when: the estimate
+  is within the measured range on the PC (`~/lpwork/full-14/`, outside the repo).
+- Size: under 1 build cycle, no A/B. Risk: low.
 
 **W0.2 One path: remove the checkerboard inline cutoff.**
 - What: remove `inline_max_blocks` (`lib/CorePotts/src/checkerboard.jl:482`, default at
@@ -156,14 +154,6 @@ The gaps and the items that carry them. State lives in the items below.
 - Unlocks: Bauer 2007 (the tip), 14c (`var`). Done when: each fold checked against a host
   fold. Size: under 1 build cycle, no A/B. Risk: low.
 
-**W0.6 Item 11: reverse engineering.**
-- State: ruled (D-346). Not started.
-- What: no code. Resolve the integrin mapping (spec 11:126-131), the contact-inhibition rule
-  (spec 11:141) and the units of β (spec 11:456) from the paper's screens, figures and code.
-- Unlocks: the ruling between the count-based contact fraction and the weighted G6 form, and
-  so item 11's needs. Done when: a note under `docs/design/research/model-specs/` and the
-  ruling. Size: 1 research cycle. Risk: details stay UNSPECIFIED and need calibration.
-
 ### Wave 1: the lifecycle pipeline
 
 Branch `lp/lc-pipeline`, building @8eca3ddc (2026-11-26), 80 commits ahead of `monorepo`
@@ -194,11 +184,12 @@ non-integer surface and contact, and asymmetric relations.
 | W1.2 | Walk trackers: site sums and minima as declared trackers, weighted surface, Euler, site minimum (D-352 ruling 14). | 1 build cycle. Risk: pass-1 cost bar (D-351 ruling 13). |
 | W1.3 | Clusters: the gated re-rooting pass and the cluster surface (D-352 ruling 14). | 1 build cycle. Risk: the no-O(C) exception's cost. |
 | W1.4 | Pieces with declared trackers. | 1 build cycle. |
-| W1.5 | `@convert` as a per-site rule with speculative slots (D-351 ruling 2, D-352 ruling 14). | 1 build cycle. Risk: Fortuna's results (D-347 open point). |
+| W1.5 | `@convert` as a per-site rule with speculative slots (D-351 ruling 2, D-352 ruling 14). | 1 build cycle. Risk: Fortuna's results; its FULL runs follow the whole pipeline (W1.11). |
 | W1.6 | The Metal paired 32-bit form for every stage (D-342). Unverified on Metal; tested here with `_FORCE_PAIRED[]`. | 1 build cycle. Risk: no Mac. |
 | W1.7 | Lift the remaining exclusions listed above. | 1 build cycle. |
 | W1.8 | One A/B against the `monorepo` lifecycle, then remove the old planner and merge. Open misses carried (D-352): quiet overhead about 7.5-10% of a small ROCm MCS against 5%; about 4 µs per quiet MCS at 4 CPU threads, both re-measured after KernelAbstractions 0.10. | 1 build cycle, 1 A/B. Risk: the CPU law for every lifecycle model. |
 | W1.9 | P6.13 division log (D-350) on the pipeline. `lineage(records)` in `PottsModels.Analysis` (f3b22176) reads host records, not this log. | 1 build cycle, 1 A/B. |
+| W1.11 | Fortuna 14a and 14b: FULL runs and reproduction page, only after the pipeline is completely finished, `@convert` (W1.5) included, at that commit, with commit and Manifest recorded (D-347). Stage 1 on 2026-11-27 at e25bdf59, informational and redone then: the tier check passed with c = 0.1, all 13 checks (mean displacement 20.56 against bound 20, a thin margin); a 14b trial ran end to end. Cost measured under contention on 24 threads (CPUs 0-11, 16-27): 14a 3.2-4.2 days, 14b 1.8-2.3 days; SMT adds nothing; peak memory about 18 GiB with no saveat. Evidence and wrappers: `~/lpwork/full-14/` on the PC, outside the repo. Done when: the FULL record with commit and Manifest in `reproductions/data/14/`, videos in a release, `reproductions/14_fortuna.jl` and its tests pass. | 1 build cycle for the page, plus about 5-6.5 days of machine time. Risk: machine time against A/B windows and gates. |
 | W1.10 | Share the converted-once launch arguments (`_LaunchArgs`, `lib/CorePotts/src/launch_args.jl`) and their identity check through `LatticeFields.Exec`, so the sweep, field and lifecycle launches use one form. Proposed 2026-11-26. | 1 build cycle, 1 A/B. |
 
 Unlocks: G1a-G1c, P6.13, every lifecycle model. Done when: W1.8 merged, the D-332 host-planner
@@ -222,7 +213,12 @@ removed.
 | W2.1 G1b | `@retire … sites => ref`, chains (four pointer-doubling steps, or one lane per chain of up to 16 links), longer chains and cycles to the medium and counted; collective targets in cell order (P2); the moment pre-stage (D-344) | W1.1, W1' | Jiang 2005 | 1-2 build cycles, 1 A/B. Risk: the ordered target reduction. |
 | W2.2 G1c | `@create` from owners not in an event, its own round after retire and divide (D-345); producer entries in the scan; donor deltas | W1.8, W1' | Bauer 2009 | 1-2 build cycles, 1 A/B. Risk: donor volume bookkeeping. |
 | W2.3 G11b | Division plane from a set, `RandomSide`, `CanonicalSide`, a `daughter` index. Verified 2026-11-27, read: neither side type exists; a plane drawn from a set is not verified. | W1.8 | Bauer 2007, FBCA | 1 build cycle. |
-| Models | Jiang 2005 (06), Bauer 2009 (05), Bauer 2007 (07): each a model branch with its page, tests and FULL record | their gaps | shipped models | 2-3 build cycles each. Risk: calibration of unstated parameters. |
+| Models | Jiang 2005 (06), Bauer 2009 (05), Bauer 2007 (07), item 11 (11a): each a model branch with its page, tests and FULL record | their gaps; item 11 needs only G1a and the count trackers (D-346) | shipped models | 2-3 build cycles each. Risk: calibration of unstated parameters. |
+
+Item 11's UNRESOLVED points are simulation screens at build time (D-346), each documented in
+the deviation table: how interior cells survive ITG-off apoptosis (two readings), the Wnt
+form, the derivation of T_RTK, the J neighbor order (4 or 5), and the effective D and
+substeps. Findings: `~/lpwork/item11-re/README.md` on the PC; summary at the top of spec 11.
 
 ### Wave 3: FBCA
 
@@ -244,7 +240,7 @@ unprotected today; the read layer protects them.
 | RL1 | Read sets, running sums, the accessor and CPU `:exact` as the default for every model; fresh A/B; tiers 0-2 | W0.2, RL0 | Starruß on `CheckerboardCPM` (CPU) | 2 build cycles, 1 A/B. Risk: CPU results change for every model (accepted, D-343). |
 | RL2 | Device `:exact`; decide D-332 Q3 by measurement (about 400 launches and at least 64 syncs per MCS at 64 phases × 3 rounds; D-332 also offers a fixed round budget with one read-back per MCS) | RL1 | Starruß on the device | 2 build cycles, 1 A/B. Risk: host launch cost. |
 | RL3 | The per-pair contact store | RL1 | G4, G6 | 1-2 build cycles, 1 A/B. |
-| W5.3 G4 + G6 | Moment-tensor terms (CorePotts computes the descriptors, `lib/CorePotts/src/geometry.jl:478`, but only `major_length` reaches the symbolic layer, `src/observed.jl:60`); interface energies; `neighbors(c)` and `contact(c, n)` (neither exists in `src/`) | RL3; exact pair trackers (R11b) | Zajac; item 11's weighted form if chosen | 2 build cycles, 1 A/B. |
+| W5.3 G4 + G6 | Moment-tensor terms (CorePotts computes the descriptors, `lib/CorePotts/src/geometry.jl:478`, but only `major_length` reaches the symbolic layer, `src/observed.jl:60`); interface energies; `neighbors(c)` and `contact(c, n)` (neither exists in `src/`) | RL3; exact pair trackers (R11b) | Zajac | 2 build cycles, 1 A/B. |
 | Models | Starruß 2007 (13) after RL1 and RL2; Zajac (12) after W5.3 | as listed | shipped models | 2-3 build cycles each. |
 
 The MCS times quoted earlier for this estimate (WortelAct 603 µs, OpenVT 737 µs, Fortuna
@@ -272,10 +268,14 @@ minimum-image merges and are stale (2026-11-27). The host floor of an empty laun
 
 ### Machine time
 
-FULL runs use cores 0-11 and 16-27 and do not run during an A/B window. A/Bs run one at a time
-in the `ab` lane on a quiet machine. Expected A/B windows, in order of need: KA 0.10 (its
-regressions are open), W0.2 the inline cutoff, W1.8 the pipeline, RL1 CPU `:exact`, RL2
-device `:exact`. W0.1's FULL runs fit between them.
+A/Bs run one at a time in the `ab` lane on a quiet machine. Expected A/B windows, in order
+of need: KA 0.10 (its regressions are open), W0.2 the inline cutoff, W1.8 the pipeline, RL1
+CPU `:exact`, RL2 device `:exact`.
+
+The Fortuna FULL runs (W1.11) come after the pipeline (D-347). They run in their own pueue
+group `full14` on cores 0-11 and 16-27, for about 5-6.5 days in total. No full gates run
+during them (OOM risk next to the 55G gate slice). They pause around each A/B, and both
+stages resume.
 
 ### Parked branches
 
@@ -288,9 +288,6 @@ Both are parked by user ruling 2026-11-24 (D-351): not merged and not held for a
 
 ### Decision queue
 
-- Item 11: count-based or weighted contact fractions, after W0.6 (D-346; D-332 Q4).
-- Whether the lifecycle pipeline counts as a `SequentialCPM` change for the Fortuna FULL
-  record (D-347).
 - D-332 Q1 (device `@terminate` cadence), Q2 (host FBA for device FBCA), Q3 (device read
   default, at RL2), Q5 (Hastings with `skip_interior`, at W0.4).
 - The many-into-one fold against the Euler `to` note (W1.1).
@@ -1104,6 +1101,8 @@ A first line in each item gives its state.
     (D-329). `links(c, rel)` (D-075) does not exist in `src/`. Whether the model needs
     them is not verified. The
     N1–N3 gate ships provisional (D-155).
+    (2026-11-27) Superseded in part: item 11 needs only G1a and the existing count trackers,
+    not G6 (D-346); see the live plan, wave 2.
   - R13 tables;
   - Boolean networks as MTK discrete (clocked, `Shift`) components lowered into the
     per-cell phases (D-065 Q9: no Potts helper; record MTK gaps and workarounds);

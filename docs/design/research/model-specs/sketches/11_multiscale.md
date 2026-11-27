@@ -97,6 +97,7 @@ bit(b) = [(fig3[(i, r, w)][c + 1] >> (4 - b)) & 1 == 1 for i in 0:1, r in 0:1, w
     end
     @lattice Lattice(lattice; boundary = Periodic(), neighborhood = VonNeumann(1))   # periodic (p.10, p.13); order UNSPECIFIED (11 §2A)
     @relations proposal = VonNeumann(1)               # UNSPECIFIED; CC3D default order 1
+    @relations first_order = VonNeumann(1)            # CC3D NeighborTracker counts order-1 pixel pairs (D-346)
     @energy begin
         contacts => J[kind, kind′]                                            # Eq 1
         cells(vessel, tumour) => γ_e * (volume - V_target)^2                  # Eq 2 [P6.0g]
@@ -112,14 +113,16 @@ bit(b) = [(fig3[(i, r, w)][c + 1] >> (4 - b)) & 1 == 1 for i in 0:1, r in 0:1, w
                s_V * (kind == quiescent) * (1 - blocked)                         # Eq 8; hypoxic cells secrete (p.10–11, p.28) [R15]
     end
     @boundary n sites(vessel) => Dirichlet(n_vessel)  # N1: clamp at EC sites (p.10); S_n source-term variant [R5]
-    # Cues → Boolean inputs, every step before the sweep (p.12). "Size" = surface and "local" = cell mean: UNSPECIFIED (11 §7 item 4; §6 G9)
-    ecm  = sum(contact(c, o) for o in neighbors(c) if kind[o] == matrix) / surface   # [R11a]
+    # Cues → Boolean inputs, every step before the sweep (p.12). "Size" = area (p.9), adopted (D-346); "local" = cell mean: UNSPECIFIED (§6 G9)
+    # Contact fractions are first-order pixel-pair counts over area, from the exact count trackers (no G6, D-346)
+    ecm  = count(neighbor_kind == matrix for _ in contacts(first_order)) / volume            # cell–ECM pairs / area (matrix is the medium)
+    cc   = count(neighbor_kind != matrix for _ in contacts(first_order)) / volume            # cell–cell pairs / area
     n̄, V̄ = integral(n) / volume, integral(V) / volume
     @before_mcs begin
         itg  ~ ecm >= T_ITG
         rtk  ~ (1 - blocked) * ifelse(kind ∈ vessel, V̄ >= T_V, n̄ >= T_RTK)    # EC: VEGF; tumour: nutrient (p.13). Clamped receptor UNSPECIFIED (11 §7 item 10)
-        cad  ~ (1 - ecm) >= T_cad                                              # cell–cell contact fraction (p.12)
-        wnt  ~ (1 - ecm) >= T_Wnt                                              # Wnt contact source UNSPECIFIED (11 §7 item 4)
+        cad  ~ cc >= T_cad                                                     # cell–cell contact over area (p.12; D-346), not 1 - ecm
+        wnt  ~ ecm >= T_Wnt                                                    # placeholder: Wnt form and direction UNRESOLVED, a build-time screen (D-346)
         hyp  ~ ifelse(n̄ < n_hyp, Pre(hyp) + 1, 0.0)
     end
     if grn === :table
@@ -250,7 +253,7 @@ end
 | `uptake(…; max_amount, relative, by)` | planned **R15** (CC3D `Uptake` semantics, AUTHORING §12.9). `per = :cell` is **NEW**; item 11 does not need it: spec 11 §G6 rules per-site uptake (D-346) |
 | `@boundary n sites(k) => Dirichlet(v)` (moving, kind-defined) | planned **R5** |
 | Per-equation solvers (`@equations solver = … begin … end`) | planned **P6.0c**. The implicit field solver is **R14** |
-| `neighbors(c)`, `contact(c, o)` (medium included) | planned **R11a** |
+| `neighbors(c)`, `contact(c, o)` (medium included) | planned **R11a**; item 11 no longer needs it: the contact fractions use the existing count trackers (D-346) |
 | `@transition`, `@retire`, `@discrete_events`; component state across transitions | planned **R3** (+ the R3 composition fix "scope across transitions") |
 | `Voronoi`, `RandomPoints`, `Circle`/`Point` | exist in core (P6.1a5, D-138; `VoronoiBall` removed, no alias) |
 | Sub-clock: several Boolean ticks per MCS (run to the attractor) | **NEW** |
@@ -306,6 +309,9 @@ end
      UNSPECIFIED.
    - A possible workaround today is `integral(count(kind[s] == matrix for s in
      VonNeumann(1)(site))) / surface`, a gather inside `integral` (untested).
+   - Resolved 2026-11-27 (D-346): CC3D counts first-order pixel pairs, so the count trackers
+     (`count(pred for _ in contacts(rel))`, `docs/src/manual/updates.md:76-85`) give the
+     fractions exactly, divided by area. R11a is not needed for item 11.
 6. **Phenotype = kind makes the decision logic N transition rules.**
    - The paper's rule is one function `(bits, n̄, hyp) → kind`. As `@transition` lines it
      becomes 5 rules whose priority ("stable model order") carries meaning: apoptosis must
