@@ -17,110 +17,284 @@ Feature scope per milestone is extended by `research/legacy-spec-adjudication.md
 Each milestone: id, depends-on, deliverable, acceptance (commands that must exit 0 or
 numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
-## Remaining work before the remaining paper models
+## Plan: the remaining paper models
 
-This section lists the work left before the remaining paper models can be built. It was
-checked on 2026-11-24 against `origin/monorepo` at b1f8924b, the code, `git log` and
-DECISIONS. The rows further down keep their history. Where a row and this section differ,
-this section is current.
+This is the live plan. It was checked on 2026-11-27 against `monorepo` at e25bdf59, the
+branches named below, the code and DECISIONS. The phase sections further down are history.
+Where they differ from this plan, this plan is current.
 
-The paper models and their rulings: Bauer 2009, Jiang 2005, Bauer 2007, FBCA (08a
-reproduced, 08b calibrated), Jafari Nivlouei 2021 as item 11 (Andasari 2012 only as an ODE
-conformance test), Zajac (a reconstruction), Starruß, and Fortuna 14c. D-332 rules that
-every mechanism is parallel-first: there are no sequential-only mechanisms. The gap ids
-G1–G12 come from the model-gap audit of 2026-11-22 (`~/lpwork/models-gap/audit.md` §2 on
-the PC) and were checked again against the code.
+### How to read this plan
 
-### Paper models
+Each item states its place on one ladder: designed, ruled, building `<branch>@<hash>`,
+review OK, A/B passed, merged `<hash>`. "Not started" means designed or ruled with no branch.
 
-| Model | Spec | State on 2026-11-24 | Gaps it needs | Can start |
+Each item carries a stamp: "verified 2026-11-27, read" means checked by reading code, git or
+documents; "run" means checked by a run.
+
+ROADMAP holds state. DECISIONS holds the reasons, and the design notes hold the method. A
+fact lives in one of them, and the others point to it.
+
+An item is sized to one branch, one review and at most one A/B. Sizes are estimates in build
+cycles (one build and its review rounds) and A/B windows. The lifecycle pipeline is the one
+named exception (D-349): several reviews on one branch, one A/B.
+
+The gap ids G1-G12 come from the model-gap audit of 2026-11-22 (`~/lpwork/models-gap/audit.md`
+§2 on the PC), checked again against the code. G1 is split into G1a-G1d (D-349).
+
+### Definition of shipped
+
+A paper model is shipped when all of these hold:
+
+- the model source in `lib/PottsModels/src/`, with tests that check correctness by oracles and
+  properties (D-048, D-275);
+- reproduction tests `lib/PottsModels/test/reproductions/<nn>_<model>_*tests.jl`;
+- a FULL record in `lib/PottsModels/reproductions/data/<nn>/` with its commit and Manifest, and
+  videos in a release (D-146, D-156);
+- a Literate reproduction page `lib/PottsModels/reproductions/<nn>_<model>.jl` with a deviation
+  table (D-154), and a model page `docs/models/<model>.jl`;
+- one model path that runs under `SequentialCPM` and `CheckerboardCPM` (D-332).
+
+A model may ship provisional (D-155). Shipped or provisional today: 01 Merks, 04 foam, 09 cell
+sorting, 10 Akeeb and 15 OpenVT (reproduction pages in `lib/PottsModels/reproductions/`).
+
+### Model outcomes
+
+| Model | Spec | State (verified 2026-11-27, read) | Needs | Wave |
 |---|---|---|---|---|
-| Fortuna 2020 (14a) | 14 | Model, protocol and FULL runner merged with C11 (6dfca14a, D-327, D-328). The model page `docs/models/fortuna.jl` exists and includes the polarization study. No FULL record in `reproductions/data/14/` and no reproduction page in `reproductions/`. | none | now: FULL run and page |
-| Thomas 2022 (14b) | 14 | Merged as options of the 14a model (635c525a, D-331). No FULL record yet. | none | now: FULL run and page |
-| Dal-Castel 2025 (14c) | 14 | Not started (P6.7b). | G7; `var` from G11 (or two sums); `@terminate` from G1 (or a callback) | after G7 |
-| Bauer 2009 | 05 | Not started (P6.9). `Global`, `pieces` and `largest_piece` done (P6.9a). Fibers and skeleton analysis done (f3b22176). | G1 (`@create`, a site retired into a collective); G2 only if the §8b screen picks per-cell uptake | after G1 |
-| Jiang 2005 | 06 | Not started (P6.11). Fields, coarse grids, implicit steps, fractional sweeps and Boolean components exist. | G1 (`@transition`, `@retire … sites => ref`) | after G1 |
-| Bauer 2007 | 07 | Not started (P6.8). `Rod`, `Fibers`, the shape form of `InsertUntil` and jittered `Tiling` done (f3b22176). | G1; G3 (`UnlikeNeighbor`); G11 (the tip as an `argmax`); G2 only for per-cell uptake | after G3 and G11 |
-| FBCA (08a, 08b) | 08 | Not started (P6.12). The lineage helper is done (f3b22176). | G1 (`@retire`); G2 (the FBA operator); G8 (neighbor-site writes, 08b); G3 (`attempts = 4`, or `repeat` today); G11 (a plane drawn from a set) | after G2 and G8 |
-| Jafari Nivlouei 2021 (item 11) | 11a | Not started (P6.10). Pair tables (F5), Boolean components, periodic fields and `pieces` exist. | G1; G6 for the weighted contact fractions (D-332 Q4 is open) | after G1; the weighted form after the read layer and G6 |
-| Zajac 2000/2003 | 12 | Not started (P6.7). Labeled a reconstruction. | the D-332 read layer (running sums, per-pair contact store); G4; G6 for its observables | after the read layer, G4 and G6 |
-| Starruß 2007 | 13 | Not started as a model (P6.6). Its mechanisms are merged: ordered relationships, angle terms and drive reads (4c9f8264, D-329, D-330), rods, chains and the cluster graph (f3b22176). Angle terms run only on `SequentialCPM` (`src/problem.jl:41`) until the D-332 read layer lands. | the D-332 read layer, so that angle terms run on `CheckerboardCPM` | after the read layer; not on `SequentialCPM` first (ruling 2026-11-24) |
+| Fortuna 2020 (14a) | 14 | Model, protocol and FULL runner merged with C11 (6dfca14a, D-327, D-328). The model page `docs/models/fortuna.jl` exists and includes the polarization study. No FULL record in `reproductions/data/14/` (runner scripts only) and no reproduction page. | W0.1 | 0 |
+| Thomas 2022 (14b) | 14 | Merged as options of the 14a model (635c525a, D-331). No FULL record. | W0.1 | 0 |
+| Dal-Castel 2025 (14c) | 14 | Not started (P6.7b). | G7 (W0.3); `var` from G11a (W0.5), or two sums; `@terminate` from G1d, or a callback | 0 |
+| Bauer 2009 | 05 | Not started (P6.9). `Global`, `pieces` and `largest_piece` done (P6.9a). Fibers and skeleton analysis done (f3b22176). | the pipeline (W1); G1a; G1c (`@create`, D-345); G1b (a site retired into a collective); G2 only if the §8b screen picks per-cell uptake | 2 |
+| Jiang 2005 | 06 | Not started (P6.11). Fields, coarse grids, implicit steps, fractional sweeps and Boolean components exist. | the pipeline (W1); G1a (`@transition`); G1b (`@retire … sites => ref`) | 2 |
+| Bauer 2007 | 07 | Not started (P6.8). `Rod`, `Fibers`, the shape form of `InsertUntil` and jittered `Tiling` done (f3b22176). | the pipeline (W1); G1a; G3 (W0.4, `UnlikeNeighbor`); G11a (the tip as an `argmax`); G11b; G2 only for per-cell uptake | 2 |
+| FBCA (08a reproduced, 08b calibrated) | 08 | Not started (P6.12). The lineage helper is done (f3b22176). | G1a (`@retire`); G2 (the FBA operator); G8 (neighbor-site writes, 08b); G3 (`attempts = 4`, or `repeat` today); G11b (a plane drawn from a set) | 3 |
+| Jafari Nivlouei 2021 (item 11) | 11a | Not started (P6.10). Pair tables (F5), Boolean components, periodic fields and `pieces` exist. Andasari 2012 only as an ODE conformance test. | W0.6 reverse engineering first (D-346); G1 (at least G1a); G6 and the read layer only if the weighted contact fractions are chosen | after W0.6 and wave 2 |
+| Zajac 2000/2003 | 12 | Not started (P6.7). A reconstruction. | RL1-RL3; G4; G6 for its observables | 5 |
+| Starruß 2007 | 13 | Not started as a model (P6.6). Its mechanisms are merged: ordered relationships, angle terms and drive reads (4c9f8264, D-329, D-330), rods, chains and the cluster graph (f3b22176). Angle terms run only on `SequentialCPM` (`src/problem.jl:41`). | RL1 for `CheckerboardCPM` on the CPU; RL2 for the device | 4 (CPU), 5 (device) |
 
-**Conflict, ruled 2026-11-24 (user).** D-332 forbids sequential-only mechanisms, but the
-code still refuses angle terms on `CheckerboardCPM` (D-329). Starruß does not ship on
-`SequentialCPM` first. It waits until angle terms run on `CheckerboardCPM` through the
-D-332 read layer. Zajac is in the same position: G4 needs the read layer's running sums and
-G6 its per-pair contact store, so Zajac also waits for the read layer.
+**Conflict, ruled 2026-11-24 (user).** D-332 forbids sequential-only mechanisms, but the code
+still refuses angle terms on `CheckerboardCPM` (D-329). Starruß does not ship on
+`SequentialCPM` first; it waits until angle terms run on `CheckerboardCPM` through the read
+layer. Zajac is in the same position: G4 needs the read layer's running sums and G6 its
+per-pair contact store.
 
 ### Feature gaps
 
-| Gap | What it is | Models | Carried by | Status on 2026-11-24 | Depends on |
-|---|---|---|---|---|---|
-| G1 | Symbolic lifecycle rules: `@transition` (cell and component state kept), `@retire` (sites to the medium, or `sites => ref` into a collective), `@create` at a site set, and `@discrete_events` and `@terminate` as MTK `SymbolicDiscreteCallback`s | 05, 06, 07, 08, 11a; 14c (`@terminate` only) | P6.4c, P6.9 (R8), P6.E4 | Open. The one KernelAbstractions lifecycle planner is merged (c92882dc), and the event precedence of D-332 (P1–P3) is ruled. No symbolic `@transition`, `@retire`, `@create`, `@discrete_events` or `@terminate` exists in `src/`. | the lifecycle efficiency merge (below) |
-| G2 | Per-cell operators in the `operators` phase (empty today, `docs/src/manual/sweep.md:59`); `uptake` and `secrete` helpers; an FBA operator as a COBREXA/JuMP extension; random-order FBA with write-back in priority rounds (D-332) | 08; 05 and 07 only for per-cell uptake. The audit also lists 06 and 11a, but its per-model tables show no need. | P6.8 (R15), P6.12 | Open. No per-cell operator or `uptake` in `src/` or CorePotts. | none; FBA solves stay on the host (D-332) |
-| G3 | Proposal laws: `UnlikeNeighbor`, Hastings acceptance, `attempts = k` | 07 (the law); 08 (`k = 4`) | P6.4b (R10), P6.E2 | Open. `UnlikeNeighbor` and `MetropolisHastings` are not in the code. The checkerboard notes of P6.4b predate D-271. Hastings with `skip_interior` is D-332 Q5. | none |
-| G4 | The moment tensor in energies and drives (`orientation`, `eccentricity`, `minor_length`, the polar moment), exact per copy; a contact-geometry energy over the interfaces of both cells (`interfaces(k, k)`) | 12 | P6.7 (R7, R11b) | Open. CorePotts computes the descriptors (`lib/CorePotts/src/geometry.jl:478`), but only `major_length` reaches the symbolic layer (`src/observed.jl:60`). | the D-332 read layer (its running sums and per-pair contact store); exact pair trackers (R11b) |
-| G5 | Ordered relationships: `prev`, `next`, `rank`, three-member angle terms, linked-centroid reads in drives | 13 | P6.6 | Closed on `SequentialCPM`: 4c9f8264 2026-11-22 (D-329, D-330). The checkerboard form waits for the read layer. | none |
-| G6 | `neighbors(c)` with the interface length `contact(c, n)`, and its lag | 11a (weighted contact fractions); the Andasari conformance test; 12 (observables) | P6.7 (R11a), P6.4a | Open. Neither name exists in `src/`. | the D-332 read layer (its per-pair contact store) |
-| G7 | `Pre(x, k)` on cell variables, and windowed means | 14c | P6.7b (R12) | Open. Cell-variable lags are refused (`docs/src/manual/updates.md:58`). | none. Lags and windowed means run between sweeps, so they do not need the read layer (`docs/design/research/parallel-mechanisms.md`) |
-| G8 | Copy-time writes into neighbor sites (an `@on_copy` neighbor-target form), the sequential and checkerboard forms in one item; the Eq 6 averaging as an aux-field map (not verified) | 08b | P6.12 | Open. | G2 for the full 08b loop. Not the read layer: the parallel form widens `region` by the write radius (`docs/design/research/parallel-mechanisms.md:400`) |
-| G9 | Layouts: fibers, rods and chains with links, the shape form of `InsertUntil` to a density, jittered `Tiling` | 05, 07, 13 | P6.4d, P6.6, P6.8 | Closed: f3b22176 2026-11-22 (`Bar`, `Rod`, `Fibers`, `Chains`, `InsertUntil(shape; density, occupied, collective)`, `Tiling(; jitter)`). A staggered `Tiling` (P6.4d) is still open; no model in this section needs it. | none |
-| G10 | Analysis: skeleton branches and loops, percolation, a cluster graph on a pair predicate, sprout length and thickness, lineage trees | 05, 07, 08, 13 | P6.4d, P6.9 (R16) | Closed: f3b22176 2026-11-22 (`skeleton_counts`, `percolates`, `pair_graph`, `sprout_length`, `sprout_thickness`, `lineage`, `clone_sizes` in `PottsModels.Analysis`). The device division log is P6.13. | none |
-| G11 | Small folds and selectors: `argmax`, `only`, `var`; a division plane drawn from a set; a division side and a `daughter` index | 07, 08, 14c | P6.4a, model-specs README §2.4 | Open. No symbolic `argmax`, `only` or `var`; `RandomSide` and `CanonicalSide` do not exist. A plane drawn from a set: not verified. | none |
-| G12 | SBML import or a Catalyst extension | the Andasari conformance test only (optional) | none | Not planned. The Catalyst extension was dropped on 2026-10-17 (`research/field-compiler/build/HANDOFF-backup.md:51,104`, in the ecosystem tree outside this repo), and item 11 is Jafari Nivlouei. | none |
+The gaps and the items that carry them. State lives in the items below.
 
-### Infrastructure and approved items
+| Gap | What it is | Models | Carried by | Item |
+|---|---|---|---|---|
+| G1a | `@transition` (cell state kept; component state dormant, D-348) and `@retire` to the medium | 05, 06, 07, 08, 11a | P6.4c, P6.9 (R8) | W1' |
+| G1b | `@retire … sites => ref` into a collective, retirement chains by pointer doubling (chains of up to 16 links), collective target updates in cell order (D-332 P1, P2), the moment pre-stage (D-344) | 05, 06 | P6.4c, P6.9 (R8) | W2.1 |
+| G1c | `@create` at a site set, from owners not in an event (D-345) | 05 | P6.4c, P6.9 (R8) | W2.2 |
+| G1d | `@discrete_events` and `@terminate` as MTK `SymbolicDiscreteCallback`s (D-162); E4 | 14c (`@terminate` only; a callback works) | P6.4c, P6.E4 | off path |
+| G2 | Per-cell operators in the `operators` phase; `uptake` and `secrete` helpers; an FBA operator as a COBREXA/JuMP extension; random-order FBA with write-back in priority rounds (D-332) | 08; 05 and 07 only for per-cell uptake. The audit also lists 06 and 11a, but its per-model tables show no need. | P6.8 (R15), P6.12 | W3.1 |
+| G3 | Proposal laws: `UnlikeNeighbor`, Hastings acceptance, `attempts = k` (E2) | 07 (the law); 08 (`k = 4`) | P6.4b (R10), P6.E2 | W0.4 |
+| G4 | The moment tensor in energies and drives (`orientation`, `eccentricity`, `minor_length`, the polar moment), exact per copy; a contact-geometry energy over the interfaces of both cells (`interfaces(k, k)`) | 12 | P6.7 (R7, R11b) | W5.3 |
+| G5 | Ordered relationships: `prev`, `next`, `rank`, three-member angle terms, linked-centroid reads in drives | 13 | P6.6 | closed on `SequentialCPM` (4c9f8264, D-329, D-330); the checkerboard form is RL1/RL2 |
+| G6 | `neighbors(c)` with the interface length `contact(c, n)`, and its lag | 12 (observables); 11a and the Andasari test only if the weighted form is chosen (D-346) | P6.7 (R11a), P6.4a | W5.3 |
+| G7 | `Pre(x, k)` on cell variables, and windowed means | 14c | P6.7b (R12) | W0.3 |
+| G8 | Copy-time writes into neighbor sites (an `@on_copy` neighbor-target form), the sequential and checkerboard forms in one item; the Eq 6 averaging as an aux-field map (not verified) | 08b | P6.12 | W3.2 |
+| G9 | Layouts: fibers, rods and chains with links, the shape form of `InsertUntil` to a density, jittered `Tiling` | 05, 07, 13 | P6.4d, P6.6, P6.8 | closed: f3b22176 2026-11-22 (`Bar`, `Rod`, `Fibers`, `Chains`, `InsertUntil(shape; density, occupied, collective)`, `Tiling(; jitter)`). A staggered `Tiling` (P6.4d) is off path; no model here needs it. |
+| G10 | Analysis: skeleton branches and loops, percolation, a cluster graph on a pair predicate, sprout length and thickness, lineage trees | 05, 07, 08, 13 | P6.4d, P6.9 (R16) | closed: f3b22176 2026-11-22 (`skeleton_counts`, `percolates`, `pair_graph`, `sprout_length`, `sprout_thickness`, `lineage`, `clone_sizes` in `PottsModels.Analysis`). The device division log is W1.9. |
+| G11a | Small folds: `argmax`, `only`, `var` | 07, 14c | P6.4a | W0.5 |
+| G11b | Division parts: a plane drawn from a set, a division side (`RandomSide`, `CanonicalSide`) and a `daughter` index (model-specs README §2.4) | 07, 08 | P6.4a, model-specs README §2.4 | W2.3 |
+| G12 | SBML import or a Catalyst extension | the Andasari conformance test only (optional) | none | not planned: the Catalyst extension was dropped on 2026-10-17 (`research/field-compiler/build/HANDOFF-backup.md:51,104`, in the ecosystem tree), and item 11 is Jafari Nivlouei |
 
-| Item | What it is | Status on 2026-11-24 | Depends on, or blocks |
+### Wave 0: independent of the lifecycle pipeline
+
+**W0.1 Fortuna 14a and 14b: FULL runs and reproduction page.**
+- State: ruled (D-347). Verified 2026-11-27, read: pueue shows no 14a or 14b task, and
+  `reproductions/data/14/` holds only the runner scripts.
+- Unlocks: 14a and 14b shipped. Needs: nothing. Rulings: D-347 (run now on `SequentialCPM`;
+  rerun only if `SequentialCPM` changes). Open: whether the lifecycle pipeline, which runs
+  Fortuna's `@convert` over clusters, counts as such a change.
+- Done when: the FULL record with commit and Manifest is in `reproductions/data/14/`, the
+  videos are in a release, and `reproductions/14_fortuna.jl` (page) and its tests pass.
+- Size: 1 build cycle for the page; FULL machine time not measured (700 runs × 10⁵ MCS per
+  the protocol). Risk: machine time against A/B windows.
+
+**W0.2 One path: remove the checkerboard inline cutoff.**
+- What: remove `inline_max_blocks` (`lib/CorePotts/src/checkerboard.jl:482`, default at
+  `:438`): one threaded launch, and coloring phases always defer to `serial_pass!`
+  (`checkerboard.jl:248`). It fixes a correctness divergence: with deferred copies (`Global()`
+  without a window, cell-scope `pieces` or `largest_piece`) the inline and threaded paths
+  decide differently, so results depend on the lattice size and the thread count. The
+  docstrings (`checkerboard.jl:46`, `algorithms.jl:192`) and DECISIONS disagree on
+  reproducibility. The divergence was found by reading the code, not by a run.
+- State: ruled 2026-11-23 (`~/lpwork/one-path-audit/README.md`) and D-343. Not started.
+  Verified 2026-11-27, read.
+- Unlocks: new models with deferred copies do not inherit the divergence; RL1.
+- Done when: a regression test (L = 190, `Global()` without a window, threads 1 against 4,
+  `window = 2` as the control), both docstrings fixed, an A/B.
+- Size: 1 build cycle, 1 A/B. Risk: CPU results change for deferred-copy models.
+
+**W0.3 G7: `Pre(x, k)` on cell variables and windowed means.**
+- State: designed. Not started. Verified 2026-11-27, read: cell-variable lags are refused
+  (`docs/src/manual/updates.md:58-59`).
+- Unlocks: 14c (with `var` and a `@terminate` callback). Needs: nothing; lags and windowed
+  means run between sweeps, so they do not need the read layer.
+- Done when: lags and windowed means tested against a host oracle; the refusal removed.
+- Size: 1 build cycle; an A/B only if the generated code of existing models changes.
+  Risk: history buffer layout on the device.
+
+**W0.4 G3 with E2: proposal laws.**
+- What: `UnlikeNeighbor`, Hastings acceptance and `attempts = k` (E2). The checkerboard notes
+  of P6.4b predate D-271; Hastings with `skip_interior` is D-332 Q5.
+- State: designed. Not started. Verified 2026-11-27, read: no `UnlikeNeighbor`,
+  `MetropolisHastings` or `attempts` keyword in the code; `repeat(n, sweep(fraction = 1//n))`
+  is the workaround.
+- Unlocks: Bauer 2007 (the law), FBCA (`attempts = 4`), Graner-Glazier in the paper's MCS.
+- Done when: the D-332 Hastings ratio checked against a detailed-balance oracle; E2's
+  acceptance lines.
+- Size: 1 build cycle, 1 A/B. Risk: Q5 (the global boundary-site count under
+  `skip_interior`).
+
+**W0.5 G11a: small folds `argmax`, `only`, `var`.**
+- State: designed. Not started. Verified 2026-11-27, read: no symbolic `argmax`, `only` or
+  `var`.
+- Unlocks: Bauer 2007 (the tip), 14c (`var`). Done when: each fold checked against a host
+  fold. Size: under 1 build cycle, no A/B. Risk: low.
+
+**W0.6 Item 11: reverse engineering.**
+- State: ruled (D-346). Not started.
+- What: no code. Resolve the integrin mapping (spec 11:126-131), the contact-inhibition rule
+  (spec 11:141) and the units of β (spec 11:456) from the paper's screens, figures and code.
+- Unlocks: the ruling between the count-based contact fraction and the weighted G6 form, and
+  so item 11's needs. Done when: a note under `docs/design/research/model-specs/` and the
+  ruling. Size: 1 research cycle. Risk: details stay UNSPECIFIED and need calibration.
+
+### Wave 1: the lifecycle pipeline
+
+Branch `lp/lc-pipeline`, building @8eca3ddc (2026-11-26), 80 commits ahead of `monorepo`
+(merged `monorepo` at b7ff47e3). Design: `research/lifecycle/design.md` and
+`assembly-plan.md` in the ecosystem tree. Rulings: D-351, D-352. It replaces the one
+KernelAbstractions planner (c92882dc, D-332). Every G1 rule and P6.13 is built inside it.
+
+Done so far on the branch (verified 2026-11-27, read): allocation by reduce-then-scan and the
+two-pass site walk with boxes as primitives with oracles (design §6 steps 2-3); the end-to-end
+slice for division, removal and transition (`_pipeline_slice`,
+`lib/CorePotts/src/lifecycle_pipeline.jl:68`; review fixes 32212398); nine launches per round
+(2f23f828); stage arguments that follow the integrator, which fixes the planner after a device
+`deepcopy` (ba3e4d74); the identity check of converted-once arguments (b0043e46,
+`launch_args.jl`); the pipeline only on backends with 64-bit atomics (15523e40). The
+`deepcopy` fault stays on the old planner, found 2026-11-26: it keeps the state's cell
+columns (`cols`, `links`) from `init`, and GPUArrays copies a device array at each reference,
+so after a `deepcopy` of a device integrator the copy's planner holds the original's columns.
+It goes when the old planner is removed (W1.8).
+
+The slice still excludes: clusters, pieces, Euler, `@convert` (`_CV_FROM`), custom
+`rebuild!` and frozen predicates, weighted relations, backends without 64-bit atomics,
+models without `:m1`, non-Int32 ownership, lattices of `typemax(Int32)` sites or more,
+non-integer surface and contact, and asymmetric relations.
+
+| Item | What | Size, risk |
+|---|---|---|
+| W1.1 | Record targets with an add-or-set fold, and a deterministic many-into-one fold (many events into one target in a round, as in Jiang). Integer targets may use atomics (`parallel-mechanisms.md:100`); float or generic targets need an ordered per-target reduction. This conflicts with the Euler note "two conversions sharing a `to` set the status" (`assembly-plan.md` §2.4); resolve it here. | 1 build cycle. Risk: the ordered reduction's cost. |
+| W1.2 | Walk trackers: site sums and minima as declared trackers, weighted surface, Euler, site minimum (D-352 ruling 14). | 1 build cycle. Risk: pass-1 cost bar (D-351 ruling 13). |
+| W1.3 | Clusters: the gated re-rooting pass and the cluster surface (D-352 ruling 14). | 1 build cycle. Risk: the no-O(C) exception's cost. |
+| W1.4 | Pieces with declared trackers. | 1 build cycle. |
+| W1.5 | `@convert` as a per-site rule with speculative slots (D-351 ruling 2, D-352 ruling 14). | 1 build cycle. Risk: Fortuna's results (D-347 open point). |
+| W1.6 | The Metal paired 32-bit form for every stage (D-342). Unverified on Metal; tested here with `_FORCE_PAIRED[]`. | 1 build cycle. Risk: no Mac. |
+| W1.7 | Lift the remaining exclusions listed above. | 1 build cycle. |
+| W1.8 | One A/B against the `monorepo` lifecycle, then remove the old planner and merge. Open misses carried (D-352): quiet overhead about 7.5-10% of a small ROCm MCS against 5%; about 4 µs per quiet MCS at 4 CPU threads, both re-measured after KernelAbstractions 0.10. | 1 build cycle, 1 A/B. Risk: the CPU law for every lifecycle model. |
+| W1.9 | P6.13 division log (D-350) on the pipeline. `lineage(records)` in `PottsModels.Analysis` (f3b22176) reads host records, not this log. | 1 build cycle, 1 A/B. |
+| W1.10 | Share the converted-once launch arguments (`_LaunchArgs`, `lib/CorePotts/src/launch_args.jl`) and their identity check through `LatticeFields.Exec`, so the sweep, field and lifecycle launches use one form. Proposed 2026-11-26. | 1 build cycle, 1 A/B. |
+
+Unlocks: G1a-G1c, P6.13, every lifecycle model. Done when: W1.8 merged, the D-332 host-planner
+bar met (transfer counters, D-029 statistics, CPU A/B of quiet and event MCS), the old planner
+removed.
+
+**W1' G1a front end: `@transition` and `@retire` to the medium.**
+- State: ruled (D-332 P1, D-348). Not started. Verified 2026-11-27, read: no `@transition` or
+  `@retire` in `src/` (only a comment at `src/codegen.jl:2729`); `lib/CorePotts/src/lifecycle.jl`
+  has only EVENT_NONE, DIVIDE, REMOVE, TRANSITION and DIVIDE_CLUSTER.
+- Needs: a branch off `lp/lc-pipeline`; merges after W1.8. Unlocks: Jiang (with G1b), Bauer
+  2009 and 2007, FBCA, item 11.
+- Done when: both rules in the DSL with oracle tests on CPU and ROCm; component state across a
+  transition per D-348.
+- Size: 1-2 build cycles, 1 A/B. Risk: the MTK front end for kind-scoped components.
+
+### Wave 2: lifecycle rules for Jiang, Bauer 2009 and Bauer 2007
+
+| Item | What | Needs | Unlocks | Size, risk |
+|---|---|---|---|---|
+| W2.1 G1b | `@retire … sites => ref`, chains (four pointer-doubling steps, or one lane per chain of up to 16 links), longer chains and cycles to the medium and counted; collective targets in cell order (P2); the moment pre-stage (D-344) | W1.1, W1' | Jiang 2005 | 1-2 build cycles, 1 A/B. Risk: the ordered target reduction. |
+| W2.2 G1c | `@create` from owners not in an event, its own round after retire and divide (D-345); producer entries in the scan; donor deltas | W1.8, W1' | Bauer 2009 | 1-2 build cycles, 1 A/B. Risk: donor volume bookkeeping. |
+| W2.3 G11b | Division plane from a set, `RandomSide`, `CanonicalSide`, a `daughter` index. Verified 2026-11-27, read: neither side type exists; a plane drawn from a set is not verified. | W1.8 | Bauer 2007, FBCA | 1 build cycle. |
+| Models | Jiang 2005 (06), Bauer 2009 (05), Bauer 2007 (07): each a model branch with its page, tests and FULL record | their gaps | shipped models | 2-3 build cycles each. Risk: calibration of unstated parameters. |
+
+### Wave 3: FBCA
+
+| Item | What | Needs | Size, risk |
 |---|---|---|---|
-| Lifecycle: one path (D-333) | Branch `lp/lc-eff`: the CPU runs the lifecycle's KernelAbstractions kernels. Against `monorepo` it removes the CPU `Exec.launch!` host path of the planner stages and the CPU quiet-MCS exit (`lib/CorePotts/src/lifecycle_planner.jl:1168`, `:1176`). | Parked by user ruling 2026-11-24: not merged and not held for an A/B. 24 commits, many marked WIP. D-333 is only on the branch. | Blocks G1 and P6.13. |
-| Lifecycle: event-sized stages (D-337) | Branch `lp/lc-event` (contains `lp/lc-eff`): per-cell bounding boxes, delta trackers, launch sizes from a backend probe, longest-prefix capacity overflow. | Parked by user ruling 2026-11-24: not merged and not held for an A/B. D-337 is only on the branch. | Blocks G1 and P6.13. |
-| Lifecycle: multi-workgroup plan scans | Plan scans across workgroups, from D-337 "Not done" on the parked branch `lp/lc-event`. | Deferred and tracked as an open item (ruling 2026-11-24). | none |
-| Division log (P6.13) | An append-only device log of divisions, read by `lineage(sol)`. | Not started. | After the two lifecycle branches. |
-| One path: checkerboard inline cutoff | Remove `inline_max_blocks` (`lib/CorePotts/src/checkerboard.jl:365`): one threaded launch, and coloring phases always defer to `serial_pass!`. This also fixes a correctness divergence: with deferred copies (`Global()` without a window, cell-scope `pieces` or `largest_piece`) the inline and threaded paths decide differently, so results depend on the lattice size and the thread count. The docstrings (`checkerboard.jl:46`, `algorithms.jl:192`) and DECISIONS disagree on reproducibility. | Approved 2026-11-23 (`~/lpwork/one-path-audit/README.md`). Not started. The divergence was found by reading the code, not by a run. | A builder, a regression test (L = 190, threads 1 against 4) and an A/B. |
-| One path: host and kernel duplicates, KernelAbstractions on the CPU everywhere | One CPU executor, KernelAbstractions: delete the host twins (the serial pass and recenter in `checkerboard.jl`, the `::CPU` methods of `_device_copy!`, `_device_fill!` and `_quiet`), use one cell-reduce run length (`_CR_RUN_HOST`, `_CR_RUN_DEVICE`, `lib/CorePotts/src/spatial.jl:352`) and replace the LatticeFields host executor (`HOST_GRAIN`). | Approved 2026-11-23. Not started. | A builder and an A/B. Interacts with KernelAbstractions 0.10, whose CPU backend runs on PoCL (D-333). Order pending the KernelAbstractions 0.10 migration audit (2026-11-24). |
-| Minimum image without a 64-bit division | The periodic minimum image in `lib/CorePotts/src/geometry.jl` uses a 64-bit `fld` on every accepted copy. Wrapping without a division (lattice offsets have \|δ\| < n, closed axes return at once) made the base device sweep kernel 11% faster at kernel level (Fortuna, rocprofv3; `research/lifecycle/boxes.md` §6.2 in the ecosystem tree). Prototype on branch `lp/lc-boxes` (ee96aaf3, 9aa75153). | Done 2026-11-26 (ROCm A/B: merks_100, merks2006 −19 to −20%, akeeb −9%, openvt_reference −7%, others within controls; CPU unchanged). | A builder, a review and an A/B on the paper models. |
-| Sweep launch arguments converted once | The ROCm sweep is bound by host launch time (GPU busy about 45% on Fortuna). Each state array costs about 2.3 µs of host time per block launch (64 per MCS on Fortuna); three unused arrays cost +20–22% with unchanged device time (`boxes.md` §6.2). Convert the sweep's launch arguments once at setup, as `allocation_args` does for the lifecycle scan. | Done: 8655cdb2 2026-11-26 (ROCm A/B: openvt_monolayer −35%, graner_glazier −23%, others −4…+2%; CPU within −4…+2%). Static ndrange not adopted; Metal unverified (D-339). Cause found 2026-11-25 on `lp/lc-pipeline` (6a958a4f, d33fd09c): KernelAbstractions converts every argument NamedTuple at every launch, even in device form; converting once into a pass-through type cut lifecycle launches 2-7× to ~4-6 µs host. Also measure a static ndrange here (about 2 µs per launch, warm only; recompiles per lattice size and capacity), then ask. | Lands before the lifecycle A/B (ruling 2026-11-25). A builder, a review and an A/B on every device model. Interacts with KernelAbstractions 0.10. |
-| One path: integer minimum image in the compiler | `src/lower.jl` (`_minimum_image_axis`, near line 628) has its own integer minimum image, whose ties keep their sign, unlike `min_image`'s `+n/2`. Use one form. | Found 2026-11-26 (min-image review). Not started. | A builder; check the generated code's results on ties. |
-| Lifecycle planner after a device `deepcopy` | `LifecyclePlanner` keeps the state's cell columns (`cols`, `links`) from `init`. GPUArrays copies a device array at each reference, so after a `deepcopy` of a device integrator the copy's planner holds the original's columns. Older than the sweep branch (`lp/sweep-args`). | Open (2026-11-26). Not fixed on the old planner, which is being replaced. | The new lifecycle pipeline must compare its stored arrays with the integrator's by identity before each MCS, as the sweep's `sync_launch!` does. |
-| Launch arguments converted once, shared | Move the converted-once launch arguments (`_LaunchArgs`, `lib/CorePotts/src/launch_args.jl`) and their identity check into `LatticeFields.Exec`, so the sweep, the field and the lifecycle launches use one form. | Proposed 2026-11-26. Not started. | After `lp/sweep-args` merges; with the lifecycle pipeline. |
-| Sweep on Metal: buffer residency | The sweep's converted-once launch arguments skip Metal's per-launch `MTL.use!` (D-339). Verify on a Mac with `MTL_SHADER_VALIDATION=1`; if it fails, add a residency hook in a Metal extension. | Unverified (2026-11-26). No code. | A Mac. |
-| One path: two-word site pick | Always draw the site pick from two words; delete `PICK_ONE_WORD_MAX` (`lib/CorePotts/src/rng.jl:231`). | Approved 2026-11-23. Not started. | A builder and an A/B. |
-| One path: field fusion | Fuse whenever legal; the cost model is deleted. | Done: b1f8924b 2026-11-24 (D-335). | none |
-| One path: later rulings | The emit index strategy, `_hoistable`, `solver_type = :auto`. | Waiting for rulings. | none |
-| D-332 read layer | Read sets, `CheckerboardCPM(reads = :exact \| :snapshot \| :live)`, running sums, the per-pair contact store, kinetic tiers 0–2. | Not started: `CheckerboardCPM` has no `reads` keyword (`lib/CorePotts/src/algorithms.jl:168`). | Blocks G4 and G6 (Zajac, and the weighted form of item 11) and the checkerboard form of G5 (Starruß). Protects the D-330 drive reads. G8 does not need it. |
-| Ergonomics E2–E10 | See the rows under "Ergonomics". E1 is done (4b91393a, D-334). | E2 is G3's `attempts`, and E4 is G1's `@terminate`. E3, E5, E6, E8, E9 and E10 are open; E7 is partial. | Docs-only rows (E6, E9, E10) need no A/B. |
-| KernelAbstractions 0.10 | The move from KernelAbstractions 0.9 (row under the field compiler). | Open. The PC's copy of the General registry (2026-11-23) has Metal.jl 1.12.1, which requires KernelAbstractions 0.10, so the stated Metal blocker looks gone. Whether the whole environment resolves is not verified. | The port must redo `Exec.launch_argument_bytes` (D-335), and, once D-333 merges, the PoCL CPU backend and the lifecycle allocation test. Order against "KernelAbstractions on the CPU everywhere" pending the KernelAbstractions 0.10 migration audit (2026-11-24). |
+| W3.1 G2 | Per-cell operators in the `operators` phase (empty today, `docs/src/manual/sweep.md:59`; no per-cell operator or `uptake` in `src/` or CorePotts); `uptake`, `secrete`; the FBA operator as a COBREXA/JuMP extension; random-order FBA with write-back in priority rounds (D-332). FBA solves stay on the host; D-332 Q2 (host FBA for device runs) is open. | none | 2 build cycles, 1 A/B. Risk: Q2. |
+| W3.2 G8 | Copy-time writes into neighbor sites, sequential and checkerboard forms in one item. The parallel form widens `region` by the write radius (`parallel-mechanisms.md:400`); it does not need the read layer. | W3.1 for the full 08b loop | 1-2 build cycles, 1 A/B. |
+| Model | FBCA 08a, then 08b | G1a, W3.1, W3.2, W0.4, W2.3 | 2-3 build cycles. |
 
-### Build order
+### Waves 4 and 5: the read layer, Starruß and Zajac
 
-This order was agreed in chat on 2026-11-24, then amended the same day to put the read
-layer before the models that need it. Each model starts once its gaps close.
+D-332's read layer as amended by D-343. Verified 2026-11-27, read: `CheckerboardCPM` has no
+`reads` keyword (`lib/CorePotts/src/algorithms.jl:168`). The D-330 drive reads are live and
+unprotected today; the read layer protects them.
 
-1. **Merge `lp/lc-event` (with `lp/lc-eff`) after its A/B.** Every G1 rule and P6.13 is
-   built inside the planner these branches change. Building on the old stages means a
-   second rewrite. The multi-workgroup plan scans are deferred (ruling 2026-11-24).
-2. **Remove the checkerboard inline cutoff.** It fixes a divergence that depends on lattice
-   size and thread count. New models with deferred copies would inherit it.
-3. **G1.** It unlocks five of the remaining models. Then Jiang 2005, Bauer 2009 (per-site
-   uptake) and item 11 (without the weighted contact fractions) can start.
-4. **G3 with G11.** Both are small. They unlock Bauer 2007 (per-site uptake), and the
-   attempts and plane draw of FBCA. E2 lands with G3.
-5. **G2 with G8.** They unlock FBCA 08a, then 08b. They also give per-cell uptake if a
-   Bauer §8b screen picks it. G8 does not need the read layer.
-6. **The D-332 read layer**, with the running sums and the per-pair contact store. Angle
-   terms then run on `CheckerboardCPM`.
-7. **G4 with G6, then Zajac; and Starruß.** Neither model ships on `SequentialCPM` first
-   (ruling 2026-11-24). G6 also gives item 11 its weighted contact fractions.
-8. **G7, then 14c.** G7 runs between sweeps and does not need the read layer. It can run
-   earlier, in parallel with the steps above.
+| Item | What | Needs | Unlocks | Size, risk |
+|---|---|---|---|---|
+| RL0 | Restate the read-layer design under D-343 in `research/parallel-mechanisms.md`. Docs only. | none | RL1 | under 1 cycle. |
+| RL1 | Read sets, running sums, the accessor and CPU `:exact` as the default for every model; fresh A/B; tiers 0-2 | W0.2, RL0 | Starruß on `CheckerboardCPM` (CPU) | 2 build cycles, 1 A/B. Risk: CPU results change for every model (accepted, D-343). |
+| RL2 | Device `:exact`; decide D-332 Q3 by measurement (about 400 launches and at least 64 syncs per MCS at 64 phases × 3 rounds; D-332 also offers a fixed round budget with one read-back per MCS) | RL1 | Starruß on the device | 2 build cycles, 1 A/B. Risk: host launch cost. |
+| RL3 | The per-pair contact store | RL1 | G4, G6 | 1-2 build cycles, 1 A/B. |
+| W5.3 G4 + G6 | Moment-tensor terms (CorePotts computes the descriptors, `lib/CorePotts/src/geometry.jl:478`, but only `major_length` reaches the symbolic layer, `src/observed.jl:60`); interface energies; `neighbors(c)` and `contact(c, n)` (neither exists in `src/`) | RL3; exact pair trackers (R11b) | Zajac; item 11's weighted form if chosen | 2 build cycles, 1 A/B. |
+| Models | Starruß 2007 (13) after RL1 and RL2; Zajac (12) after W5.3 | as listed | shipped models | 2-3 build cycles each. |
 
-Alongside, with no order of their own:
-- the FULL runs and pages of 14a and 14b;
-- the other one-path removals, each with its own A/B window;
-- ergonomics E3 and E5–E10;
-- KernelAbstractions 0.10. Its order against "KernelAbstractions on the CPU everywhere" is
-  pending the KernelAbstractions 0.10 migration audit (2026-11-24).
+The MCS times quoted earlier for this estimate (WortelAct 603 µs, OpenVT 737 µs, Fortuna
+3284 µs, `research/lifecycle/boxes.md` §6) were measured before the sweep-arguments and
+minimum-image merges and are stale (2026-11-27). The host floor of an empty launch is about
+1.8 µs on ROCm.
+
+### Off the critical path
+
+| Item | State | Notes |
+|---|---|---|
+| G1d `@discrete_events`, `@terminate`, E4 (P6.4c, D-162) | designed | Kept in the plan (D-349); models use callbacks meanwhile (`CallbackSet(edge_guard, stop_at_cells)`). D-332 Q1 (device `@terminate` cadence) open. |
+| `:snapshot` and `:live` read policies | deferred (D-343) | Built only when a measurement needs them. |
+| KernelAbstractions 0.10 | review OK (second review, 32494667); building `lp/ka010`@0d6981e4 (2026-11-27) | KA 0.10.9, KernelInterface 0.4.7, AMDGPU 2.13.0 (no ROCmDeviceLibs_jll), Metal 1.12.1; JumpProcesses from a pinned commit. `Exec.launch_argument_bytes` (D-335) is redone on `KernelInterface.argconvert`. Host time per sweep launch on ROCm 1.8-2.6 µs, against 5.5-6.3 µs on `monorepo`. Two PoCL bugs are marked broken in tests (KernelAbstractions.jl#996, pocl#2418, fix in pocl#2419; SPIR-V `OpPtrEqual`, llvm-project#246540, KernelAbstractions.jl#997). ROCm full GPU gate green; ROCm A/B run after the one-CPU harness fix (0d6981e4; D-341 on `lp/ka010`). Merge held only for a JumpProcesses release that allows KA 0.10 (temporary `[sources]` pin to JumpProcesses PR #684). Open regressions: wortel +16% (GPUCompiler 2.24 early `LoopFullUnrollPass`, being researched) and graner +7% (cause unknown). Upstream: JuliaGPU/GPUToolbox.jl#47, JuliaLang/julia#65310, a comment on JuliaGPU/CUDA.jl#3060. Its merge closes the device libraries 7.0 item (D-256 item 4; KA 0.10 rulings 2026-11-24, D-338). |
+| One path: KernelAbstractions on the CPU everywhere | ruled 2026-11-23, not started | One CPU executor: delete the host twins (the serial pass and recenter in `checkerboard.jl`, the `::CPU` methods of `_device_copy!`, `_device_fill!` and `_quiet`), one cell-reduce run length (`_CR_RUN_HOST`, `_CR_RUN_DEVICE`, `lib/CorePotts/src/spatial.jl:352-353`), replace the LatticeFields host executor (`HOST_GRAIN`, `lib/LatticeFields/src/exec.jl:30`). After KA 0.10 (user ruling 2026-11-24 on the KA 0.10 migration audit), whose CPU backend runs on PoCL (D-338). A/B. |
+| One path: two-word site pick | ruled 2026-11-23, not started | Delete `PICK_ONE_WORD_MAX` (`lib/CorePotts/src/rng.jl:231`). A/B. |
+| One path: integer minimum image in the compiler | found 2026-11-26, not started | `_minimum_image_axis` (`src/lower.jl:560`, called at `:251`) keeps the sign on ties, unlike `min_image`'s `+n/2`. Use one form; check the generated code on ties. |
+| One path: later rulings | waiting for rulings | The emit index strategy, `_hoistable`, `solver_type = :auto` (`~/lpwork/one-path-audit/README.md`). |
+| Sweep on Metal: buffer residency | unverified (D-339) | Verify on a Mac with `MTL_SHADER_VALIDATION=1`. The Metal residency hook is withdrawn (user ruling 2026-11-26; D-340, which exists only on `lp/ka010`): if residency fails, the fix must be backend-neutral. |
+| Device libraries 7.0 doubles | blocked upstream (2026-11-22) | Details in the field-compiler row below; ROCmDeviceLibs_jll held at `~6.2.1` until the KA 0.10 merge. |
+| P6.0cd lockless 32-bit index audit | open | See P6.0cd below. |
+| Ergonomics E3, E5-E10 | open; E7 partial | E3 (`capacity`), E5 plot shortcuts, E6 time to first run, E7 error messages, E8 getting started, E9 `coming_from.md`, E10 docs polish. Rows under "Ergonomics" below. Docs-only rows (E6, E9, E10) need no A/B. |
+| P6.4a, P6.4d (staggered `Tiling`) | partial | Rows below. No remaining paper model needs a staggered `Tiling`. |
+| After the paper; `DivKGrad(:harmonic)` twin; upstream issues | open | Rows under "Field compiler" below. |
+
+### Machine time
+
+FULL runs use cores 0-11 and 16-27 and do not run during an A/B window. A/Bs run one at a time
+in the `ab` lane on a quiet machine. Expected A/B windows, in order of need: KA 0.10 (its
+regressions are open), W0.2 the inline cutoff, W1.8 the pipeline, RL1 CPU `:exact`, RL2
+device `:exact`. W0.1's FULL runs fit between them.
+
+### Parked branches
+
+- `lp/lc-eff`@f96b6e62 (2026-11-23): the CPU runs the lifecycle's KernelAbstractions kernels.
+  D-333 exists only on this branch. 24 commits, many marked WIP.
+- `lp/lc-event`@1064a9a3 (2026-11-24, contains `lp/lc-eff`): event-sized stages, per-cell
+  boxes, delta trackers, probed launch sizes, longest-prefix overflow. D-337 exists only here.
+
+Both are parked by user ruling 2026-11-24 (D-351): not merged and not held for an A/B.
+
+### Decision queue
+
+- Item 11: count-based or weighted contact fractions, after W0.6 (D-346; D-332 Q4).
+- Whether the lifecycle pipeline counts as a `SequentialCPM` change for the Fortuna FULL
+  record (D-347).
+- D-332 Q1 (device `@terminate` cadence), Q2 (host FBA for device FBCA), Q3 (device read
+  default, at RL2), Q5 (Hastings with `skip_interior`, at W0.4).
+- The many-into-one fold against the Euler `to` note (W1.1).
+- Rebalancing uneven walk item ranges (design §7 ruling 11, open).
 
 ## Phase 1 — Skeleton
 
@@ -169,7 +343,7 @@ Alongside, with no order of their own:
   Accept (D-048): per model, brute-force ΔH, independent drive/effect checks, invariants
   and mechanism tests with negative controls; TTFX table in docs.
 
-- [ ] (2026-11-16: Jiang 1999 foam ships provisional, P6.4r; OpenVT monolayer, Step 3b. 2026-11-24: Fortuna 14a merged with C11, 6dfca14a, and 14b as its options, 635c525a; neither has a FULL record or a page yet; the other models are not started, see "Remaining work before the remaining paper models") **M4.3** extended model library per `research/legacy-spec-adjudication.md` §3 "Models" (Mombach 3D, Shirinifard CNV, Wang 2025, OpenVT categories, Jiang 2005, Bauer 2007/2009, Zajac, Jafari Nivlouei, Starruß, Fortuna, Jiang 1999 foam, FBCA via COBREXA, hard-model set). Each: ordinary tests per D-048, plus the paper's qualitative results as mechanism tests.
+- [ ] (2026-11-16: Jiang 1999 foam ships provisional, P6.4r; OpenVT monolayer, Step 3b. 2026-11-24: Fortuna 14a merged with C11, 6dfca14a, and 14b as its options, 635c525a; neither has a FULL record or a page yet; the other models are not started, see "Plan: the remaining paper models") **M4.3** extended model library per `research/legacy-spec-adjudication.md` §3 "Models" (Mombach 3D, Shirinifard CNV, Wang 2025, OpenVT categories, Jiang 2005, Bauer 2007/2009, Zajac, Jafari Nivlouei, Starruß, Fortuna, Jiang 1999 foam, FBCA via COBREXA, hard-model set). Each: ordinary tests per D-048, plus the paper's qualitative results as mechanism tests.
   The 12 published models (Merks, Jiang 1999 foam, Bauer 2009, Jiang 2005, Bauer 2007, FBCA, sorting, Akeeb, item 11 = Jafari Nivlouei 2021, Zajac, Starruß, Fortuna/Thomas/Dal-Castel) are specified in `research/model-specs/` and built in the order of its README §6; each ships a reproduction tutorial per `research/model-specs/TUTORIAL_TEMPLATE.md` with ensemble validation against pre-registered tolerances.
 
 - [ ] (PIFF done 2026-09-29; MorpheusML pending) **M4.4** importers: PIFF (import/export) and MorpheusML (EzXML.jl → Symbolics); run the importable part of the Morpheus model repository as a regression corpus.
@@ -794,7 +968,7 @@ API changes here follow D-254: no back-compatibility shims before the paper, so 
   - Results can be read as kind symbols or as a categorical (`sol[:kind]` today returns integers in `@kinds` order, with the medium first).
   - Build errors for a table of the wrong size and for a forgotten medium.
 - [ ] (open 2026-11-24: no `attempts` keyword; `repeat(n, sweep(fraction = 1//n))` is the workaround; carried with G3) **P6.E2** `attempts = k` (D-051 item 2), pulled forward from P6.4b: run in the paper's MCS (Graner–Glazier `attempts = 16`), then simplify getting_started's "3200 of our MCS are 200 of the paper's".
-- [ ] (open 2026-11-24: the default is twice the initial cells plus 64, `docs/src/manual/lifecycle.md:20`; the overflow warning says "Pass a larger `capacity`" without an N, `lib/CorePotts/src/lifecycle_planner.jl:1499`) **P6.E3** `capacity`.
+- [ ] (open 2026-11-24: the default is twice the initial cells plus 64, `docs/src/manual/lifecycle.md:20`; the overflow warning says "Pass a larger `capacity`" without an N, `lib/CorePotts/src/lifecycle_planner.jl:1500`, line checked 2026-11-27) **P6.E3** `capacity`.
   - Size it automatically, or let it grow, for growing populations (the OpenVT minimal run needs `capacity = 256` today).
   - At minimum, on overflow, say "raise capacity to ≥ N" with N.
 - [ ] (open 2026-11-24; part of G1) **P6.E4** `@terminate` / a `stop =` keyword (P6.4c) for cell count, edge reached and time, replacing the `CallbackSet(edge_guard, stop_at_cells)` boilerplate.
@@ -858,7 +1032,7 @@ merges (phase-end checkpoint).
 
 **Status 2026-11-24.** Step 5 is not closed: 14a and 14b are merged without FULL records,
 and 14c is open. The models below are no longer waiting for step 5. Each starts when its
-gaps close, in the order of "Remaining work before the remaining paper models" at the top.
+gaps close, in the waves of "Plan: the remaining paper models" at the top.
 A first line in each item gives its state.
 
 - **P6.6** myxobacteria (Starruß):
@@ -972,6 +1146,8 @@ A first line in each item gives its state.
   `lp/lc-event` (D-337), parked by user ruling 2026-11-24: not merged, not held for an
   A/B. `lineage(records)` in `PottsModels.Analysis` (f3b22176) reads host records, not
   this log.
+  (2026-11-27) Superseded: the efficiency pass is now the lifecycle pipeline, and the log is
+  item W1.9 of the live plan (D-350, D-351).
 
 ## Field compiler: LatticeFields and LatticePDE (D-256 onward)
 
@@ -994,7 +1170,7 @@ Open and deferred:
 - [x] D-286 2026-11-16 **Confirm the provisional entries.** D-256 to D-270 and the C8/C9 re-freeze entries still say "provisional, awaiting confirmation". The maintainer's OK of 2026-10-17 and 2026-10-19 is recorded only in the git-ignored `PottsWorktrees/lattice-pde/HANDOFF.md` §1. C10 was to write it into DECISIONS. Also give numbers to the placeholder ids (D-C*, D-F2-*, D-F3-*, D-F4-*, D-INT-1 (now D-322)).
 - [x] 4944e171, e3fbf0db 2026-11-21 **C10** Field-compiler docs: the Fields (LatticePDE) docs section, field plotting and live recipe attributes (D-302), then the convergence page from committed data, numbered decision ids and amended-by notes (D-325). The old local branch `lp/c10` is deleted.
 - [x] 4c6b0157 2026-11-21 **F5** The feature batch: pair tables, `sign`, `mod`, `rem` and `clamp` in field terms, and per-field periodicity (D-301).
-- [ ] **KernelAbstractions 0.10.** One commit with its own A/B once the upstream packages are registered (D-256 item 4). Do it as soon as it is possible (maintainer, 2026-11-22): with AMDGPU 2.9+, it also fixes the device libraries 7.0 doubles, so KA, AMDGPU and ROCmDeviceLibs_jll stay at their current versions until then. Status 2026-11-22 (General registry): KernelAbstractions 0.10.8 and AMDGPU 2.11+ (KA 0.10, no ROCmDeviceLibs_jll) are registered; Metal.jl, up to 1.11, still requires KA 0.9, so the move waits for a Metal release on KA 0.10. The compat is `0.9.42` today (`Project.toml:49`). The port must also redo `Exec.launch_argument_bytes` (`lib/LatticeFields/src/exec.jl`, D-335): it sizes a device launch from the KernelAbstractions 0.9 internals `argconvert`, `launch_config` and `mkcontext`. Status 2026-11-24: the PC's copy of the General registry (2026-11-23) has Metal.jl 1.12.1, which requires KernelAbstractions 0.10, so the Metal blocker above looks gone; whether the whole environment resolves is not verified. Its order against "KernelAbstractions on the CPU everywhere" is pending the KernelAbstractions 0.10 migration audit (2026-11-24). Once D-333 (`lp/lc-eff`) merges, the port also covers the PoCL CPU backend for the lifecycle kernels and the lifecycle allocation test.
+- [ ] **KernelAbstractions 0.10.** One commit with its own A/B once the upstream packages are registered (D-256 item 4). Do it as soon as it is possible (maintainer, 2026-11-22): with AMDGPU 2.9+, it also fixes the device libraries 7.0 doubles, so KA, AMDGPU and ROCmDeviceLibs_jll stay at their current versions until then. Status 2026-11-22 (General registry): KernelAbstractions 0.10.8 and AMDGPU 2.11+ (KA 0.10, no ROCmDeviceLibs_jll) are registered; Metal.jl, up to 1.11, still requires KA 0.9, so the move waits for a Metal release on KA 0.10. The compat is `0.9.42` today (`Project.toml:49`). The port must also redo `Exec.launch_argument_bytes` (`lib/LatticeFields/src/exec.jl`, D-335): it sizes a device launch from the KernelAbstractions 0.9 internals `argconvert`, `launch_config` and `mkcontext`. Status 2026-11-24: the PC's copy of the General registry (2026-11-23) has Metal.jl 1.12.1, which requires KernelAbstractions 0.10, so the Metal blocker above looks gone; whether the whole environment resolves is not verified. Its order against "KernelAbstractions on the CPU everywhere" is pending the KernelAbstractions 0.10 migration audit (2026-11-24). Once D-333 (`lp/lc-eff`) merges, the port also covers the PoCL CPU backend for the lifecycle kernels and the lifecycle allocation test. (2026-11-27) Superseded: `lp/lc-eff` is parked, and the current state is the KernelAbstractions 0.10 row under "Off the critical path" in the live plan.
 - [ ] **After the paper.** LBM in its own package (D-256 item 6). FEM, IMEX, split stepping of mixed rate and map systems, and Duals for field and ODE parameters in Potts (rulings Q4, Q8, Q9, Q10 of 2026-10-18, HANDOFF). A two-ring hexagonal Galerkin coarse operator (D-321).
 - [ ] **`DivKGrad(:harmonic)` fine-reading blending twin** (deferred, `_migration/HANDOFF-coordinator-2026-11-12-b.md:69`). The note says the twin needs front end A, which D-320 deleted. Its route needs a new decision.
 - [ ] **Upstream issues.** Drafted, not filed (D-257 item 9, `research/field-compiler/build/upstream-issues.md`). The Symbolics `∈ Set` hazard is filed as Symbolics.jl#2126 (D-318).
@@ -1027,13 +1203,13 @@ Goal (maintainer, 2026-11-11 and 2026-11-12): a fast test harness at SciML quali
 - [x] 4b91393a 2026-11-23 **Named kind tables** (P6.E1, D-334).
 - [x] 29e5a661..c3775e89 2026-11-23 **One test runner** for every package, chosen by environment variables (D-336). It reached `monorepo` as a fast-forward, so it has no merge commit of its own.
 - [x] b1f8924b 2026-11-24 **Field fusion** Field kernels fuse whenever legal; the fusion cost model is deleted (D-335). The first of the four one-path removals.
-- [ ] **Lifecycle: one path** (D-333, branch `lp/lc-eff`) Parked by user ruling 2026-11-24: not merged and not held for an A/B. The CPU runs the lifecycle's KernelAbstractions kernels. D-333 exists only on the branch. 24 commits, many marked WIP.
-- [ ] **Lifecycle: event-sized stages** (D-337, branch `lp/lc-event`, which contains `lp/lc-eff`) Parked by user ruling 2026-11-24: not merged and not held for an A/B. Per-cell bounding boxes, delta trackers, probed launch sizes, longest-prefix overflow. The multi-workgroup plan scans (D-337 "Not done") are deferred and tracked as an open item.
-- [ ] **One path: checkerboard inline cutoff** (ruling 2026-11-23) Remove `inline_max_blocks`; one threaded launch; coloring phases always defer to `serial_pass!`. Fixes the inline-against-threaded divergence for deferred copies, found by reading the code. Accept: a regression test (L = 190, `Global()` without a window, threads 1 against 4, `window = 2` as the control), both docstrings fixed, and an A/B.
-- [ ] **One path: KernelAbstractions on the CPU everywhere** (ruling 2026-11-23) Delete the host and kernel duplicates, use one cell-reduce run length, and replace the LatticeFields host executor. A/B. Order against KernelAbstractions 0.10 pending the KernelAbstractions 0.10 migration audit (2026-11-24).
-- [x] **Minimum image without a 64-bit division** (ruling 2026-11-25) Device sweep kernel 11% faster at kernel level. Review and A/B.
-- [x] **Sweep launch arguments converted once** (ruling 2026-11-25) The ROCm sweep is host-launch-bound; KernelAbstractions re-converts each argument NamedTuple per launch. Convert once (the lifecycle's pass-through form), measure a static ndrange, A/B. Lands before the lifecycle A/B.
-- [ ] **One path: two-word site pick** (ruling 2026-11-23) Delete `PICK_ONE_WORD_MAX`. A/B.
-- [ ] **One path: later rulings** The emit index strategy, `_hoistable` and `solver_type = :auto` wait for rulings (`~/lpwork/one-path-audit/README.md`).
-- [ ] **D-332 read layer** Read sets, `CheckerboardCPM(reads = :exact | :snapshot | :live)`, running sums and the per-pair contact store, with kinetic tiers 0–2. Not started. Comes before Zajac (G4, G6) and Starruß in the build order of 2026-11-24.
+- [ ] **Lifecycle: one path** (D-333, branch `lp/lc-eff`) Parked. See "Parked branches" in the live plan.
+- [ ] **Lifecycle: event-sized stages** (D-337, branch `lp/lc-event`) Parked. See "Parked branches" in the live plan. The multi-workgroup plan scans are closed as superseded by the pipeline (D-349).
+- [ ] **One path: checkerboard inline cutoff** (ruling 2026-11-23, D-343) Live plan item W0.2.
+- [ ] **One path: KernelAbstractions on the CPU everywhere** (ruling 2026-11-23) See "Off the critical path" in the live plan.
+- [x] 450a8189 2026-11-26 **Minimum image without a 64-bit division** (ruling 2026-11-25) The periodic minimum image in `lib/CorePotts/src/geometry.jl` used a 64-bit `fld` on every accepted copy. Wrapping without a division (lattice offsets have \|δ\| < n, closed axes return at once) made the base device sweep kernel 11% faster at kernel level (Fortuna, rocprofv3; `research/lifecycle/boxes.md` §6.2 in the ecosystem tree). Prototype on `lp/lc-boxes` (ee96aaf3, 9aa75153). ROCm A/B: merks_100 and merks2006 −19 to −20%, akeeb −9%, openvt_reference −7%, others within controls; CPU unchanged.
+- [x] 8655cdb2 2026-11-26 **Sweep launch arguments converted once** (ruling 2026-11-25) Measured 2026-11-25, before this merge (stale since): the ROCm sweep was bound by host launch time (GPU busy about 45% on Fortuna); each state array cost about 2.3 µs of host time per block launch (64 per MCS on Fortuna), and three unused arrays cost +20–22% with unchanged device time (`boxes.md` §6.2). Cause, found on `lp/lc-pipeline` (6a958a4f, d33fd09c): KernelAbstractions converts every argument NamedTuple at every launch, even in device form; converting once into a pass-through type cut lifecycle launches 2-7× to about 4-6 µs host. The sweep now converts its launch arguments once at setup, as `allocation_args` does for the lifecycle scan. ROCm A/B: openvt_monolayer −35%, graner_glazier −23%, others −4…+2%; CPU within −4…+2%. Static ndrange (about 2 µs per launch, warm only; recompiles per lattice size and capacity) not adopted. Metal unverified (D-339). Landed before the lifecycle A/B.
+- [ ] **One path: two-word site pick** (ruling 2026-11-23) See "Off the critical path" in the live plan.
+- [ ] **One path: later rulings** See "Off the critical path" in the live plan.
+- [ ] **D-332 read layer** Live plan items RL0-RL3 (amended by D-343).
 - [ ] (blocked upstream, 2026-11-22) **Device libraries 7.0 put doubles in Potts kernels.** The cause is a ROCm Device Libraries bug, not Potts code: in rocm-7.0.0 to rocm-7.2.0, `ocml/src/builtins.h` defines `BUILTIN_FREXP_EXP_F32` with the double `__builtin_frexp` (6.2.1 used `__builtin_amdgcn_frexp_expf`; the amd-staging branch has the fix, `__builtin_frexpf`, in no release yet). Every Float32 ocml function that reaches it (`log1p`, `pow`/`pown`, `hypot`, `asinh`, `acosh`, `atanh`, `ilogb`, `logb`, `gamma`) widens to double; results stay exact, only speed suffers. With the integer-power fix of 2026-11-19, the device IR scan fails on 6 kernels (the two `log1p` acceptance models). A Potts-side `log1p` alone would hide the rest, so the hold of ROCmDeviceLibs_jll at `~6.2.1` (user ruling 2026-11-19) stays until a ROCm release ships the fix or the AMDGPU 2.9+ port (with KernelAbstractions 0.10), which drops ROCmDeviceLibs_jll. Evidence and a plain-KernelAbstractions reproducer: `~/lpwork/devlibs7/` on the PC.

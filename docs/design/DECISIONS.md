@@ -2617,6 +2617,7 @@ Amended by D-320: `@boundary`, `Dirichlet` and `NoFlux` are removed; field condi
 ## D-157 Device testing and benchmarks are backend-neutral: Metal (Mac) and ROCm (PC), with ROCm in CI (2026-10-06, maintainer; coordinator design)
 
 Amended by D-336: `POTTS_GPU` is the one device variable; `COREPOTTS_GPU` (and `LATTICEPDE_GPU`, `LATTICEFIELDS_GPU`) are gone, without aliases.
+Amended by D-342 (2026-11-27): every lifecycle stage on Metal uses the paired 32-bit form; it stays unverified until a Mac is available.
 
 - **Why.** The maintainer's PC (D-156) has a Radeon 8060S (gfx1151). A probe on 2026-10-06 with AMDGPU.jl, ROCm 7.2.1 and Julia 1.12.6 passed:
   - `AMDGPU.functional()`;
@@ -2768,6 +2769,8 @@ Amended by D-259 (item 4) and D-262: a `PottsSystem` refused MTK's metadata func
 - **Open.** P6.3f's FULL run, its 01b figure targets and video clock overlays remain open. P6.1h may reuse this re-freeze.
 
 ## D-162 P6.0bp re-scoped: no event callbacks today; `Potts.updates(sys)` now, MTK callbacks with P6.4c; the paper says "update rules" (2026-10-07, maintainer, on the P6.0bp test author's D-156 stop; amends D-159)
+
+Amended by D-349 (2026-11-27): `@discrete_events` and `@terminate` (G1d) are off every model's critical path but stay in the plan.
 
 - **Finding.**
   - Potts has no `@discrete_events` or `@terminate` yet (P6.4c), so `ModelingToolkitBase.discrete_events(sys)` and `continuous_events(sys)` already return `[]`.
@@ -4808,6 +4811,8 @@ Amended by D-330: drives may read `centroid(c, k)` and `separation(a, b)` of ref
 
 ## D-253 Site lists and mask counters take Int64 above 2³¹ − 1 sites (2026-10-15; maintainer's request, "fix the Int32 site lists now"; number reserved by the coordinator; supersedes D-247 rule 4's refusal; P6.0cd)
 
+Amended by D-342 (2026-11-27): Int64 values work on Metal; only 64-bit atomic adds are missing, which `_atomic64` names. Every lifecycle stage uses the paired 32-bit form there.
+
 - **Gap.** Three structures stored site indices or site counts as `Int32`:
   - the boundary-site sweep's list and positions (`BoundaryCache.list`/`pos`);
   - a frozen mask's mobile-site list (`MaskMobility.sites`), from which `SequentialCPM` draws its targets;
@@ -5885,6 +5890,12 @@ Thomas et al. (2022, Physica A 587:126511) restate the Fortuna model. Each diffe
 - **Trend rows (spec P4, P5).** The spec asks for "the same monotonic trends". The rule is tightened from "≥ 2 of 3 λ_F curves" to all 3 curves. The remaining relaxation is deliberate: a curve's trend is the sign of Kendall's τ over its four φ points, not strict monotonicity, so one swapped pair still passes.
 
 ## D-332 Parallel-first mechanisms: one model path, a read policy per algorithm, one lifecycle planner, tiered kinetic checks (2026-11-22; user rulings of 2026-11-22, revised in place the same day after the design review `~/lpwork/d332-review/review.md`, before any code; amends D-051 item 5, D-065 Q7, D-075 (the time-boxed D-051 item 5 exceptions), D-271, D-329 "Solvers", D-330 and the sequential-only parts of the 2026-11-22 model-list rulings)
+
+Amended by D-343 (2026-11-27): one read path on the CPU, no cost threshold; `:exact` is the default for every model after a fresh A/B; `:snapshot` and `:live` are deferred.
+Amended by D-344 and D-345 (2026-11-27): P1 gains a moment pre-stage for a retire into a dividing `ref`, and `@create` takes sites from any owner not in an event, in its own round.
+Amended by D-351 and D-352 (2026-11-27): the one planner is the staged lifecycle pipeline, with no host hooks in the lifecycle.
+Amended by D-346 (2026-11-27): Q4 waits for item 11's reverse engineering.
+
 - **Design record.** `docs/design/research/parallel-mechanisms.md`.
 - **One model path.** Every model has one generated code path, and it runs under every algorithm: `SequentialCPM` (CPU only) and `CheckerboardCPM` on the CPU and a device. Nothing is refused per algorithm. This replaces D-051 item 5's exception list and reverses the earlier 2026-11-22 rulings that allowed sequential-only forms for the Zajac tensor energy, the FBCA neighbor-site writes and the Starruß angle terms. D-329's refusal of non-sequential algorithms for angle terms is lifted when the read layer lands.
 - **State.** Every shared cell quantity that a copy-time term reads is a running sum that a commit only adds to (N, Σx, Σy, Σz, Σx², Σy², Σxy and the other second moments, perimeter, contact counts, a per-pair contact store where needed). The adds are plain on `SequentialCPM` and atomic on parallel backends, from one KernelAbstractions and Atomix source. Position sums are integers, so they are exact and independent of order. Centroid, axis, angle and curvature are computed on read. The per-pair store has a fixed maximum degree per cell, overflow in the status word, and slots freed only between sweeps.
@@ -5946,3 +5957,77 @@ Thomas et al. (2022, Physica A 587:126511) restate the Fortuna model. Each diffe
 - **Likely fix.** A residency hook in a Metal extension of CorePotts: at each launch, declare the converted-once buffers on the encoder. Not built.
 - **Check.** When a Mac is available, run the GPU group on Metal with `MTL_SHADER_VALIDATION=1`.
 - **Other backends.** On ROCm, the launches skip AMDGPU's per-stream ownership in the same way. A reconversion (a `deepcopy`, or a step from another task) launches an empty kernel with the plain arguments first, which hands the buffers to the current task's stream (`_relaunch!`, 2454ba00). The CPU needs neither.
+
+## D-342 Metal: every lifecycle stage uses the paired 32-bit form; unverified (2026-11-27; user ruling 1 on the roadmap review; clarifies D-253; amends D-157 and D-332's "Int64 moment scratch where `_atomic64`")
+
+- **Rule.** On a backend without 64-bit atomic adds (Metal), every stage of the lifecycle pipeline uses the existing paired 32-bit form: `_paired(backend) = _FORCE_PAIRED[] || !_atomic64(backend)` (`lib/CorePotts/src/spatial.jl:282`) and Int32 planner counters (`M = _atomic64(backend) ? Int64 : Int32`, `lib/CorePotts/src/lifecycle_planner.jl:113`). Lifecycle models are not refused on Metal, and the old planner is not kept for Metal (one path).
+- **Clarifies D-253.** Int64 values work on Metal. What Metal lacks is 64-bit atomic adds, which is what `_atomic64` names.
+- **Status.** Unverified: no Mac compute since 2026-10-20. Today the pipeline refuses backends without 64-bit atomics (`_pipeline_slice`, 15523e40 on `lp/lc-pipeline`). The walk's Int64 partials need this form before the old planner is removed (`research/lifecycle/assembly-plan.md` §1, in the ecosystem tree).
+- **Check.** Here, `_FORCE_PAIRED[]` runs the paired form on the CPU and ROCm, as the lockless sweep tests do (`lib/CorePotts/test/gpu_lockless_ir_tests.jl`). On a Mac, run the GPU group on Metal, lifecycle items included.
+
+## D-343 The read layer is one path on the CPU; `:exact` is the default; `:snapshot` and `:live` are deferred (2026-11-27; user ruling 2 on the roadmap review; amends D-332 "Reads" and "Exactness", under the one-path ruling of 2026-11-23)
+
+- **One path on the CPU.** `CheckerboardCPM` on the CPU has no cost threshold. D-332's "On the CPU the scheduler may run any phase inline in key order instead, by cost" (`research/parallel-mechanisms.md:286-290`) is withdrawn under the one-path ruling of 2026-11-23. `inline_max_blocks` (`lib/CorePotts/src/checkerboard.jl:482`) is removed; that is the approved item "One path: checkerboard inline cutoff".
+- **Default.** `reads = :exact` is the default for every model. It changes CPU results for every model (`research/parallel-mechanisms.md:293-294`), and the user accepts this. A fresh A/B against today's path checks it before it becomes the default.
+- **Deferred.** `:snapshot` and `:live` are not built until a measurement needs them. This amends D-332's "built generically in codegen and CorePotts for every model with extra read sets" and the tier 2 runs per deferred policy.
+- **Device.** D-332 Q3 (the device default, by measurement) stays open. It is decided when the device form of `:exact` is measured.
+
+## D-344 A cell retired into a reference that divides in the same MCS joins first, through an order-free moment pre-stage (2026-11-27; user ruling 3 on the roadmap review; amends D-332 P1)
+
+- **Rule.** When `@retire … sites => ref` and a division of `ref` fall in the same MCS, D-332 P1 stands: the sites join `ref` first, then `ref` divides. The division of `ref` is not deferred.
+- **How.** An order-free pre-stage runs before the division plane is computed. It sums the retiring cells' integer moments into `ref` and adds their sites to `ref`'s region. The plane then uses the joined moments.
+- **Why a stage.** The pipeline's site walk takes its deltas from the unmodified lattice in two passes (`research/lifecycle/design.md` §7 ruling 6). Without the pre-stage, the plane of `ref` would not see the incoming sites. The proposal to defer the division of `ref` by one round was declined.
+
+## D-345 `@create` takes sites from any owner not in an event, in its own round (2026-11-27; user ruling 4 on the roadmap review; amends D-332 P1)
+
+- **Sources.** A `@create` may take sites from any owner that is not in an event in that MCS. The P1 precedence table did not cover owners outside events; this settles it.
+- **Order.** Creation runs in its own round, after retire and divide, as P1's order requires.
+- **Donors.** A donor cell loses the volume it gives up. Its targets are unchanged.
+- **Scope.** Only Bauer 2009 (spec 05) needs a true `@create`: the new cell paints over the fluid and matrix collectives (`docs/design/research/model-specs/sketches/05_bauer2009_ecm.md`, about lines 233-241). In specs 06, 07, 08 and 11, "@create for division" means `@divide`, which exists.
+
+## D-346 Item 11 (Jafari Nivlouei 2021): reverse engineering before any code (2026-11-27; user ruling 5 on the roadmap review; relates to D-332 Q4)
+
+- **First step, no code.** Reverse-engineer the integrin mapping (spec 11, `model-specs/11_multiscale.md:126-131`), the contact-inhibition rule (spec 11:141) and the units of β (spec 11:456).
+- **Then.** Choose between the count-based contact fraction, which the exact count trackers give today (`docs/src/manual/updates.md:76-85`), and the weighted form of gap G6 that sketch 11 uses (`sketches/11_multiscale.md:116`). Until then, whether item 11 needs G6 and the read layer is undecided, and D-332 Q4 stays open.
+- **Uptake.** Uptake in item 11 is per site (spec 11 §G6, line 412). The sketch's `per = :cell` is corrected to match.
+
+## D-347 The Fortuna 14a and 14b FULL runs go now, on `SequentialCPM` (2026-11-27; user ruling 6 on the roadmap review)
+
+- **Rule.** Run the 14a and 14b FULL runs now, not after the lifecycle pipeline. The FULL runner uses `SequentialCPM` (`lib/PottsModels/reproductions/data/14/run_full.jl:629`; protocol at `protocol.jl:328`, `:440-443`; record at `record.jl:223`).
+- **Record.** The commit and the Manifest are stored with the data. The runner already records the commit, a dirty flag and the Manifest's sha256 per job, and refuses a dirty tree.
+- **Rerun.** Only if `SequentialCPM` changes.
+- **Open.** Fortuna's `@convert` over clusters runs through the lifecycle planner, which the pipeline replaces. Whether that replacement counts as a change for this rule is not ruled; it is asked at the pipeline's A/B.
+
+## D-348 Kind-scoped component state stays dormant across `@transition` (2026-11-27; user ruling 7 on the roadmap review; part of gap G1a)
+
+- **Rule.** While a cell is in a kind without a kind-scoped component, the component's state stays in the cell's columns and is not integrated. When the cell returns to a kind with the component, the state continues from the stored values, unless the `@transition` sets them.
+
+## D-349 The roadmap is a plan by model outcome; G1 is split into four items (2026-11-27; user ruling 8 on the roadmap review, approved with changes; the user reviews the diff before it merges)
+
+- **Structure.** The live part of ROADMAP.md is organized by model outcome, with a definition of a shipped model. Each item has a state from a fixed ladder, a verification stamp, what it unlocks and needs, its rulings (open ones listed), a "done when" line and a size with its main risk. ROADMAP holds state, DECISIONS the reasons, design notes the method. An item is one branch, one review and at most one A/B; the lifecycle pipeline is a named exception (several reviews on one branch, one A/B).
+- **G1 split.** G1a: `@transition` and `@retire` to the medium. G1b: `@retire … sites => ref`, retirement chains and collective targets. G1c: `@create`. G1d: `@discrete_events` and `@terminate`. G1d is off every model's critical path, because callbacks cover the models' needs (`~/lpwork/models-gap/audit.md:100-104`, `:151-155` on the PC), but it stays in the plan.
+- **Rulings get ids.** The lifecycle pipeline rulings of 2026-11-22, 2026-11-24, 2026-11-25 and 2026-11-26 are D-350, D-351 and D-352.
+- **Parked ids.** D-333 and D-337 exist only on the parked branches `lp/lc-eff` and `lp/lc-event`. They are cited as such and are not copied here.
+- **Superseded item.** "Multi-workgroup plan scans" (from D-337 "Not done") is closed: the pipeline's allocation is multi-workgroup by requirement (`research/lifecycle/design.md` §1, §4.1).
+
+## D-350 The division log is the full device log, after a lifecycle efficiency pass (2026-11-22 user ruling, recorded 2026-11-27; P6.13)
+
+- **Rule.** Divisions go to an append-only device log, not a parent column. Records are `(mcs, parent serial, daughter serial)`, written at the serials' block offset with no extra atomic. The log drains only at existing host reads (saves, run end, near full). Overflow is counted in the statistics and flagged in the status word. `lineage(sol)` reads it; there is no `mother` variable and no dense save. Checkpoints and `remake` carry the log offset. The log is designed to extend to removals, transitions, `@convert` and discrete events.
+- **Precondition.** A lifecycle efficiency pass, with budgets set before the log lands and checked after. A quiet MCS stays at 0 syncs and 0 transfers.
+- **Now.** The efficiency pass is the lifecycle pipeline (D-351), not the parked branches `lp/lc-eff` and `lp/lc-event`. The log is built on the pipeline after the old planner is removed.
+
+## D-351 The lifecycle becomes one staged pipeline (2026-11-24 user rulings, recorded 2026-11-27; `research/lifecycle/design.md` §1, §6 and §7 rulings 1-13; amends D-332 "One lifecycle planner")
+
+- **Parked.** `lp/lc-eff` (D-333) and `lp/lc-event` (D-337) are parked: not merged and not held for an A/B. The work restarts as a staged pipeline on `lp/lc-pipeline`.
+- **Requirements.** Any workload, from 10 cells on 64² to 10⁶ cells on 8192² or 256³. Multi-workgroup cooperation; no single-workgroup planner. Daughter ids, serials and site assignment do not depend on scheduling. One path on every backend, the CPU through KernelAbstractions included, with no size cutoffs or twins; backend probes are allowed. One pipeline for division, removal, transition, `@convert` and model hooks. A kind changes only through the lifecycle. Slots freed in a round are reusable from the next round. Fragment labeling only when a rule asks for it.
+- **Rulings 1-13.** Site visits by load-balanced boxes. `@convert` is a per-site rule over its source cells' sites. No host hooks in the lifecycle; FBCA's host operator gets the event list at its own sync. The cost bars of design §3. GPU runs repeat ids, serials, site assignment and integer trackers, not whole runs bitwise; CPU runs repeat bitwise. Two-pass site walk with deltas from the unmodified lattice. Zero-daughter events always proceed. Free slots recomputed each checked step without atomics. `@unroll 16` in the count. The daughter kind is set before the walk (`kind => expr` in `@divide`). A probed walk grid. One neighbor primitive (`fold_neighbors`). Revised cost bars.
+- **Order.** One A/B against the `monorepo` lifecycle, then the old planner is removed.
+- **Amends D-332.** The one planner is this pipeline. D-332's "host hooks as a stage after the planner" is replaced by ruling 3 (no host hooks in the lifecycle).
+
+## D-352 Lifecycle assembly rulings (2026-11-25 and 2026-11-26 user rulings, recorded 2026-11-27; `research/lifecycle/design.md` §7 rulings 14-18 and `assembly-plan.md`)
+
+- **14, assembly.** `@convert` slots are speculative; an unused slot stays free and leaves a serial gap. `rebuild!` is removed; site sums and minima become declared trackers updated by the walk; a custom `remake_frozen` becomes a per-site device predicate. A transitioning division at capacity still transitions. Clusters re-root by a gated pass over all slots, a named exception to the no-O(C) bar.
+- **15, boxes.** Variant C: no box state in the sweep; one launch on event rounds gives the exact boxes of the event cells, fused into the regions stage. The end-to-end slice comes first, with an early small-model A/B. Two spin-offs became their own items and merged: the minimum image without a 64-bit division (450a8189) and the sweep's launch arguments converted once (8655cdb2).
+- **16, quiet cost.** Every stage's launch arguments are converted once. All stages are enqueued and gated on the device, with no sync. The target is a quiet overhead of at most 5% of a small-model MCS. Sizes, scan and offsets fold into one launch after the box pass: nine launches per round. No static ndrange in the lifecycle.
+- **17, last-workgroup fusion.** Not adopted (gain within noise). The quiet-overhead miss is accepted for now: about 7.5-10% of a small ROCm MCS against 5%, to be re-measured.
+- **18, CPU count grain.** One count kernel. The backend probe of the CPU task count is deferred (amended the same day). The about 4 µs quiet gap per MCS at 4 CPU threads is a known miss, re-measured after the move to KernelAbstractions 0.10.

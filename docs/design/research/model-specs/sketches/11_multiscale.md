@@ -105,10 +105,10 @@ bit(b) = [(fig3[(i, r, w)][c + 1] >> (4 - b)) & 1 == 1 for i in 0:1, r in 0:1, w
     @drive copy => ifelse((kind[new] == migrating) | (kind[old] == migrating), -χ_n * (n[target] - n[source]), 0.0)   # Eq 4 (CC3D gate assumed)
     @drive copy => ifelse((kind[new] == endothelial_active) | (kind[old] == endothelial_active), -χ_V * (V[target] - V[source]), 0.0)  # Eq 5
     @equations solver = Adaptive(KenCarp4(linsolve = KrylovJL_GMRES())) begin   # D_n Δt/Δx² = 3750 [P6.0c][R14]
-        D(n) ~ D_n * Δ(n) - uptake(n; max_amount = κ_β * β[kind], relative = 1, per = :cell, by = kind ∈ cancer)  # Eq 7: B = min(n, β) [R15][NEW per]
+        D(n) ~ D_n * Δ(n) - uptake(n; max_amount = κ_β * β[kind], relative = 1, per = :site, by = kind ∈ cancer)  # Eq 7: B = min(n, β) per site, spec 11 §G6 [R15]
     end
     @equations solver = ExplicitEuler() begin     # substeps from the stability limit (≈ 150) [P6.0c]
-        D(V) ~ D_V * Δ(V) - k_V * V - uptake(V; max_amount = e_V, relative = 1, per = :cell, by = kind ∈ vessel) +
+        D(V) ~ D_V * Δ(V) - k_V * V - uptake(V; max_amount = e_V, relative = 1, per = :site, by = kind ∈ vessel) +
                s_V * (kind == quiescent) * (1 - blocked)                         # Eq 8; hypoxic cells secrete (p.10–11, p.28) [R15]
     end
     @boundary n sites(vessel) => Dirichlet(n_vessel)  # N1: clamp at EC sites (p.10); S_n source-term variant [R5]
@@ -247,7 +247,7 @@ end
 | MTK clocked Boolean component (`ShiftIndex`, `Bool` unknowns, `&`/`\|`/`!`) lowered per cell; coupling of its inputs | planned **P6.0k** spike (D-065 Q9), then **R13** |
 | Integer-indexed tables `tab[0:1, …]::Bool` indexed by cell expressions | planned **R13** |
 | `components(old; scope = Global())` in a drive | planned **R4** |
-| `uptake(…; max_amount, relative, by)` | planned **R15** (CC3D `Uptake` semantics, AUTHORING §12.9). `per = :cell` is **NEW** |
+| `uptake(…; max_amount, relative, by)` | planned **R15** (CC3D `Uptake` semantics, AUTHORING §12.9). `per = :cell` is **NEW**; item 11 does not need it: spec 11 §G6 rules per-site uptake (D-346) |
 | `@boundary n sites(k) => Dirichlet(v)` (moving, kind-defined) | planned **R5** |
 | Per-equation solvers (`@equations solver = … begin … end`) | planned **P6.0c**. The implicit field solver is **R14** |
 | `neighbors(c)`, `contact(c, o)` (medium included) | planned **R11a** |
@@ -272,8 +272,10 @@ end
    - β is in mol/cell/s, n is in pg/voxel, and the clamp "n|ECs = S_n" uses a rate.
    - With DynamicQuantities loaded, `mtkcompile` would reject the model. The sketch
      therefore uses bare numbers with `κ_β` and `n_vessel` as `NaN` placeholders.
-   - A per-cell capped uptake is not the CC3D `Uptake` (per site). N2 needs a
-     `per = :cell` budget that is spread over the cell's sites (NEW keyword on R15).
+   - A per-cell capped uptake is not the CC3D `Uptake` (per site). An earlier N2 asked
+     for a `per = :cell` budget spread over the cell's sites (NEW keyword on R15). Spec 11
+     §G6 rules per-site uptake as Eq 7 prints it, so the sketch uses `per = :site` (the
+     CC3D default) and item 11 does not need `per = :cell` (D-346).
 3. **Boolean networks as MTK discrete components (P6.0k) need three things verified.**
    - (a) `Bool`-typed unknowns and `&`/`|`/`!` inside a `Shift` system. The workaround is
      0/1 reals with `min`/`max`/`1 − x`, recorded in DECISIONS per D-065 Q9.
